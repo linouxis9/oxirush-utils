@@ -31,7 +31,7 @@
 //!
 //! | Module | Has | Feature |
 //! |--------|-----|---------|
-//! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity | none |
+//! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the SUPI with its type, the SUCI of an IMSI, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity | none |
 //! | [`tree`] | The tree of a message as a `serde_json::Value`: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |
 //! | [`tree::serde`] | `Serialize` and `Deserialize` for a type through its tree | `serde` |
 //!

@@ -44,8 +44,8 @@ The minimum supported Rust version is 1.88.
 
 ## Identities
 
-A value is checked when it is made, prints whole, and is `Copy`, `Eq`, `Ord`
-and `Hash`.
+A value is checked when it is made, prints whole, and is `Eq`, `Ord` and
+`Hash`, and `Copy` where it holds no text.
 
 ### A PLMN in both orders
 
@@ -112,6 +112,36 @@ fn main() -> Result<(), oxirush_utils::identity::Error> {
     let eps = GutiEps::new(plmn, 0x0002, 0x01, 0xc000_04f4);
     assert_eq!(eps.to_string().parse::<GutiEps>()?, eps);
     assert_eq!(Tai5gs::new(plmn, 1)?.to_string(), "208-93-000001");
+    Ok(())
+}
+```
+
+### SUPI, and the SUCI of an IMSI
+
+A SUCI is the value of its parts, in its two forms. Concealing an IMSI and
+reading a concealed one need keys, and are no part of this crate.
+
+```rust
+use oxirush_utils::identity::{ImsiSuci, Plmn, RoutingIndicator, Supi, SupiType};
+
+fn main() -> Result<(), oxirush_utils::identity::Error> {
+    // The example of TS 23.003 clause 2.2B
+    let plmn = Plmn::new("234", "15")?;
+    let suci = ImsiSuci::null(plmn, RoutingIndicator::new("678")?, "0999999999")?;
+    assert_eq!(suci.to_string(), "suci-0-234-15-678-0-0-0999999999");
+    assert_eq!(suci.to_nas_octets()[..8], [0x01, 0x32, 0xf4, 0x51, 0x76, 0xf8, 0x00, 0x00]);
+
+    // What PacketRusher sent in a REGISTRATION REQUEST
+    let sent = [0x01, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10];
+    let suci = ImsiSuci::from_nas_octets(&sent)?;
+    assert_eq!(suci.to_string(), "suci-0-208-93-0000-0-0-0000000001");
+
+    // Under the null scheme, the SUPI is in it
+    let supi = Supi::from(suci.imsi().unwrap());
+    assert_eq!(supi.to_string(), "imsi-208930000000001");
+
+    // A GCI is 3 in TS 23.003 clause 2.2B and 2 in TS 24.501 table 9.11.3.4.1
+    assert_eq!((SupiType::Gci.type_number(), SupiType::Gci.nas_format()), (3, 2));
     Ok(())
 }
 ```
@@ -365,6 +395,9 @@ those of the program too.
 - It knows no codec and no message: the crates of each family do.
 - It conceals no SUCI and derives no key:
   [oxirush-security](https://github.com/linouxis9/oxirush-security) does.
+- A SUCI in the form of a NAI, which a SUPI that is no IMSI has, is no type
+  here: `ImsiSuci` is the SUCI of an IMSI, and `Supi` checks of a NAI that it
+  has a realm and its length, not its grammar.
 - A value of `identity` holds what the clauses allow. Octets that are no such
   identity stay octets in the crate that read them.
 

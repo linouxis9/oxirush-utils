@@ -13,14 +13,21 @@ once.
   identity; `Imsi`, `Imei` with its spare digit or its check digit, `Imeisv`;
   `Guti5g` and `STmsi5g`, `GutiEps` and `STmsiEps`; `Tai5gs` and `TaiEps`; the
   types of identity of TS 24.501, TS 24.301 and TS 24.008. A value is checked
-  when it is made, prints whole, and is `Copy`, `Eq`, `Ord` and `Hash`. An
-  error names the member at fault and says why.
+  when it is made, prints whole, and is `Eq`, `Ord` and `Hash`, and `Copy`
+  where it holds no text. An error names the member at fault and says why.
+- `Supi` with its `SupiType`, whose number in TS 23.003 clause 2.2B and whose
+  SUPI format in TS 24.501 table 9.11.3.4.1 differ for a GLI and a GCI.
+  `ImsiSuci`, the SUCI of an IMSI as the value of its parts, with
+  `RoutingIndicator` and `ProtectionScheme`: the 5GS mobile identity of
+  TS 24.501 figure 9.11.3.4.3, and the text `suci-0-208-93-0-0-0-0000000001`.
+  The crate conceals nothing and reads no concealed identity. The SUCI in the
+  form of a NAI is not a type of this version.
 - A reader of octets is canonical: it gives a value only for the octets that
   the value is written as. The readers named `_tolerant` also take what other
   implementations are known to send, with a list of what was not by the
   clause, which allocates nothing: another end mark than `1111` after an even
-  number of identity digits, and the spare bit of the first octet of a
-  5G-GUTI or a 5G-S-TMSI.
+  number of identity digits, the spare bit of the first octet of a 5G-GUTI or
+  a 5G-S-TMSI, and the spare bits and the spare SUPI formats of a SUCI.
 - `tree`, with the feature `tree`: the tree of a message as a
   `serde_json::Value`. `Tree`, `Members` and `Reading` write a type as a tree
   and read it from one, with refusals that say the member and why. Octets are

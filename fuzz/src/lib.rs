@@ -28,7 +28,8 @@
 //! the tree as it was, and a value that is set is the one that is selected.
 
 use oxirush_utils::identity::{
-    Guti5g, GutiEps, Imei, Imeisv, Imsi, Plmn, STmsi5g, Tai5gs, TaiEps, digits, tbcd,
+    Guti5g, GutiEps, Imei, Imeisv, Imsi, ImsiSuci, Plmn, RoutingIndicator, STmsi5g, Supi, Tai5gs,
+    TaiEps, digits, tbcd,
 };
 use oxirush_utils::tree::{self, Family, Next, Place, Root, Step};
 use serde_json::Value;
@@ -99,6 +100,26 @@ pub fn identity(octets: &[u8]) {
         assert_eq!(guti.to_nas_octets(), octets);
         assert_eq!(guti.to_string().parse(), Ok(guti));
     }
+    // The SUCI of an IMSI, and its routing indicator.
+    let strict = ImsiSuci::from_nas_octets(octets);
+    match ImsiSuci::from_nas_octets_tolerant(octets) {
+        Ok((suci, faults)) => {
+            assert_eq!(strict.is_ok(), faults.is_empty());
+            let canonical = suci.to_nas_octets();
+            assert_eq!(ImsiSuci::from_nas_octets(&canonical).as_ref(), Ok(&suci));
+            assert_eq!(faults.is_empty(), canonical == octets);
+            assert_eq!(suci.to_string().parse().as_ref(), Ok(&suci));
+            assert_eq!(suci.msin().is_some(), suci.concealed_output().is_none());
+            assert_eq!(suci.msin().is_some(), suci.imsi().is_some());
+        }
+        Err(_) => assert!(strict.is_err()),
+    }
+    if let Ok(two) = <[u8; 2]>::try_from(octets)
+        && let Ok(indicator) = RoutingIndicator::from_nas_octets(two)
+    {
+        assert_eq!(indicator.to_nas_octets(), two);
+        assert_eq!(indicator.as_str().parse(), Ok(indicator));
+    }
     if let Ok(six) = <[u8; 6]>::try_from(octets)
         && let Ok(tai) = Tai5gs::from_nas_octets(six)
     {
@@ -132,6 +153,15 @@ pub fn identity(octets: &[u8]) {
     }
     if let Ok(imei) = Imei::with_check_digit(text) {
         assert!(imei.has_check_digit());
+    }
+    if let Ok(supi) = Supi::parse(text) {
+        assert_eq!(supi.to_string(), text);
+        assert_eq!(text.parse(), Ok(supi.clone().into_owned()));
+        assert_eq!(supi.as_imsi().is_some(), text.starts_with("imsi-"));
+    }
+    if let Ok(suci) = text.parse::<ImsiSuci>() {
+        assert_eq!(suci.to_string(), text.to_ascii_lowercase());
+        assert_eq!(ImsiSuci::from_nas_octets(&suci.to_nas_octets()), Ok(suci));
     }
 }
 

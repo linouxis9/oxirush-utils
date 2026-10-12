@@ -6,8 +6,9 @@
 //! 0000000008): each implementation sent them in a NAS message.
 
 use oxirush_utils::identity::{
-    Error, Fault, Guti5g, GutiEps, IdentityType, Imei, Imeisv, Imsi, MobileIdentityType5gs,
-    MobileIdentityTypeEps, Plmn, STmsi5g, STmsiEps, Tai5gs, TaiEps, digits, tbcd,
+    Error, Fault, Guti5g, GutiEps, IdentityType, Imei, Imeisv, Imsi, ImsiSuci,
+    MobileIdentityType5gs, MobileIdentityTypeEps, Plmn, ProtectionScheme, RoutingIndicator,
+    STmsi5g, STmsiEps, Supi, SupiType, Tai5gs, TaiEps, digits, tbcd,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -698,5 +699,620 @@ fn a_type_of_identity_has_the_number_of_its_clause() {
             IdentityType::Imei.bits()
         ),
         (3, 3, 2)
+    );
+}
+
+// ── SUPI and SUCI ───────────────────────────────────────────────────────────
+
+/// TS 23.003 clause 2.2B numbers the GLI 2 and the GCI 3; TS 24.501 table 9.11.3.4.1
+/// numbers the GCI 2 and the GLI 3.
+#[test]
+fn a_type_of_supi_has_two_numbers() {
+    for (kind, number, format, prefix) in [
+        (SupiType::Imsi, 0, 0, "imsi-"),
+        (SupiType::NetworkSpecific, 1, 1, "nai-"),
+        (SupiType::Gli, 2, 3, "gli-"),
+        (SupiType::Gci, 3, 2, "gci-"),
+    ] {
+        assert_eq!(
+            (kind.type_number(), kind.nas_format(), kind.prefix()),
+            (number, format, prefix)
+        );
+        assert_eq!(SupiType::from_type_number(number), Ok(kind));
+        assert_eq!(SupiType::from_nas_format(format), Ok(kind));
+    }
+    for spare in 4..=8 {
+        assert!(
+            SupiType::from_type_number(spare).is_err() && SupiType::from_nas_format(spare).is_err()
+        );
+    }
+}
+
+#[test]
+fn a_supi_is_written_with_its_type() {
+    let imsi = Supi::parse("imsi-208930000000001").unwrap();
+    assert_eq!(
+        (imsi.supi_type(), imsi.identity()),
+        (SupiType::Imsi, "208930000000001")
+    );
+    assert_eq!(imsi.as_imsi(), Some(Imsi::new("208930000000001").unwrap()));
+    assert_eq!(
+        format!("{imsi} {imsi:?}"),
+        "imsi-208930000000001 Supi(imsi-208930000000001)"
+    );
+    assert_eq!(Supi::imsi("208930000000001"), Ok(imsi.clone()));
+    assert_eq!(Supi::from(Imsi::new("208930000000001").unwrap()), imsi);
+    let owned: Supi<'static> = "nai-user@example.com".parse().unwrap();
+    assert_eq!(
+        owned,
+        Supi::network_specific("user@example.com")
+            .unwrap()
+            .into_owned()
+    );
+    assert_eq!(
+        (owned.identity(), owned.as_imsi()),
+        ("user@example.com", None)
+    );
+    // The type is part of the value: the same NAI is three SUPIs.
+    let nai = "00-00-5e-00-53-00@5gc.mnc012.mcc345.3gppnetwork.org";
+    let (gci, gli) = (Supi::gci(nai).unwrap(), Supi::gli(nai).unwrap());
+    assert_ne!(gci, gli);
+    assert_eq!(gci.to_string(), format!("gci-{nai}"));
+    assert_eq!(Supi::parse(&format!("gli-{nai}")), Ok(gli));
+    // A username may be empty, and a realm may not.
+    assert!(Supi::network_specific("@example.com").is_ok());
+    let error = |result: Result<Supi, Error>| result.unwrap_err().to_string();
+    assert_eq!(
+        error(Supi::network_specific("user@")),
+        "`nai` is written as a username, @ and a realm, as user@example.com"
+    );
+    assert_eq!(
+        error(Supi::gci("no-realm")),
+        error(Supi::network_specific("user@"))
+    );
+    let long = format!("{}@example.com", "u".repeat(500));
+    assert_eq!(
+        error(Supi::network_specific(&long)),
+        "`nai` has 512 octets, and has 3 to 507"
+    );
+    assert_eq!(
+        error(Supi::imsi("20893")),
+        "`imsi` has 5 digits, and has 6 to 15"
+    );
+    assert_eq!(
+        error(Supi::parse("208930000000001")),
+        "`supi` is written as imsi-, nai-, gli- or gci-, then the identity, as \
+         imsi-208930000000001"
+    );
+    assert!(Supi::parse("imsi-user@example.com").is_err());
+}
+
+/// TS 24.501 table 9.11.3.4.1: 1 to 4 digits in BCD, and 1111 for each that is not
+/// there. TS 23.003 clause 2.2B: each digit counts.
+#[test]
+fn a_routing_indicator_is_one_to_four_digits_which_all_count() {
+    for (digits, octets) in [
+        ("678", [0x76, 0xf8]),
+        ("0", [0xf0, 0xff]),
+        ("0000", [0x00, 0x00]),
+        ("12", [0x21, 0xff]),
+        ("9012", [0x09, 0x21]),
+    ] {
+        let indicator = RoutingIndicator::new(digits).unwrap();
+        assert_eq!(indicator.to_nas_octets(), octets, "{digits}");
+        assert_eq!(RoutingIndicator::from_nas_octets(octets), Ok(indicator));
+        assert_eq!(
+            format!("{indicator} {indicator:?}"),
+            format!("{digits} RoutingIndicator({digits})")
+        );
+    }
+    assert_eq!(
+        RoutingIndicator::default(),
+        RoutingIndicator::new("0").unwrap()
+    );
+    assert_ne!(
+        RoutingIndicator::new("012").unwrap(),
+        RoutingIndicator::new("12").unwrap()
+    );
+    assert_ne!(
+        RoutingIndicator::new("0").unwrap(),
+        RoutingIndicator::new("00").unwrap()
+    );
+    // Each of the 11,110 indicators is read from what it writes.
+    let mut count = 0;
+    for width in 1..=4 {
+        for number in 0..10_u32.pow(width) {
+            let indicator: RoutingIndicator = format!("{number:0width$}", width = width as usize)
+                .parse()
+                .unwrap();
+            assert_eq!(
+                RoutingIndicator::from_nas_octets(indicator.to_nas_octets()),
+                Ok(indicator)
+            );
+            count += 1;
+        }
+    }
+    assert_eq!(count, 11_110);
+    let error = |result: Result<RoutingIndicator, Error>| result.unwrap_err().to_string();
+    assert_eq!(
+        error(RoutingIndicator::new("")),
+        "`routing-indicator` has 0 digits, and has 1 to 4"
+    );
+    assert_eq!(
+        error(RoutingIndicator::new("12345")),
+        "`routing-indicator` has 5 digits, and has 1 to 4"
+    );
+    assert!(error(RoutingIndicator::new("1a")).contains("the character `a`"));
+    // No digit at all, a digit after a filler, and a half octet that is neither.
+    for octets in [[0xff, 0xff], [0xf6, 0xf8], [0x76, 0x8f], [0xa6, 0xff]] {
+        assert!(
+            RoutingIndicator::from_nas_octets(octets).is_err(),
+            "{octets:02x?}"
+        );
+    }
+}
+
+/// TS 24.501 table 9.11.3.4.1: 0 the null scheme, 1 and 2 the profiles, 3 to 11
+/// reserved, 12 to 15 of the operator. TS 33.501 annex C.1: "The values 0x3 - 0xB are
+/// reserved for future standardized protection schemes."
+#[test]
+fn a_protection_scheme_is_its_identifier_and_no_reserved_one() {
+    for identifier in 0..=15 {
+        let Ok(scheme) = ProtectionScheme::new(identifier) else {
+            assert!((3..=11).contains(&identifier), "{identifier}");
+            continue;
+        };
+        assert!(!(3..=11).contains(&identifier), "{identifier}");
+        assert_eq!(scheme.identifier(), identifier);
+        let kinds = (scheme.is_null(), scheme.is_of_the_operator());
+        assert_eq!(kinds, (identifier == 0, identifier >= 12));
+    }
+    assert_eq!(ProtectionScheme::new(0), Ok(ProtectionScheme::NULL));
+    let shown = format!(
+        "{:?} {:?}",
+        ProtectionScheme::PROFILE_B,
+        ProtectionScheme::new(12).unwrap()
+    );
+    assert_eq!(
+        shown,
+        "ProtectionScheme(2: profile B) ProtectionScheme(12: of the operator)"
+    );
+    let error = |identifier| ProtectionScheme::new(identifier).unwrap_err().to_string();
+    assert_eq!(error(16), "`protection-scheme` is 16, and is 15 at most");
+    assert_eq!(
+        error(3),
+        "`protection-scheme` is 3, and is 0, 1, 2 or 12 to 15: 3 to 11 are reserved"
+    );
+}
+
+/// TS 23.003 clause 2.2B: "assuming the IMSI 234150999999999 ... the Routing Indicator
+/// 678 ... the SUCI for the null protection scheme is composed of: 0, 234, 15, 678, 0, 0
+/// and 0999999999". TS 33.501 annex C.4.2.1 and C.4.3.1: the scheme outputs of the IMSI
+/// 274012001002086 under the null scheme and under profile A.
+#[test]
+fn the_suci_of_an_imsi_has_the_parts_and_the_octets_of_its_clauses() {
+    let suci = ImsiSuci::null(
+        plmn("234-15"),
+        RoutingIndicator::new("678").unwrap(),
+        "0999999999",
+    )
+    .unwrap();
+    assert_eq!(suci.to_string(), "suci-0-234-15-678-0-0-0999999999");
+    assert_eq!(
+        format!("{suci:?}"),
+        "ImsiSuci(suci-0-234-15-678-0-0-0999999999)"
+    );
+    assert_eq!(suci.imsi().unwrap().as_str(), "234150999999999");
+    assert_eq!(
+        (suci.msin(), suci.concealed_output()),
+        (Some("0999999999"), None)
+    );
+    assert_eq!(suci.to_string().parse(), Ok(suci.clone()));
+    let octets = suci.to_nas_octets();
+    assert_eq!(hex::encode(&octets), "0132f45176f800009099999999");
+    assert_eq!(ImsiSuci::from_nas_octets(&octets), Ok(suci));
+
+    // Annex C.4.2.1: the scheme output of the null scheme is the MSIN in BCD.
+    let imsi = Imsi::new("274012001002086").unwrap();
+    let null = ImsiSuci::of(imsi, 3).unwrap();
+    assert_eq!(
+        (null.plmn(), null.msin()),
+        (plmn("274-012"), Some("001002086"))
+    );
+    assert_eq!(hex::encode(&null.to_nas_octets()[8..]), "00012080f6");
+    assert_eq!(null.to_string(), "suci-0-274-012-0-0-0-001002086");
+    assert_eq!(null.imsi(), Some(imsi));
+
+    // Annex C.4.3.1: the scheme output of profile A, with the key identifier 27 of the
+    // example of TS 23.003.
+    let output = "b2e92f836055a255837debf850b528997ce0201cb82adfe4be1f587d07d8457d\
+                  cb02352410cddd9e730ef3fa87";
+    let concealed = ImsiSuci::concealed(
+        plmn("274-012"),
+        RoutingIndicator::new("678").unwrap(),
+        ProtectionScheme::PROFILE_A,
+        27,
+        hex::decode(output).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        concealed.to_string(),
+        format!("suci-0-274-012-678-1-27-{output}")
+    );
+    assert_eq!(concealed.to_string().parse(), Ok(concealed.clone()));
+    assert_eq!((concealed.msin(), concealed.imsi()), (None, None));
+    assert_eq!(
+        concealed.concealed_output().map(hex::encode).as_deref(),
+        Some(output)
+    );
+    let octets = concealed.to_nas_octets();
+    // MCC 274 and MNC 012 in the order of TS 24.008 clause 10.5.1.3: 72 24 10.
+    assert_eq!(hex::encode(&octets), format!("0172241076f8011b{output}"));
+    assert_eq!(ImsiSuci::from_nas_octets(&octets), Ok(concealed));
+}
+
+/// Captured: PacketRusher 20250225 sends this SUCI in its REGISTRATION REQUEST, with a
+/// routing indicator of four zeros.
+#[test]
+fn the_suci_that_another_implementation_sent_is_read_and_written_back() {
+    let sent = hex::decode("0102f839000000000000000010").unwrap();
+    let suci = ImsiSuci::from_nas_octets(&sent).unwrap();
+    assert_eq!(suci.to_string(), "suci-0-208-93-0000-0-0-0000000001");
+    assert_eq!(suci.routing_indicator().as_str(), "0000");
+    assert_eq!(suci.imsi().unwrap().as_str(), "208930000000001");
+    assert_eq!(suci.to_nas_octets(), sent);
+    let scheme = (
+        suci.protection_scheme(),
+        suci.home_network_public_key_identifier(),
+    );
+    assert_eq!(scheme, (ProtectionScheme::NULL, 0));
+}
+
+#[test]
+fn a_suci_is_refused_with_its_member_and_the_reason() {
+    let routing = RoutingIndicator::default();
+    let error = |result: Result<ImsiSuci, Error>| result.unwrap_err().to_string();
+    // The MSIN: digits, one at least, and no more than an IMSI of 15 digits has.
+    assert_eq!(
+        error(ImsiSuci::null(plmn("208-93"), routing, "00000000012")),
+        "`msin` has 11 digits, and has 1 to 10"
+    );
+    assert_eq!(
+        error(ImsiSuci::null(plmn("208-093"), routing, "")),
+        "`msin` has 0 digits, and has 1 to 9"
+    );
+    assert!(error(ImsiSuci::null(plmn("208-93"), routing, "12a")).contains("the character `a`"));
+    // TS 23.003 clause 2.2B: the key identifier is 0 if and only if the scheme is the
+    // null one. TS 24.501 table 9.11.3.4.1: 255 is reserved.
+    let concealed =
+        |scheme, key_id| ImsiSuci::concealed(plmn("208-93"), routing, scheme, key_id, vec![1]);
+    assert_eq!(
+        error(concealed(ProtectionScheme::PROFILE_A, 0)),
+        "`home-network-public-key-identifier` is 0, and is 1 to 254 for a scheme that conceals"
+    );
+    assert!(error(concealed(ProtectionScheme::PROFILE_B, 255)).contains("is 255"));
+    assert!(error(concealed(ProtectionScheme::NULL, 1)).contains("`protection-scheme` is 0"));
+    assert!(concealed(ProtectionScheme::new(12).unwrap(), 254).is_ok());
+    let empty = ImsiSuci::concealed(
+        plmn("208-93"),
+        routing,
+        ProtectionScheme::PROFILE_A,
+        1,
+        vec![],
+    );
+    assert_eq!(
+        error(empty),
+        "`scheme-output` has 0 octets, and has 1 at least"
+    );
+    for (octets, reason) in [
+        (
+            "0102f839f0ff0000",
+            "`suci` has 8 octets, and has 9 at least",
+        ),
+        (
+            "0102f839f0ff000110",
+            "`home-network-public-key-identifier` is 1, and is 0 for the null scheme",
+        ),
+        (
+            "0102f839f0ff01001a",
+            "`home-network-public-key-identifier` is 0, and is 1 to 254",
+        ),
+        // A reserved scheme, and one with its spare bits set too.
+        (
+            "0102f839f0ff0301aa",
+            "`protection-scheme` is 3, and is 0, 1, 2 or 12 to 15",
+        ),
+        (
+            "0102f839f0fffb01aa",
+            "`protection-scheme` is 11, and is 0, 1, 2 or 12 to 15",
+        ),
+        ("010af839f0ff000010", "`mcc` has the half octet 0xa"),
+        (
+            "0102f839ffff000010",
+            "`routing-indicator` has the half octet 0xf where a digit is",
+        ),
+        ("0102f839f0ff00001a", "`msin` has the character `*`"),
+        (
+            "0102f839f0ff00001f",
+            "`msin` has the half octet 0xf where a digit is",
+        ),
+        (
+            "0202f839f0ff000010",
+            "`suci` has the octet 0x02, and has 0x01 there",
+        ),
+        // The SUPI format of a NAI: no SUCI of an IMSI.
+        (
+            "1102f839f0ff000010",
+            "`suci` has the octet 0x11, and has 0x01 there",
+        ),
+    ] {
+        let refused = error(ImsiSuci::from_nas_octets(&hex::decode(octets).unwrap()));
+        assert!(refused.starts_with(reason), "{octets}: {refused}");
+        assert!(
+            ImsiSuci::from_nas_octets_tolerant(&hex::decode(octets).unwrap()).is_err(),
+            "{octets}"
+        );
+    }
+    for text in [
+        "suci-1-208-93-0-0-0-1",
+        "suci-0-208-93-0-0-1-1",
+        "suci-0-208-93-0-1-1-zz",
+        "suci-0-208-93-0-1-1-abc",
+        "suci-0-208-93-0-0-0",
+        // The scheme is one hexadecimal digit, and the key identifier a number in
+        // decimal that is written in one way.
+        "suci-0-208-93-0-12-1-ab",
+        "suci-0-208-93-0-3-1-ab",
+        "suci-0-208-93-0-b-1-ab",
+        "suci-0-208-93-0-g-1-ab",
+        "suci-0-208-93-0-00-0-1",
+        "suci-0-208-93-0-1-01-ab",
+        "suci-0-208-93-0-1-255-ab",
+        "suci-0-208-93-0-1-256-ab",
+        "suci-0-208-93-0-0-00-1",
+        "SUCI-0-208-93-0-0-0-1",
+    ] {
+        assert!(text.parse::<ImsiSuci>().is_err(), "{text}");
+    }
+}
+
+/// The OpenAPI of TS 29.571 (`TS29571_CommonData.yaml` 1.5.0-alpha.6) has this pattern
+/// for a SUCI of an IMSI in `SupiOrSuci`:
+///
+/// ```text
+/// suci-(0-[0-9]{3}-[0-9]{2,3}|[1-7]-.+)-[0-9]{1,4}-(0-0-.*|[a-fA-F1-9]-([1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])-[a-fA-F0-9]+)
+/// ```
+fn is_a_suci_of_an_imsi_by_ts_29_571(text: &str) -> bool {
+    let Some(rest) = text.strip_prefix("suci-0-") else {
+        return false;
+    };
+    let parts: Vec<&str> = rest.splitn(6, '-').collect();
+    let [mcc, mnc, routing, scheme, key, output] = parts[..] else {
+        return false;
+    };
+    let digits = |text: &str, least, most| {
+        (least..=most).contains(&text.len()) && text.bytes().all(|digit| digit.is_ascii_digit())
+    };
+    let home = digits(mcc, 3, 3) && digits(mnc, 2, 3) && digits(routing, 1, 4);
+    let concealed = scheme.len() == 1
+        && scheme != "0"
+        && scheme.bytes().all(|digit| digit.is_ascii_hexdigit())
+        && digits(key, 1, 3)
+        && !key.starts_with('0')
+        && key.parse::<u8>().is_ok()
+        && !output.is_empty()
+        && output.bytes().all(|digit| digit.is_ascii_hexdigit());
+    home && ((scheme, key) == ("0", "0") || concealed)
+}
+
+#[test]
+fn the_text_of_a_suci_is_the_one_of_the_service_based_interfaces() {
+    let routing = RoutingIndicator::default();
+    // The scheme is one hexadecimal digit: the first scheme of the operator is `c`.
+    let scheme = ProtectionScheme::new(12).unwrap();
+    let suci = ImsiSuci::concealed(plmn("208-93"), routing, scheme, 254, vec![0xaa, 0xbb]).unwrap();
+    assert_eq!(suci.to_string(), "suci-0-208-93-0-c-254-aabb");
+    assert_eq!("suci-0-208-93-0-c-254-aabb".parse(), Ok(suci.clone()));
+    // The hexadecimal digits are read in either case, and written in lower case.
+    assert_eq!("suci-0-208-93-0-C-254-AABB".parse(), Ok(suci));
+    // What free5GC printed for the SUCI of PacketRusher in a lab run.
+    let sent = hex::decode("0102f839000000000000000010").unwrap();
+    let suci = ImsiSuci::from_nas_octets(&sent).unwrap();
+    assert_eq!(suci.to_string(), "suci-0-208-93-0000-0-0-0000000001");
+    // Every scheme and every key identifier, and the pattern of the specification.
+    for scheme in (0..=2).chain(12..=15) {
+        for key in 0..=255 {
+            let made = match scheme {
+                0 => ImsiSuci::null(plmn("208-093"), routing, "123456789"),
+                _ => {
+                    let scheme = ProtectionScheme::new(scheme).unwrap();
+                    ImsiSuci::concealed(
+                        plmn("208-093"),
+                        routing,
+                        scheme,
+                        key,
+                        vec![scheme.identifier()],
+                    )
+                }
+            };
+            let Ok(suci) = made else {
+                assert!(matches!(key, 0 | 255), "{scheme} {key}");
+                continue;
+            };
+            let text = suci.to_string();
+            assert!(is_a_suci_of_an_imsi_by_ts_29_571(&text), "{text}");
+            assert_eq!(text.parse(), Ok(suci));
+        }
+    }
+    // What this reads is of the pattern, and the pattern has no more than this reads
+    // but a scheme and the key identifier 255 that TS 24.501 table 9.11.3.4.1 reserves,
+    // a scheme output of an odd number of hexadecimal digits, which is no octets, and
+    // under the null scheme an MSIN that is no digits or that is too long for an IMSI.
+    let routings = ["0", "12", "0000", "12345", "a", ""];
+    let schemes = ["0", "1", "2", "5", "c", "C", "f", "g", "12", "00", ""];
+    let keys = ["0", "1", "27", "254", "255", "256", "01", "00", "a", ""];
+    let outputs = [
+        "1",
+        "0999999999",
+        "09999999990",
+        "aabb",
+        "AABB",
+        "abc",
+        "zz",
+        "",
+    ];
+    let (mut read, mut of_the_pattern_only) = (0, 0);
+    for routing in routings {
+        for scheme in schemes {
+            for key in keys {
+                for output in outputs {
+                    let text = format!("suci-0-208-93-{routing}-{scheme}-{key}-{output}");
+                    let by_the_pattern = is_a_suci_of_an_imsi_by_ts_29_571(&text);
+                    match text.parse::<ImsiSuci>() {
+                        Ok(suci) => {
+                            assert!(by_the_pattern, "{text}");
+                            assert_eq!(suci.to_string(), text.to_ascii_lowercase());
+                            read += 1;
+                        }
+                        Err(_) if by_the_pattern => {
+                            let msin = output.bytes().all(|digit| digit.is_ascii_digit())
+                                && (1..=10).contains(&output.len());
+                            let odd = scheme != "0" && output.len() % 2 == 1;
+                            let reserved = key == "255" || scheme == "5";
+                            assert!(reserved || odd || (scheme == "0" && !msin), "{text}");
+                            of_the_pattern_only += 1;
+                        }
+                        Err(_) => {}
+                    }
+                }
+            }
+        }
+    }
+    // 3 routing indicators, by 2 MSINs under the null scheme and by 5 schemes, 3 key
+    // identifiers and 3 outputs under the others; the pattern has 6 schemes, 4 key
+    // identifiers and 6 outputs there.
+    assert_eq!(
+        (read, of_the_pattern_only),
+        (3 * (2 + 5 * 3 * 3), 3 * (6 + 6 * 4 * 6 - 5 * 3 * 3))
+    );
+}
+
+/// TS 24.007 clause 11.1.4 on spare bits, and TS 24.501 table 9.11.3.4.1: "All other
+/// values are interpreted as IMSI by this version of the protocol."
+#[test]
+fn the_spare_bits_and_a_spare_format_of_a_suci_are_read_with_their_faults() {
+    let canonical = hex::decode("0102f839f0ff000010").unwrap();
+    let (suci, faults) = ImsiSuci::from_nas_octets_tolerant(&canonical).unwrap();
+    assert!(faults.is_empty());
+    for (first, scheme, expected) in [
+        (0x09, 0x00, vec![("suci", Fault::Spare { given: 0x09 })]),
+        (0x81, 0x00, vec![("suci", Fault::Spare { given: 0x81 })]),
+        (
+            0x01,
+            0xf0,
+            vec![("protection-scheme", Fault::Spare { given: 0xf0 })],
+        ),
+        (
+            0x41,
+            0x00,
+            vec![(
+                "supi-format",
+                Fault::Value {
+                    given: 4,
+                    expected: "0, the SUPI format of an IMSI",
+                },
+            )],
+        ),
+        (
+            0xf9,
+            0x10,
+            vec![
+                (
+                    "supi-format",
+                    Fault::Value {
+                        given: 7,
+                        expected: "0, the SUPI format of an IMSI",
+                    },
+                ),
+                ("suci", Fault::Spare { given: 0xf9 }),
+                ("protection-scheme", Fault::Spare { given: 0x10 }),
+            ],
+        ),
+    ] {
+        let mut octets = canonical.clone();
+        (octets[0], octets[6]) = (first, scheme);
+        let first_fault = ImsiSuci::from_nas_octets(&octets).unwrap_err();
+        let (read, faults) = ImsiSuci::from_nas_octets_tolerant(&octets).unwrap();
+        let found: Vec<_> = faults
+            .iter()
+            .map(|fault| (fault.member, fault.fault))
+            .collect();
+        assert_eq!(found, expected, "{first:#04x} {scheme:#04x}");
+        assert_eq!((first_fault.member, first_fault.fault), expected[0]);
+        // The value is the one of the canonical octets, which it writes.
+        assert_eq!(read, suci);
+        assert_eq!(read.to_nas_octets(), canonical);
+    }
+}
+
+#[test]
+fn any_suci_of_an_imsi_is_read_from_what_it_writes() {
+    let mut numbers = Numbers(4);
+    for _ in 0..20_000 {
+        let width = 2 + (numbers.next() % 2) as usize;
+        let plmn = Plmn::new(&numbers.digits(3), &numbers.digits(width)).unwrap();
+        let count = 1 + (numbers.next() % 4) as usize;
+        let routing = RoutingIndicator::new(&numbers.digits(count)).unwrap();
+        let suci = match numbers.next() % 2 {
+            0 => {
+                let count = 1 + numbers.next() as usize % (15 - plmn.digits().len());
+                let msin = numbers.digits(count);
+                ImsiSuci::null(plmn, routing, &msin).unwrap()
+            }
+            _ => {
+                let scheme = [1, 2, 12, 13, 14, 15][numbers.next() as usize % 6];
+                let scheme = ProtectionScheme::new(scheme).unwrap();
+                let output: Vec<u8> = (0..1 + numbers.next() % 60)
+                    .map(|_| numbers.next() as u8)
+                    .collect();
+                ImsiSuci::concealed(
+                    plmn,
+                    routing,
+                    scheme,
+                    1 + (numbers.next() % 254) as u8,
+                    output,
+                )
+                .unwrap()
+            }
+        };
+        assert_eq!(
+            ImsiSuci::from_nas_octets(&suci.to_nas_octets()).as_ref(),
+            Ok(&suci)
+        );
+        assert_eq!(suci.to_string().parse().as_ref(), Ok(&suci));
+    }
+    // And any octets are a SUCI that writes them back, or none.
+    let (mut read, mut refused) = (0, 0);
+    for _ in 0..50_000 {
+        let mut octets: Vec<u8> = (0..9 + numbers.next() % 8)
+            .map(|_| numbers.next() as u8)
+            .collect();
+        // Three in four start as a SUCI of an IMSI does.
+        if numbers.next() & 3 != 0 {
+            octets[..8].copy_from_slice(&[0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00]);
+            octets[6] = (numbers.next() % 3) as u8;
+            octets[7] = (numbers.next() % 3) as u8;
+        }
+        match ImsiSuci::from_nas_octets(&octets) {
+            Ok(suci) => {
+                assert_eq!(suci.to_nas_octets(), octets);
+                read += 1;
+            }
+            Err(_) => refused += 1,
+        }
+    }
+    assert!(
+        read > 5_000 && refused > 5_000,
+        "{read} read, {refused} refused"
     );
 }
