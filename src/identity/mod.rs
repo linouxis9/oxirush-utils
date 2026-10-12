@@ -62,7 +62,7 @@ mod tai;
 mod types;
 
 pub use digits::{Imei, Imeisv, Imsi, tbcd};
-pub use error::{Error, Fault};
+pub use error::{Error, Fault, Faults};
 pub use guti::{Guti5g, GutiEps, STmsi5g, STmsiEps};
 pub use plmn::Plmn;
 pub use tai::{Tai5gs, TaiEps};
@@ -71,4 +71,4 @@ pub use types::{IdentityType, MobileIdentityType5gs, MobileIdentityTypeEps};
 /// What a tolerant reader gives: the value, and each thing that a sender by the clause
 /// would have written otherwise, as the error that a canonical reader gives for it.
 /// The list is empty for octets that are canonical.
-pub type Tolerated<T> = (T, alloc::vec::Vec<Error>);
+pub type Tolerated<T> = (T, Faults);

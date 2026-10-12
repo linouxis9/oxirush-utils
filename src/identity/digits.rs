@@ -19,7 +19,7 @@
 //! IMSI, the IMEI and the IMEISV.
 
 use super::plmn::FILLER;
-use super::{Error, Fault, Plmn, Tolerated};
+use super::{Error, Fault, Faults, Plmn, Tolerated};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
@@ -180,7 +180,7 @@ pub fn decode_tolerant(octets: &[u8]) -> Result<Tolerated<(u8, String)>, Error> 
     };
     let (odd, kind) = (first & 0x08 != 0, first & 0x07);
     let mut digits = String::with_capacity(octets.len() * 2);
-    let mut faults = Vec::new();
+    let mut faults = Faults::new();
     digits.push(digit(first >> 4)?);
     // An even number of digits has two octets at least: the first has one digit.
     if !odd && rest.is_empty() {
@@ -253,8 +253,7 @@ fn read<T>(
         };
         return Err(Error::new(member, fault));
     }
-    let faults = faults.into_iter().map(|fault| fault.of(member)).collect();
-    Ok((new(&digits)?, faults))
+    Ok((new(&digits)?, faults.of(member)))
 }
 
 /// The value of a tolerant reading when it has no fault, and its first fault otherwise.

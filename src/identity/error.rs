@@ -197,3 +197,91 @@ impl fmt::Display for Error {
 }
 
 impl core::error::Error for Error {}
+
+/// What a tolerant reader found that a sender by the clause would have written
+/// otherwise, in the order of the octets: each as the error that the canonical reader
+/// gives for it. It is a list of [`Error`], which it derefs to, and is empty for octets
+/// that are canonical. It holds its faults in place, without an allocation.
+///
+/// ```
+/// use oxirush_utils::identity::{Fault, Guti5g};
+///
+/// // The spare bit 4 of the first octet is 1
+/// let octets = [0xfa, 0x02, 0xf8, 0x39, 0xca, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x01];
+/// let (guti, faults) = Guti5g::from_nas_octets_tolerant(&octets)?;
+/// assert_eq!(faults.len(), 1);
+/// assert_eq!(faults[0].fault, Fault::Spare { given: 0xfa });
+/// assert_eq!(guti.to_nas_octets()[0], 0xf2);
+/// # Ok::<(), oxirush_utils::identity::Error>(())
+/// ```
+#[derive(Clone, Copy)]
+pub struct Faults {
+    /// The faults, then what fills the list to its size.
+    faults: [Error; Self::MOST],
+    length: u8,
+}
+
+impl Faults {
+    /// The most faults that one reading has: no reader tolerates more departures.
+    const MOST: usize = 4;
+
+    /// No fault.
+    pub(crate) const fn new() -> Self {
+        let unused = Error::new("", Fault::Form { expected: "" });
+        Self {
+            faults: [unused; Self::MOST],
+            length: 0,
+        }
+    }
+
+    /// One more fault. A reader has no more departures to tell than the list holds.
+    pub(crate) fn push(&mut self, fault: Error) {
+        debug_assert!(usize::from(self.length) < Self::MOST);
+        if let Some(place) = self.faults.get_mut(usize::from(self.length)) {
+            *place = fault;
+            self.length += 1;
+        }
+    }
+
+    /// The same faults, each of the member `member`: that of the identity which holds
+    /// what was read.
+    pub(crate) fn of(mut self, member: &'static str) -> Self {
+        for fault in &mut self.faults {
+            *fault = fault.of(member);
+        }
+        self
+    }
+
+    /// The faults.
+    pub fn as_slice(&self) -> &[Error] {
+        &self.faults[..usize::from(self.length)]
+    }
+}
+
+impl core::ops::Deref for Faults {
+    type Target = [Error];
+
+    fn deref(&self) -> &[Error] {
+        self.as_slice()
+    }
+}
+
+impl fmt::Debug for Faults {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_slice().fmt(f)
+    }
+}
+
+impl PartialEq for Faults {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl Eq for Faults {}
+
+impl<const N: usize> PartialEq<[Error; N]> for Faults {
+    fn eq(&self, other: &[Error; N]) -> bool {
+        self.as_slice() == other
+    }
+}

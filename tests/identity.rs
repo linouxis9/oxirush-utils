@@ -392,7 +392,7 @@ fn an_imeisv_with_another_end_mark_is_read_with_its_fault_and_is_not_canonical()
         [0x15, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0]
     );
     let read = Imeisv::from_nas_octets_tolerant(kind, &canonical).unwrap();
-    assert_eq!(read, (imeisv, vec![]));
+    assert_eq!((read.0, read.1.len()), (imeisv, 0));
     // Tolerance takes that half octet alone: no digit is made up.
     let mut no_digit = sent;
     no_digit[3] = 0x0a;
@@ -461,10 +461,8 @@ fn the_gutis_that_other_implementations_sent_are_read_and_written_back() {
         assert_eq!(parts, (region, set, pointer, tmsi), "{source}");
         assert_eq!(guti.to_nas_octets()[..], octets[..], "{source}");
         assert_eq!(guti.to_string().parse(), Ok(guti), "{source}");
-        assert_eq!(
-            Guti5g::from_nas_octets_tolerant(&octets),
-            Ok((guti, vec![]))
-        );
+        let (tolerant, faults) = Guti5g::from_nas_octets_tolerant(&octets).unwrap();
+        assert!(tolerant == guti && faults.is_empty(), "{source}");
     }
     for (octets, tmsi) in [
         ("f602f839000201c00004f4", 0xc000_04f4),

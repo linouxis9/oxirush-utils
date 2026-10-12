@@ -18,8 +18,9 @@ once.
 - A reader of octets is canonical: it gives a value only for the octets that
   the value is written as. The readers named `_tolerant` also take what other
   implementations are known to send, with a list of what was not by the
-  clause: another end mark than `1111` after an even number of identity
-  digits, and the spare bit of the first octet of a 5G-GUTI or a 5G-S-TMSI.
+  clause, which allocates nothing: another end mark than `1111` after an even
+  number of identity digits, and the spare bit of the first octet of a
+  5G-GUTI or a 5G-S-TMSI.
 - `tree`, with the feature `tree`: the tree of a message as a
   `serde_json::Value`. `Tree`, `Members` and `Reading` write a type as a tree
   and read it from one, with refusals that say the member and why. Octets are

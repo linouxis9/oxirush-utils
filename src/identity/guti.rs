@@ -18,8 +18,7 @@
 //! The temporary identities of both systems: the 5G-GUTI and the 5G-S-TMSI, the GUTI of
 //! EPS and its S-TMSI.
 
-use super::{Error, Fault, Plmn, Tolerated};
-use alloc::vec::Vec;
+use super::{Error, Fault, Faults, Plmn, Tolerated};
 use core::fmt;
 use core::str::FromStr;
 
@@ -43,7 +42,7 @@ fn first_octet(
     member: &'static str,
     given: u8,
     expected: u8,
-    faults: &mut Vec<Error>,
+    faults: &mut Faults,
 ) -> Result<(), Error> {
     if given == expected {
         Ok(())
@@ -178,7 +177,7 @@ impl STmsi5g {
     /// spare bit.
     pub fn from_nas_octets_tolerant(octets: &[u8]) -> Result<Tolerated<Self>, Error> {
         let [first, parts @ ..] = sized::<7>("5g-s-tmsi", octets)?;
-        let mut faults = Vec::new();
+        let mut faults = Faults::new();
         first_octet("5g-s-tmsi", first, 0xf4, &mut faults)?;
         Ok((Self::from_parts(parts), faults))
     }
@@ -309,7 +308,7 @@ impl Guti5g {
     /// or the three after it are no PLMN.
     pub fn from_nas_octets_tolerant(octets: &[u8]) -> Result<Tolerated<Self>, Error> {
         let [first, p1, p2, p3, amf_region_id, parts @ ..] = sized::<11>("5g-guti", octets)?;
-        let mut faults = Vec::new();
+        let mut faults = Faults::new();
         first_octet("5g-guti", first, 0xf2, &mut faults)?;
         let plmn = Plmn::from_nas_octets([p1, p2, p3])?;
         let guti = Self::of(plmn, amf_region_id, STmsi5g::from_parts(parts));
