@@ -1,0 +1,30 @@
+[package]
+name = "oxirush-utils"
+version = "0.1.0"
+edition = "2024"
+description = "What the OxiRush crates share: 3GPP identities as values (PLMN, IMSI, IMEI, GUTI, TAI)"
+license = "Apache-2.0"
+repository = "https://github.com/linouxis9/oxirush-utils"
+authors = ["Valentin D'Emmanuele"]
+rust-version = "1.88"
+keywords = ["3gpp", "5g", "lte", "plmn", "imsi"]
+categories = ["network-programming", "encoding", "no-std"]
+readme = "README.md"
+include = [
+    "src/**/*.rs",
+    "tests/**/*.rs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+# cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)', 'cfg(docsrs)'] }
+
+[dev-dependencies]
+hex = "0.4"
