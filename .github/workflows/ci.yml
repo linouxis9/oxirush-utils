@@ -89,6 +89,19 @@ jobs:
       - run: cargo package --all-features
       - run: "! cargo package --list | grep -E '^(fuzz|\\.github)/'"
 
+  fuzz:
+    name: Fuzz the identities and the paths (2 minutes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install cargo-fuzz --locked
+      - run: cargo fuzz run identity -- -max_total_time=60 -max_len=64
+      - run: cargo fuzz run paths -- -max_total_time=60 -max_len=512
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -98,3 +111,4 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --check
+      - run: cargo fmt --check --manifest-path fuzz/Cargo.toml

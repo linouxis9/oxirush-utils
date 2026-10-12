@@ -381,6 +381,15 @@ bound.
 cargo test --all-features
 ```
 
+`fuzz/` has two [cargo-fuzz](https://crates.io/crates/cargo-fuzz) targets:
+`identity` reads octets and text as each identity, and `paths` takes any path
+and any edit on any tree.
+
+```sh
+cargo +nightly fuzz run identity -- -max_total_time=60 -max_len=64
+cargo +nightly fuzz run paths -- -max_total_time=60 -max_len=512
+```
+
 ## OxiRush crates
 
 [oxirush-nas](https://github.com/linouxis9/oxirush-nas) (NAS) ·
