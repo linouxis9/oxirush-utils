@@ -305,11 +305,52 @@ assert_eq!(written_as(Form::Plain, &json!("C0")), json!("C0"));
 `select_forms_in` gives each selected value with the form that its family
 says it has.
 
+### Any format of serde
+
+With the feature `serde`, a type is serialized and deserialized through its
+tree, so YAML and JSON carry the same form.
+
+```rust
+use oxirush_utils::tree::{self, Members, Reading, Refused, Tree};
+use serde_json::Value;
+
+#[derive(Debug, PartialEq)]
+struct Timer {
+    seconds: u32,
+}
+
+impl Tree for Timer {
+    const NAME: &'static str = "GPRS timer";
+
+    fn to_tree(&self) -> Value {
+        let mut members = Members::new();
+        members.put("seconds", tree::unsigned(self.seconds.into()));
+        members.finish()
+    }
+
+    fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+        let members = reading.members(value, &["seconds"])?;
+        let seconds = reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 11160))?;
+        Ok(Self { seconds: seconds as u32 })
+    }
+}
+
+// `Serialize` and `Deserialize`, through the tree
+oxirush_utils::impl_serde!(Timer);
+
+fn main() {
+    let timer = Timer { seconds: 3600 };
+    assert_eq!(serde_json::to_string(&timer).unwrap(), r#"{"seconds":3600}"#);
+    assert_eq!(serde_json::from_str::<Timer>(r#"{"Seconds": 3600}"#).unwrap(), timer);
+}
+```
+
 ## Features
 
 | Feature | Adds | Through |
 |---------|------|---------|
 | `tree` | The tree of a message, its forms and its paths | `serde_json` with `preserve_order` |
+| `serde` | `Serialize` and `Deserialize` for a type through its tree | `serde_core` |
 
 No feature is on by default.
 

@@ -83,6 +83,9 @@ mod error;
 mod forms;
 mod members;
 mod path;
+#[cfg(feature = "serde")]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+pub mod serde;
 mod walk;
 
 pub use error::{Error, ErrorKind};

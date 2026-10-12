@@ -24,6 +24,8 @@ include = [
 # of every `serde_json::Map` of a program that depends on this feature keep the order in
 # which they were written.
 tree = ["dep:serde_json"]
+# `Serialize` and `Deserialize` for a type through its tree.
+serde = ["tree", "dep:serde_core"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -36,8 +38,11 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)', 'cfg(docsrs)'] 
 [dependencies]
 # 1.0.154 is the first whose `preserve_order` needs `alloc` alone.
 serde_json = { version = "1.0.154", optional = true, default-features = false, features = ["alloc", "preserve_order"] }
+serde_core = { version = "1.0.220", optional = true, default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
+# Another self-describing format than JSON, for the tests of `serde`.
+serde_yaml = "0.9"
 hex = "0.4"
 
 [[test]]
@@ -47,6 +52,10 @@ required-features = ["tree"]
 [[test]]
 name = "forms"
 required-features = ["tree"]
+
+[[test]]
+name = "serde"
+required-features = ["serde"]
 
 [[test]]
 name = "readme"

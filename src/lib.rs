@@ -33,6 +33,7 @@
 //! |--------|-----|---------|
 //! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity | none |
 //! | [`tree`] | The tree of a message as a `serde_json::Value`: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |
+//! | [`tree::serde`] | `Serialize` and `Deserialize` for a type through its tree | `serde` |
 //!
 //! The crate is `no_std` with `alloc`, has no dependency without a feature, and no
 //! `unsafe`.
@@ -55,6 +56,6 @@ pub mod identity;
 pub mod tree;
 
 /// The blocks of the README, which are compiled and run with the documentation tests.
-#[cfg(all(doctest, feature = "tree"))]
+#[cfg(all(doctest, feature = "serde"))]
 #[doc = include_str!("../README.md")]
 struct _Readme;

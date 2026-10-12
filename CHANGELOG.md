@@ -34,5 +34,8 @@ once.
   the functions that end with `_in` take one. `written_as` brings a value
   that someone wrote to the form that a tree shows at a place, for a
   comparison.
+- `tree::serde`, with the feature `serde`: `Serialize` and `Deserialize` for
+  a type through its tree, by `impl_serde!` or the two functions that it
+  calls.
 - `no_std` with `alloc`, no `unsafe`, no dependency without a feature. The
   minimum supported Rust version is 1.88.
