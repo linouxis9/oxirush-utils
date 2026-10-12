@@ -4,8 +4,9 @@
 [![Documentation](https://docs.rs/oxirush-utils/badge.svg)](https://docs.rs/oxirush-utils)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-What the OxiRush crates share: the identities of 3GPP networks as values.
-`no_std`, without a dependency.
+What the OxiRush crates share: the identities of 3GPP networks as values, and
+one JSON tree with paths for the messages of every family. `no_std`, without a
+dependency unless a feature asks for one.
 
 ```rust
 use oxirush_utils::identity::{Guti5g, Plmn};
@@ -35,6 +36,8 @@ This page describes 0.1.0, which is not on crates.io yet.
 ```toml
 [dependencies]
 oxirush-utils = "0.1"
+# With the tree and its paths:
+# oxirush-utils = { version = "0.1", features = ["tree"] }
 ```
 
 The minimum supported Rust version is 1.88.
@@ -137,6 +140,185 @@ fn main() -> Result<(), oxirush_utils::identity::Error> {
 [The documentation](https://docs.rs/oxirush-utils/latest/oxirush_utils/identity/)
 lists each tolerance with its clause and its evidence.
 
+## Trees
+
+With the feature `tree`, a message is a `serde_json::Value` in one form for
+every family: octets in lower-case hexadecimal, numbers as JSON numbers, names
+read however they are written, members in the order of the specification.
+
+### A type as a tree
+
+```rust
+use oxirush_utils::tree::{self, Members, Reading, Refused, Tree};
+use serde_json::{Value, json};
+
+#[derive(Debug)]
+struct Slice {
+    sst: u8,
+    sd: Option<[u8; 3]>,
+}
+
+impl Tree for Slice {
+    const NAME: &'static str = "S-NSSAI";
+
+    fn to_tree(&self) -> Value {
+        let mut members = Members::new();
+        members.put("sst", tree::unsigned(self.sst.into()));
+        members.put_optional("sd", self.sd.map(|sd| tree::octets(&sd)));
+        members.finish()
+    }
+
+    fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+        let members = reading.members(value, &["sst", "sd"])?;
+        Ok(Self {
+            sst: reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 255))? as u8,
+            sd: reading.optional(&members, 1, |value, reading| reading.octet_array(value))?,
+        })
+    }
+}
+
+fn main() -> Result<(), oxirush_utils::tree::Error> {
+    let slice = Slice { sst: 1, sd: Some([0, 0, 0xff]) };
+    assert_eq!(tree::to_value(&slice), json!({"sst": 1, "sd": "0000ff"}));
+
+    // A name is read however it is written, and octets in either case
+    let read: Slice = tree::from_value(&json!({"SST": 2, "sd": "0000FF"}))?;
+    assert_eq!((read.sst, read.sd), (2, Some([0, 0, 0xff])));
+
+    // A refusal says where and why
+    let error = tree::from_value::<Slice>(&json!({"sst": 256})).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "this is not a value of S-NSSAI: a number from 0 to 255 is expected, and 256 is written, at sst"
+    );
+    Ok(())
+}
+```
+
+### Paths
+
+A path is a JSON pointer: the name of a member, the position of an entry, `*`
+for each of them, and `-` for the end of a list in an insertion.
+
+```rust
+use oxirush_utils::tree;
+use serde_json::json;
+
+fn main() -> Result<(), oxirush_utils::tree::Error> {
+    let mut message = json!({
+        "message-type": "registration-request",
+        "requested-nssai": [{"sst": 1}, {"sst": 2, "sd": "0000ff"}],
+        "t3512-value": null,
+    });
+
+    // Select, by names however they are written
+    assert_eq!(tree::select(&message, "/Requested NSSAI/*/sst")?, [&json!(1), &json!(2)]);
+
+    // What is not there selects nothing; a name that the value does not have is an error
+    assert!(tree::select(&message, "/t3512-value/unit")?.is_empty());
+    assert!(tree::select(&message, "/requested-nssai/0/sts").is_err());
+
+    // Each value with the path that selects it
+    let paths: Vec<String> = tree::paths(&message).into_iter().map(|(path, _)| path).collect();
+    assert_eq!(paths, [
+        "/message-type",
+        "/requested-nssai/0/sst",
+        "/requested-nssai/1/sst",
+        "/requested-nssai/1/sd",
+    ]);
+
+    // An edit is done whole, or not at all
+    tree::set(&mut message, "/requested-nssai/0/sd", json!("000001"))?;
+    tree::insert(&mut message, "/requested-nssai/-", json!({"sst": 3}))?;
+    tree::remove(&mut message, "/requested-nssai/1")?;
+    assert_eq!(message["requested-nssai"], json!([{"sst": 1, "sd": "000001"}, {"sst": 3}]));
+    Ok(())
+}
+```
+
+### The rules of a family
+
+A family of messages whose trees are more than objects and lists implements
+`Family`: its root, an entry of a list that a name selects, a member that is
+absent and could be there. The functions that end with `_in` take one.
+
+```rust
+use oxirush_utils::tree::{self, Family, Next, Place, Root, Step};
+use serde_json::{Value, json};
+
+/// A list of `{"id", "value"}` whose entries are selected by their `id`.
+struct ById;
+
+impl Family for ById {
+    type Shape = ();
+
+    fn root(&self) -> Root<'_> {
+        Root { name: "ies", stands_for: &[], required: true }
+    }
+
+    fn step<'v>(
+        &self,
+        place: &Place<'v, ()>,
+        segment: &str,
+        next: &mut Next<'v, ()>,
+    ) -> Result<Step<()>, tree::Error> {
+        let Some(entries) = place.value().and_then(Value::as_array) else {
+            return Ok(Step::Plain);
+        };
+        let named = |entry: &Value| entry["id"].as_str() == Some(segment);
+        if !entries.iter().any(named) {
+            return Ok(Step::Plain);
+        }
+        for (position, entry) in entries.iter().enumerate().filter(|(_, entry)| named(entry)) {
+            next.entry(position, entry, ());
+        }
+        Ok(Step::Taken)
+    }
+}
+
+fn main() -> Result<(), tree::Error> {
+    let mut ies = json!([{"id": "cause", "value": 3}, {"id": "timer", "value": 60}]);
+    assert_eq!(tree::select_in(&ById, &ies, "/ies/timer/value")?, [&json!(60)]);
+    tree::set_in(&ById, &mut ies, "/ies/cause/value", json!(7))?;
+    assert_eq!(ies[0]["value"], 7);
+    Ok(())
+}
+```
+
+### Compare with a value that someone wrote
+
+A tree shows octets in lower case and reads them in either. `written_as`
+brings a written value to the form that the tree shows at a place, so that a
+comparison does not depend on how its writer spelled it.
+
+```rust
+use oxirush_utils::tree::{Form, written_as};
+use serde_json::json;
+
+// At a place of octets, C0 is the octets c0
+assert_eq!(written_as(Form::Octets, &json!("C0")), json!("c0"));
+
+// At a place of text, C0 is other text than c0
+assert_eq!(written_as(Form::Plain, &json!("C0")), json!("C0"));
+```
+
+`select_forms_in` gives each selected value with the form that its family
+says it has.
+
+## Features
+
+| Feature | Adds | Through |
+|---------|------|---------|
+| `tree` | The tree of a message, its forms and its paths | `serde_json` with `preserve_order` |
+
+No feature is on by default.
+
+The feature `tree` turns on `serde_json/preserve_order`, so that the members
+of a tree keep the order of the specification whatever else a build enables.
+Cargo unifies features: in a program that depends on this crate with `tree`,
+every `serde_json::Map` keeps the order in which its members were inserted,
+those of the program too.
+
 ## What it does not do
 
 - It knows no codec and no message: the crates of each family do.
@@ -150,7 +332,9 @@ lists each tolerance with its clause and its evidence.
 The identities are tested against their clauses, against what Open5GS,
 free5GC and PacketRusher sent in lab runs, and against themselves: every
 value is read from the octets that it writes, and any octets are a value that
-writes them back or none.
+writes them back or none. The paths hold the tests of the crates of messages
+on trees that are written out, and a tree of 65,535 entries within a time
+bound.
 
 ```sh
 cargo test --all-features

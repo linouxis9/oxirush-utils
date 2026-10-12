@@ -20,6 +20,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
+      - run: cargo test --features tree
       - run: cargo test
 
   msrv:
@@ -30,6 +31,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
+
+  # The oldest versions that the manifest allows: serde_json 1.0.154 is the first whose
+  # `preserve_order` needs no `std`.
+  minimal-versions:
+    name: Minimal versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo +nightly update -Z direct-minimal-versions
+      - run: cargo test --all-features --locked
 
   no-std:
     name: no_std (thumbv7em-none-eabihf)

@@ -20,5 +20,19 @@ once.
   implementations are known to send, with a list of what was not by the
   clause: another end mark than `1111` after an even number of identity
   digits, and the spare bit of the first octet of a 5G-GUTI or a 5G-S-TMSI.
+- `tree`, with the feature `tree`: the tree of a message as a
+  `serde_json::Value`. `Tree`, `Members` and `Reading` write a type as a tree
+  and read it from one, with refusals that say the member and why. Octets are
+  hexadecimal in lower case, read in either; a number is a JSON number; a
+  name is read by its letters and its digits, however it is written. The
+  members of a tree keep the order in which they were written: the feature
+  turns on `serde_json/preserve_order`, for the whole build.
+- Paths on a tree: `select`, `paths`, `set`, `remove` and `insert`, with
+  4096 octets, 64 segments and 4096 selected values at most, one error type
+  with a kind, and edits that are done whole or not at all. `Family` is what
+  a family of messages adds where its trees are more than objects and lists;
+  the functions that end with `_in` take one. `written_as` brings a value
+  that someone wrote to the form that a tree shows at a place, for a
+  comparison.
 - `no_std` with `alloc`, no `unsafe`, no dependency without a feature. The
   minimum supported Rust version is 1.88.

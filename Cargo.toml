@@ -2,7 +2,7 @@
 name = "oxirush-utils"
 version = "0.1.0"
 edition = "2024"
-description = "What the OxiRush crates share: 3GPP identities as values (PLMN, IMSI, IMEI, GUTI, TAI)"
+description = "What the OxiRush crates share: 3GPP identities as values (PLMN, IMSI, IMEI, GUTI, TAI) and one JSON tree with paths for every message family"
 license = "Apache-2.0"
 repository = "https://github.com/linouxis9/oxirush-utils"
 authors = ["Valentin D'Emmanuele"]
@@ -18,6 +18,13 @@ include = [
     "LICENSE",
 ]
 
+[features]
+# The tree of a message as a `serde_json::Value`, its forms and its paths. It turns on
+# `serde_json/preserve_order` for the whole build, as cargo unifies features: the members
+# of every `serde_json::Map` of a program that depends on this feature keep the order in
+# which they were written.
+tree = ["dep:serde_json"]
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -26,5 +33,21 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)', 'cfg(docsrs)'] }
 
+[dependencies]
+# 1.0.154 is the first whose `preserve_order` needs `alloc` alone.
+serde_json = { version = "1.0.154", optional = true, default-features = false, features = ["alloc", "preserve_order"] }
+
 [dev-dependencies]
 hex = "0.4"
+
+[[test]]
+name = "paths"
+required-features = ["tree"]
+
+[[test]]
+name = "forms"
+required-features = ["tree"]
+
+[[test]]
+name = "readme"
+required-features = ["tree"]

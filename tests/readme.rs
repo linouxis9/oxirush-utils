@@ -30,3 +30,22 @@ fn the_first_sample_prints_what_the_readme_shows() {
         assert!(readme.contains(line), "{line}");
     }
 }
+
+/// The tree module says its example prints this: the order of the members is that in
+/// which they were written.
+#[test]
+fn the_sample_of_the_tree_module_prints_what_its_documentation_shows() {
+    use oxirush_utils::tree;
+    use serde_json::json;
+
+    let mut message = json!({
+        "message-type": "registration-request",
+        "requested-nssai": [{"sst": 1}, {"sst": 2, "sd": "0000ff"}],
+    });
+    tree::set(&mut message, "/requested-nssai/0/sd", json!("000001")).unwrap();
+    tree::remove(&mut message, "/requested-nssai/1").unwrap();
+    let shown =
+        r#"{"message-type":"registration-request","requested-nssai":[{"sst":1,"sd":"000001"}]}"#;
+    assert_eq!(message.to_string(), shown);
+    assert!(include_str!("../src/tree/mod.rs").contains(shown));
+}

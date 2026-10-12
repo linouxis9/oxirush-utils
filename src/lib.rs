@@ -15,7 +15,8 @@
    limitations under the License.
 */
 
-//! What the OxiRush crates share: the identities of 3GPP networks as values.
+//! What the OxiRush crates share: the identities of 3GPP networks as values, and one
+//! tree with paths for the messages of every family.
 //!
 //! ```
 //! use oxirush_utils::identity::Plmn;
@@ -28,12 +29,18 @@
 //! # Ok::<(), oxirush_utils::identity::Error>(())
 //! ```
 //!
-//! | Module | Has |
-//! |--------|-----|
-//! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity |
+//! | Module | Has | Feature |
+//! |--------|-----|---------|
+//! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity | none |
+//! | [`tree`] | The tree of a message as a `serde_json::Value`: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |
 //!
 //! The crate is `no_std` with `alloc`, has no dependency without a feature, and no
 //! `unsafe`.
+//!
+//! The feature `tree` turns on `serde_json/preserve_order`, so that the members of a
+//! tree keep the order of the specification whatever else a build enables. Cargo
+//! unifies features: every `serde_json::Map` of a program that depends on this feature
+//! then keeps the order in which its members were inserted.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -43,8 +50,11 @@
 extern crate alloc;
 
 pub mod identity;
+#[cfg(feature = "tree")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tree")))]
+pub mod tree;
 
 /// The blocks of the README, which are compiled and run with the documentation tests.
-#[cfg(doctest)]
+#[cfg(all(doctest, feature = "tree"))]
 #[doc = include_str!("../README.md")]
 struct _Readme;
