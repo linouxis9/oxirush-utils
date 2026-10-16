@@ -146,6 +146,30 @@ fn main() -> Result<(), oxirush_utils::identity::Error> {
 }
 ```
 
+### The SUCI in the form of a NAI
+
+A SUPI that is no IMSI is a NAI, and so is its SUCI. The grammar of a NAI is
+that of RFC 7542; with the feature `idna` its realm is also a name that IDNA
+takes as it is written.
+
+```rust
+use oxirush_utils::identity::{NaiSuci, SupiType, nai};
+
+fn main() -> Result<(), oxirush_utils::identity::Error> {
+    // The example of TS 23.003 clause 28.7.3: a network specific identifier in clear
+    let suci: NaiSuci = "type1.rid678.schid0.useriduser17@example.com".parse()?;
+    assert_eq!(suci.supi_type(), SupiType::NetworkSpecific);
+    assert_eq!((suci.clear(), suci.realm()), (Some("user17"), "example.com"));
+
+    // In a 5GS mobile identity, after the SUPI format of a network specific identifier
+    assert_eq!(suci.to_nas_octets()?[0], 0x11);
+
+    // A realm has two labels at least
+    assert_eq!(nai::check_realm("example").unwrap_err().member, "realm");
+    Ok(())
+}
+```
+
 ### What other implementations send
 
 `from_nas_octets` gives a value only for the octets that the value is written
@@ -381,6 +405,7 @@ fn main() {
 |---------|------|---------|
 | `tree` | The tree of a message, its forms and its paths | `serde_json` with `preserve_order` |
 | `serde` | `Serialize` and `Deserialize` for a type through its tree | `serde_core` |
+| `idna` | The realm and the username of a NAI are also checked as internationalized names: Unicode normalization form C, and a realm that IDNA takes as it is written | `idna`, `unicode-normalization` |
 
 No feature is on by default.
 
@@ -395,9 +420,8 @@ those of the program too.
 - It knows no codec and no message: the crates of each family do.
 - It conceals no SUCI and derives no key:
   [oxirush-security](https://github.com/linouxis9/oxirush-security) does.
-- A SUCI in the form of a NAI, which a SUPI that is no IMSI has, is no type
-  here: `ImsiSuci` is the SUCI of an IMSI, and `Supi` checks of a NAI that it
-  has a realm and its length, not its grammar.
+- `Supi` checks of a NAI that it has a realm and its length, not its
+  grammar, which `nai::check_realm` and `nai::check_username` check.
 - A value of `identity` holds what the clauses allow. Octets that are no such
   identity stay octets in the crate that read them.
 

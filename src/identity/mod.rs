@@ -51,6 +51,7 @@
 //! | [`digits::decode_tolerant`], and the `_tolerant` readers of [`Imsi`], [`Imei`] and [`Imeisv`] | another half octet than `1111` as the end mark of an even number of digits | TS 24.008 clause 10.5.1.4; PacketRusher sends an IMEISV so, and Open5GS, free5GC and pycrate read it |
 //! | [`Guti5g::from_nas_octets_tolerant`], [`STmsi5g::from_nas_octets_tolerant`] | the spare bit 4 of the first octet as 1 | TS 24.007 clause 11.1.4: a receiver accepts a spare bit as 0 or as 1 |
 //! | [`ImsiSuci::from_nas_octets_tolerant`] | a spare bit of the first octet or of the octet of the scheme as 1; a SUPI format of 4 to 7 as that of an IMSI | TS 24.007 clause 11.1.4, and Open5GS reads neither bit 4 of the first octet nor the spare half of the scheme; TS 24.501 table 9.11.3.4.1: "All other values are interpreted as IMSI", as free5GC reads them |
+//! | [`NaiSuci::from_nas_octets_tolerant`] | a spare bit of the first octet as 1 | TS 24.007 clause 11.1.4 |
 //!
 //! Which reader a family calls is its own decision. A tolerant reader never makes a
 //! value up: octets that are not the identity however they are read stay an error.
@@ -58,6 +59,7 @@
 pub mod digits;
 mod error;
 mod guti;
+pub mod nai;
 mod plmn;
 mod suci;
 mod supi;
@@ -67,6 +69,7 @@ mod types;
 pub use digits::{Imei, Imeisv, Imsi, tbcd};
 pub use error::{Error, Fault, Faults};
 pub use guti::{Guti5g, GutiEps, STmsi5g, STmsiEps};
+pub use nai::NaiSuci;
 pub use plmn::Plmn;
 pub use suci::{ImsiSuci, ProtectionScheme, RoutingIndicator};
 pub use supi::{Supi, SupiType};

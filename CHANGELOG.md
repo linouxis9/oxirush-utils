@@ -20,8 +20,17 @@ once.
   `ImsiSuci`, the SUCI of an IMSI as the value of its parts, with
   `RoutingIndicator` and `ProtectionScheme`: the 5GS mobile identity of
   TS 24.501 figure 9.11.3.4.3, and the text `suci-0-208-93-0-0-0-0000000001`.
-  The crate conceals nothing and reads no concealed identity. The SUCI in the
-  form of a NAI is not a type of this version.
+  The crate conceals nothing and reads no concealed identity.
+- `NaiSuci`, the SUCI in the form of a NAI that a network specific
+  identifier, a GCI or a GLI has, and an IMSI as a NAI (TS 23.003 clauses
+  28.7.3, 28.15.5 and 28.16.5): the text
+  `type1.rid678.schid0.useriduser17@example.com` and the 5GS mobile identity
+  that holds it, with the rules of each SUPI type, the key identifier of the
+  scheme and the fields of a profile of ECIES. `nai::check_realm` and
+  `nai::check_username` check the grammar of RFC 7542, and
+  `nai::home_network_domain` writes the realm of an IMSI. With the feature
+  `idna` a realm and a username are also in Unicode normalization form C, and
+  a realm is a name that IDNA takes as it is written.
 - A reader of octets is canonical: it gives a value only for the octets that
   the value is written as. The readers named `_tolerant` also take what other
   implementations are known to send, with a list of what was not by the

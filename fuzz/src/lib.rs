@@ -28,8 +28,8 @@
 //! the tree as it was, and a value that is set is the one that is selected.
 
 use oxirush_utils::identity::{
-    Guti5g, GutiEps, Imei, Imeisv, Imsi, ImsiSuci, Plmn, RoutingIndicator, STmsi5g, Supi, Tai5gs,
-    TaiEps, digits, tbcd,
+    Guti5g, GutiEps, Imei, Imeisv, Imsi, ImsiSuci, NaiSuci, Plmn, RoutingIndicator, STmsi5g, Supi,
+    Tai5gs, TaiEps, digits, nai, tbcd,
 };
 use oxirush_utils::tree::{self, Family, Next, Place, Root, Step};
 use serde_json::Value;
@@ -114,6 +114,17 @@ pub fn identity(octets: &[u8]) {
         }
         Err(_) => assert!(strict.is_err()),
     }
+    // The SUCI in the form of a NAI.
+    let strict = NaiSuci::from_nas_octets(octets);
+    match NaiSuci::from_nas_octets_tolerant(octets) {
+        Ok((suci, faults)) => {
+            assert_eq!(strict.is_ok(), faults.is_empty());
+            let canonical = suci.to_nas_octets().unwrap();
+            assert_eq!(NaiSuci::from_nas_octets(&canonical).as_ref(), Ok(&suci));
+            assert_eq!(suci.clear().is_some(), suci.concealed_output().is_none());
+        }
+        Err(_) => assert!(strict.is_err()),
+    }
     if let Ok(two) = <[u8; 2]>::try_from(octets)
         && let Ok(indicator) = RoutingIndicator::from_nas_octets(two)
     {
@@ -162,6 +173,23 @@ pub fn identity(octets: &[u8]) {
     if let Ok(suci) = text.parse::<ImsiSuci>() {
         assert_eq!(suci.to_string(), text.to_ascii_lowercase());
         assert_eq!(ImsiSuci::from_nas_octets(&suci.to_nas_octets()), Ok(suci));
+    }
+    // A SUCI in the form of a NAI writes its octets in lower case, and the rest as it came.
+    if let Ok(suci) = text.parse::<NaiSuci>() {
+        assert_eq!(suci.to_string().parse().as_ref(), Ok(&suci));
+        if !text.bytes().any(|c| c.is_ascii_uppercase()) {
+            assert_eq!(suci.to_string(), text);
+        }
+        if let Ok(octets) = suci.to_nas_octets() {
+            assert_eq!(NaiSuci::from_nas_octets(&octets).as_ref(), Ok(&suci));
+        }
+        assert_eq!(nai::check_realm(suci.realm()), Ok(()));
+    }
+    if let Some((username, realm)) = text.rsplit_once('@')
+        && nai::check_realm(realm).is_ok()
+        && nai::check_username(username).is_ok()
+    {
+        assert!(!username.is_empty() && !realm.is_empty());
     }
 }
 

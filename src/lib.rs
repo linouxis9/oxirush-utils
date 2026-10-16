@@ -31,7 +31,7 @@
 //!
 //! | Module | Has | Feature |
 //! |--------|-----|---------|
-//! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the SUPI with its type, the SUCI of an IMSI, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity | none |
+//! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the SUPI with its type, the SUCI of an IMSI and the SUCI in the form of a NAI with the grammar of a NAI, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity | none |
 // A module that a feature turns on is a link when the build has it.
 #![cfg_attr(
     feature = "tree",
@@ -51,7 +51,8 @@
 )]
 //!
 //! The crate is `no_std` with `alloc`, has no dependency without a feature, and no
-//! `unsafe`.
+//! `unsafe`. With the feature `idna`, the realm and the username of a NAI are also
+//! checked as internationalized names (see [`identity::nai::check_realm`]).
 //!
 //! The feature `tree` turns on `serde_json/preserve_order`, so that the members of a
 //! tree keep the order of the specification whatever else a build enables. Cargo

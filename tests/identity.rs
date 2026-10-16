@@ -7,8 +7,8 @@
 
 use oxirush_utils::identity::{
     Error, Fault, Guti5g, GutiEps, IdentityType, Imei, Imeisv, Imsi, ImsiSuci,
-    MobileIdentityType5gs, MobileIdentityTypeEps, Plmn, ProtectionScheme, RoutingIndicator,
-    STmsi5g, STmsiEps, Supi, SupiType, Tai5gs, TaiEps, digits, tbcd,
+    MobileIdentityType5gs, MobileIdentityTypeEps, NaiSuci, Plmn, ProtectionScheme,
+    RoutingIndicator, STmsi5g, STmsiEps, Supi, SupiType, Tai5gs, TaiEps, digits, nai, tbcd,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -1313,6 +1313,542 @@ fn any_suci_of_an_imsi_is_read_from_what_it_writes() {
     }
     assert!(
         read > 5_000 && refused > 5_000,
+        "{read} read, {refused} refused"
+    );
+}
+
+// ── The SUCI in the form of a NAI ───────────────────────────────────────────
+
+fn nai_suci(text: &str) -> NaiSuci {
+    text.parse().unwrap()
+}
+
+/// What a text that is no SUCI is refused with: the member at fault.
+fn refused_member(text: &str) -> &'static str {
+    text.parse::<NaiSuci>().unwrap_err().member
+}
+
+/// A 5GS mobile identity that holds the NAI `text`, with the SUPI format `format`.
+fn nas(format: u8, text: &str) -> Vec<u8> {
+    let mut octets = vec![format << 4 | 0x01];
+    octets.extend_from_slice(text.as_bytes());
+    octets
+}
+
+/// The examples of TS 23.003 clauses 28.7.3, 28.15.5 and 28.16.5, as text and as the 5GS
+/// mobile identity of TS 24.501 figure 9.11.3.4.3b.
+#[test]
+fn a_suci_in_the_form_of_a_nai_is_read_and_written_back() {
+    let text = "type1.rid678.schid0.useriduser17@example.com";
+    let suci = nai_suci(text);
+    assert_eq!(suci.supi_type(), SupiType::NetworkSpecific);
+    assert_eq!(suci.routing_indicator().as_str(), "678");
+    assert_eq!(suci.protection_scheme(), ProtectionScheme::NULL);
+    assert_eq!(suci.home_network_public_key_identifier(), 0);
+    assert_eq!(
+        (suci.clear(), suci.realm()),
+        (Some("user17"), "example.com")
+    );
+    assert_eq!((suci.concealed_output(), suci.ecies()), (None, None));
+    assert_eq!(suci.to_string(), text);
+    assert_eq!(format!("{suci:?}"), format!("NaiSuci({text})"));
+    assert_eq!(suci.to_nas_octets().unwrap(), nas(1, text));
+    assert_eq!(NaiSuci::from_nas_octets(&nas(1, text)).unwrap(), suci);
+
+    // The SUPI format of NAS has the GCI as 2 and the GLI as 3, and the SUPI type of the
+    // NAI the other way round.
+    let gci = "type3.rid0.schid0.userid00-00-5E-00-53-00@operator.com";
+    let gli = "type2.rid0.schid0.useridQUJDRA==@operator.com";
+    assert_eq!(nai_suci(gci).supi_type(), SupiType::Gci);
+    assert_eq!(nai_suci(gli).supi_type(), SupiType::Gli);
+    assert_eq!(nai_suci(gci).to_nas_octets().unwrap(), nas(2, gci));
+    assert_eq!(nai_suci(gli).to_nas_octets().unwrap(), nas(3, gli));
+    for (format, text) in [(1, gci), (2, gli), (3, gci), (2, text)] {
+        let error = NaiSuci::from_nas_octets(&nas(format, text)).unwrap_err();
+        assert_eq!(error.member, "supi-type", "{format} {text}");
+    }
+    // An anonymous SUCI has no username.
+    let anonymous = nai_suci("type1.rid678.schid0.userid@example.com");
+    assert_eq!(anonymous.clear(), Some(""));
+    // A GCI and a GLI have the routing indicator 0 and the null scheme.
+    assert_eq!(
+        refused_member("type3.rid1.schid0.userid00-00-5E-00-53-00@operator.com"),
+        "routing-indicator"
+    );
+    assert_eq!(
+        refused_member("type3.rid0.schid12.hnkey1.outaa@operator.com"),
+        "protection-scheme"
+    );
+    // What is no mobile identity of a NAI.
+    for octets in [
+        &[][..],
+        &[0x12, b'a'],
+        &[0x01, b'a'],
+        &[0x71, b'a'],
+        &[0x11, 0xff, b'@'],
+    ] {
+        assert!(NaiSuci::from_nas_octets(octets).is_err(), "{octets:02x?}");
+    }
+}
+
+/// TS 33.501 annex C.4: the scheme outputs of the network specific identifier
+/// verylongusername1@3gpp.com, with the null scheme (C.4.2.2) and the profiles A
+/// (C.4.3.2) and B (C.4.4.2), written as the annex writes them, in upper case.
+#[test]
+fn the_scheme_outputs_of_annex_c4_are_read_and_written_back() {
+    let null = nai_suci("type1.rid0.schid0.useridverylongusername1@3gpp.com");
+    assert_eq!(null.clear(), Some("verylongusername1"));
+    let concealed = [
+        (
+            1,
+            "ecckey977D8B2FDAA7B64AA700D04227D5B440630EA4EC50F9082273A26BB678C92222.\
+             cip8E358A1582ADB15322C10E515141D2039A.mac12E1D7783A97F1AC",
+            "977d8b2fdaa7b64aa700d04227d5b440630ea4ec50f9082273a26bb678c92222",
+            "8e358a1582adb15322c10e515141d2039a",
+            "12e1d7783a97f1ac",
+        ),
+        (
+            2,
+            "ecckey03759BB22C563D9F4A6B3C1419E543FC2F39D6823F02A9D71162B39399218B244B.\
+             cipBE22D8B9F856A52ED381CD7EAF4CF2D525.mac3CDDC61A0A7882EB",
+            "03759bb22c563d9f4a6b3c1419e543fc2f39d6823f02a9d71162b39399218b244b",
+            "be22d8b9f856a52ed381cd7eaf4cf2d525",
+            "3cddc61a0a7882eb",
+        ),
+    ];
+    for (scheme, output, public_key, ciphertext, tag) in concealed {
+        let text = format!("type1.rid678.schid{scheme}.hnkey27.{output}@3gpp.com");
+        let suci = nai_suci(&text);
+        assert_eq!(suci.protection_scheme().identifier(), scheme);
+        assert_eq!(suci.home_network_public_key_identifier(), 27);
+        let (key, cipher, mac) = suci.ecies().unwrap();
+        assert_eq!(
+            (hex::encode(key), hex::encode(cipher), hex::encode(mac)),
+            (public_key.into(), ciphertext.into(), tag.into())
+        );
+        let concealed = [
+            hex::decode(public_key).unwrap(),
+            hex::decode(ciphertext).unwrap(),
+        ];
+        let mut whole = concealed.concat();
+        whole.extend(hex::decode(tag).unwrap());
+        assert_eq!(suci.concealed_output(), Some(&whole[..]));
+        // Written in lower case, and read back from it and from its mobile identity
+        let written = format!(
+            "type1.rid678.schid{scheme}.hnkey27.ecckey{public_key}.cip{ciphertext}.mac{tag}@3gpp.com"
+        );
+        assert_eq!(suci.to_string(), written);
+        assert_eq!(nai_suci(&written), suci);
+        assert_eq!(
+            NaiSuci::from_nas_octets(&suci.to_nas_octets().unwrap()).unwrap(),
+            suci
+        );
+        let made = NaiSuci::concealed(
+            SupiType::NetworkSpecific,
+            RoutingIndicator::new("678").unwrap(),
+            ProtectionScheme::new(scheme).unwrap(),
+            27,
+            whole,
+            "3gpp.com",
+        );
+        assert_eq!(made.unwrap(), suci);
+    }
+}
+
+/// Each mistake names its member.
+#[test]
+fn a_text_that_is_no_suci_in_the_form_of_a_nai_is_refused_with_its_member() {
+    for (text, member) in [
+        ("type1.rid678.schid0.useriduser17", "nai"),
+        ("type1.rid678.schid0.useriduser17@example", "realm"),
+        ("type1.rid678.schid0.useriduser17@", "realm"),
+        ("@example.com", "type"),
+        ("user17@example.com", "type"),
+        ("typex.rid678.schid0.useridu@example.com", "type"),
+        ("type1@example.com", "rid"),
+        ("type1.schid0.rid1.useridu@example.com", "rid"),
+        ("type1.rid678@example.com", "schid"),
+        (
+            "type1.rid678.schid16.useridu@example.com",
+            "protection-scheme",
+        ),
+        (
+            "type1.rid678.schid3.hnkey27.out00@example.com",
+            "protection-scheme",
+        ),
+        ("type1.rid678.schid0@example.com", "userid"),
+        ("type1.rid678.schid0.user17@example.com", "userid"),
+        ("type1.rid678.schid1@example.com", "hnkey"),
+        ("type1.rid678.schid1.hnkey@example.com", "hnkey"),
+        ("type1.rid678.schid1.hnkey1000.ecckey@example.com", "hnkey"),
+        ("type1.rid678.schid12.hnkey027.out00@example.com", "hnkey"),
+        ("type01.rid678.schid0.useridu@example.com", "type"),
+        ("type1.rid678.schid00.useridu@example.com", "schid"),
+        ("type1.rid678.schid1.hnkey27@example.com", "ecckey"),
+        ("type1.rid678.schid12.hnkey27@example.com", "out"),
+        ("type1.rid678.schid12.hnkey27.outnot-hex@example.com", "out"),
+        ("type1.rid678.schid12.hnkey27.outabc@example.com", "out"),
+        ("type7.rid678.schid0.useridu@example.com", "supi-type"),
+        (
+            "type1.rid12345.schid0.useridu@example.com",
+            "routing-indicator",
+        ),
+        ("type1.rid678.schid0.userida b@example.com", "username"),
+    ] {
+        assert_eq!(refused_member(text), member, "{text}");
+    }
+    // The fields of a profile, each missing or of another length
+    let key = "42".repeat(32);
+    let profile = |ecckey: &str, cip: &str, mac: &str| {
+        format!("type1.rid678.schid1.hnkey27.{ecckey}.{cip}.{mac}@example.com")
+    };
+    let whole = profile(&format!("ecckey{key}"), "cipaabb", "mac0011223344556677");
+    assert!(whole.parse::<NaiSuci>().is_ok());
+    for (text, member) in [
+        (
+            profile(
+                &format!("ecckey{}", &key[2..]),
+                "cipaabb",
+                "mac0011223344556677",
+            ),
+            "ecckey",
+        ),
+        (
+            profile(&format!("key{key}"), "cipaabb", "mac0011223344556677"),
+            "ecckey",
+        ),
+        (
+            profile(&format!("ecckey{key}"), "cip", "mac0011223344556677"),
+            "cip",
+        ),
+        (
+            profile(&format!("ecckey{key}"), "cipaab", "mac0011223344556677"),
+            "cip",
+        ),
+        (
+            profile(&format!("ecckey{key}"), "cipaabb", "mac00112233445566"),
+            "mac",
+        ),
+        (
+            profile(
+                &format!("ecckey{key}"),
+                "cipaabb",
+                "mac0011223344556677.more",
+            ),
+            "mac",
+        ),
+        (whole.replace(".mac0011223344556677", ""), "mac"),
+    ] {
+        assert_eq!(refused_member(&text), member, "{text}");
+    }
+    // The text of an error says what the member is written as.
+    let error = "type1.rid678.schid1.hnkey27@example.com".parse::<NaiSuci>();
+    assert_eq!(
+        error.unwrap_err().to_string(),
+        "`ecckey` is written as ecckey and the ephemeral public key in hexadecimal digits"
+    );
+}
+
+/// The length is looked at first, and the realm before the username.
+#[test]
+fn a_text_that_is_too_long_is_refused_before_it_is_read() {
+    let huge = format!(
+        "type1.rid0.schid0.userid{}@example.com",
+        "a".repeat(64 * 1024)
+    );
+    let error = huge.parse::<NaiSuci>().unwrap_err();
+    assert_eq!(error.member, "nai");
+    assert!(
+        matches!(error.fault, Fault::Length { max: 6824, .. }),
+        "{error:?}"
+    );
+    assert_eq!(
+        NaiSuci::from_nas_octets(&nas(1, &huge)).unwrap_err().member,
+        "nai"
+    );
+    let long_realm = format!("type1.rid0.schid0.useridu@{}.com", "a".repeat(250));
+    assert_eq!(refused_member(&long_realm), "realm");
+    // The longest realm, of labels of 63 octets at most
+    let realm = format!("{0}.{0}.{0}.{1}.com", "a".repeat(63), "a".repeat(57));
+    assert_eq!(realm.len(), 253);
+    assert!(
+        format!("type1.rid0.schid0.useridu@{realm}")
+            .parse::<NaiSuci>()
+            .is_ok()
+    );
+    let long_label = format!("type1.rid0.schid0.useridu@{}.com", "a".repeat(64));
+    assert_eq!(refused_member(&long_label), "realm");
+    // A username of more than 253 octets, in clear and as ciphertext
+    let long_username = format!("type1.rid0.schid0.userid{}@example.com", "a".repeat(254));
+    assert_eq!(refused_member(&long_username), "username");
+    let long_ciphertext = format!(
+        "type1.rid0.schid1.hnkey1.ecckey{}.cip{}.mac0011223344556677@example.com",
+        "42".repeat(32),
+        "aa".repeat(254)
+    );
+    assert_eq!(refused_member(&long_ciphertext), "cip");
+}
+
+/// The home network public key identifier is 1 to 254 with a scheme that conceals, and 0
+/// with the null scheme, in this form as in a mobile identity.
+#[test]
+fn a_key_identifier_is_one_of_its_scheme() {
+    for valid in [1, 27, 254] {
+        let text = format!("type1.rid678.schid12.hnkey{valid}.out00abff@example.com");
+        let suci = nai_suci(&text);
+        assert_eq!(suci.home_network_public_key_identifier(), valid);
+        assert_eq!(suci.concealed_output(), Some(&[0x00, 0xab, 0xff][..]));
+        assert_eq!(suci.to_string(), text);
+    }
+    for invalid in [0u8, 255] {
+        let text = format!("type1.rid678.schid12.hnkey{invalid}.out00abff@example.com");
+        let error = text.parse::<NaiSuci>().unwrap_err();
+        assert_eq!(error.member, "home-network-public-key-identifier");
+        assert!(matches!(error.fault, Fault::Value { given, .. } if given == u64::from(invalid)));
+    }
+    // Hexadecimal digits of either case are read, and written in lower case
+    let upper = nai_suci("type1.rid678.schid12.hnkey27.out00ABFF@example.com");
+    assert_eq!(
+        upper.to_string(),
+        "type1.rid678.schid12.hnkey27.out00abff@example.com"
+    );
+    // The null scheme has no key
+    let routing = RoutingIndicator::default();
+    let kind = SupiType::NetworkSpecific;
+    let null = NaiSuci::concealed(kind, routing, ProtectionScheme::NULL, 0, vec![1], "a.b");
+    assert_eq!(null.unwrap_err().member, "protection-scheme");
+}
+
+#[test]
+fn the_grammar_of_rfc_7542_is_strict() {
+    for realm in [
+        ".",
+        "a..b",
+        "-bad.example",
+        "bad-.example",
+        "example",
+        "a b.example",
+    ] {
+        assert_eq!(
+            nai::check_realm(realm).unwrap_err().member,
+            "realm",
+            "realm {realm:?}"
+        );
+    }
+    for username in ["a b", "a@b", "a..b", ".a", "a.", ""] {
+        assert_eq!(
+            nai::check_username(username).unwrap_err().member,
+            "username",
+            "username {username:?}"
+        );
+    }
+    for username in [
+        "user\u{a0}name",
+        "user\u{2003}name",
+        "élodie",
+        "a!#$%&'*+-/=?^_`{|}~z",
+    ] {
+        assert_eq!(nai::check_username(username), Ok(()), "{username:?}");
+    }
+    for username in ["user\u{85}name", "user\u{7f}name"] {
+        assert!(nai::check_username(username).is_err(), "{username:?}");
+    }
+    for realm in ["bücher.example", "xn--bcher-kva.example", "a-b.c-d.example"] {
+        assert_eq!(nai::check_realm(realm), Ok(()), "{realm}");
+    }
+    // A realm and a username that are not normalized, and realms that IDNA maps to another
+    // name: refused with the feature `idna`, and taken by the grammar alone without it.
+    let idna = cfg!(feature = "idna");
+    for realm in [
+        "ｅxample.com",
+        "a．b.example",
+        "bu\u{0308}cher.example",
+        "xn--zz.example",
+    ] {
+        assert_eq!(nai::check_realm(realm).is_err(), idna, "{realm}");
+    }
+    assert_eq!(nai::check_username("e\u{301}").is_err(), idna);
+}
+
+/// TS 23.003 clause 28.7.3: the SUCI of an IMSI in the form of a NAI, whose realm is the
+/// home network domain. Its MSIN is not known to belong to one PLMN, as the realm writes
+/// the MNC with three digits: it has no mobile identity of its own.
+#[test]
+fn an_imsi_in_the_form_of_a_nai_has_the_home_network_domain() {
+    for text in [
+        "type0.rid678.schid0.userid0999999999@5gc.mnc015.mcc234.3gppnetwork.org",
+        "type0.rid678.schid0.userid0999999999@5gc.nid000007ed9d5.mnc015.mcc234.3gppnetwork.org",
+    ] {
+        let suci = nai_suci(text);
+        assert_eq!(suci.supi_type(), SupiType::Imsi);
+        assert_eq!(suci.to_string(), text);
+        assert_eq!(suci.to_nas_octets().unwrap_err().member, "supi-type");
+    }
+    for (text, member) in [
+        (
+            "type0.rid678.schid0.userid@5gc.mnc015.mcc234.3gppnetwork.org",
+            "msin",
+        ),
+        (
+            "type0.rid678.schid0.useridabc@5gc.mnc015.mcc234.3gppnetwork.org",
+            "msin",
+        ),
+        (
+            "type0.rid678.schid0.userid01234567890@5gc.mnc015.mcc234.3gppnetwork.org",
+            "msin",
+        ),
+        ("type0.rid678.schid0.userid0123@example.com", "realm"),
+        (
+            "type0.rid678.schid0.userid0123@5gc.mnc15.mcc234.3gppnetwork.org",
+            "realm",
+        ),
+        (
+            "type0.rid678.schid0.userid0123@5gc.nid3.mnc015.mcc234.3gppnetwork.org",
+            "realm",
+        ),
+        (
+            "type0.rid678.schid0.userid0123@5gc.mnc015.mcc234.3gppnetwork.org.x",
+            "realm",
+        ),
+        ("type3.rid0.schid0.userid@operator.com", "username"),
+        ("type2.rid0.schid0.userid***@operator.com", "username"),
+    ] {
+        assert_eq!(refused_member(text), member, "{text}");
+    }
+    assert_eq!(
+        nai::home_network_domain(plmn("234-15")),
+        "5gc.mnc015.mcc234.3gppnetwork.org"
+    );
+    assert_eq!(
+        nai::home_network_domain(plmn("310-410")),
+        "5gc.mnc410.mcc310.3gppnetwork.org"
+    );
+}
+
+/// TS 23.003 clause 28.16.4: a GLI is base64 of RFC 4648 as it is written, of 150 octets at
+/// most.
+#[test]
+fn a_gli_is_base64_as_it_is_written() {
+    let gli = |username: &str| format!("type2.rid0.schid0.userid{username}@operator.com");
+    for valid in ["QUJDRA==", "QUJD", "QUI=", "+/+/"] {
+        assert!(gli(valid).parse::<NaiSuci>().is_ok(), "{valid}");
+    }
+    let longest = "QUJD".repeat(50);
+    assert!(gli(&longest).parse::<NaiSuci>().is_ok());
+    for invalid in [
+        "QUJDRA=", "QUJDRB==", "QUJ=", "Q===", "QU=D", "QUJD====", "QU JD", "",
+    ] {
+        assert_eq!(refused_member(&gli(invalid)), "username", "{invalid}");
+    }
+    assert_eq!(refused_member(&gli(&format!("{longest}QUJD"))), "username");
+}
+
+/// The spare bits of the first octet are read by the tolerant reader, which says so.
+#[test]
+fn a_spare_bit_of_a_suci_in_the_form_of_a_nai_is_read_with_its_fault() {
+    let text = "type1.rid678.schid0.useriduser17@example.com";
+    for first in [0x91, 0x19] {
+        let octets = nas(1, text);
+        let mut spare = octets.clone();
+        spare[0] = first;
+        let (suci, faults) = NaiSuci::from_nas_octets_tolerant(&spare).unwrap();
+        assert_eq!(suci.to_nas_octets().unwrap(), octets);
+        assert_eq!(faults.len(), 1);
+        assert_eq!(
+            (faults[0].member, faults[0].fault),
+            ("suci", Fault::Spare { given: first })
+        );
+        let error: Error = NaiSuci::from_nas_octets(&spare).unwrap_err();
+        assert_eq!(error.fault, Fault::Spare { given: first });
+    }
+}
+
+/// Every SUCI that is made is read from the text and from the octets that it writes, and
+/// any text near one is read as a SUCI that writes it again, or refused.
+#[test]
+fn any_suci_in_the_form_of_a_nai_is_read_from_what_it_writes() {
+    let mut numbers = Numbers(0x5ec1);
+    let hex = |numbers: &mut Numbers, count: usize| -> Vec<u8> {
+        (0..count).map(|_| numbers.next() as u8).collect()
+    };
+    let realms = ["example.com", "operator.com", "a-b.c.example", "3gpp.com"];
+    let mut made = Vec::new();
+    for _ in 0..2_000 {
+        let realm = realms[(numbers.next() % 4) as usize];
+        let length = 1 + (numbers.next() % 4) as usize;
+        let routing = RoutingIndicator::new(&numbers.digits(length));
+        let routing = routing.unwrap();
+        let suci = match numbers.next() % 4 {
+            0 => {
+                let length = (numbers.next() % 20) as usize;
+                let username = format!("u{}", numbers.digits(length));
+                NaiSuci::null(SupiType::NetworkSpecific, routing, &username, realm)
+            }
+            1 => NaiSuci::null(SupiType::Gci, RoutingIndicator::default(), "a.b-c", realm),
+            2 => {
+                let scheme = ProtectionScheme::new(1 + (numbers.next() % 2) as u8).unwrap();
+                let key = if scheme == ProtectionScheme::PROFILE_A {
+                    32
+                } else {
+                    33
+                };
+                let length = key + 1 + (numbers.next() % 40) as usize + 8;
+                let output = hex(&mut numbers, length);
+                let key_id = 1 + (numbers.next() % 254) as u8;
+                NaiSuci::concealed(
+                    SupiType::NetworkSpecific,
+                    routing,
+                    scheme,
+                    key_id,
+                    output,
+                    realm,
+                )
+            }
+            _ => {
+                let scheme = ProtectionScheme::new(12 + (numbers.next() % 4) as u8).unwrap();
+                let length = 1 + (numbers.next() % 60) as usize;
+                let output = hex(&mut numbers, length);
+                let key_id = 1 + (numbers.next() % 254) as u8;
+                NaiSuci::concealed(
+                    SupiType::NetworkSpecific,
+                    routing,
+                    scheme,
+                    key_id,
+                    output,
+                    realm,
+                )
+            }
+        };
+        let suci = suci.unwrap();
+        assert_eq!(nai_suci(&suci.to_string()), suci);
+        assert_eq!(
+            NaiSuci::from_nas_octets(&suci.to_nas_octets().unwrap()).unwrap(),
+            suci
+        );
+        made.push(suci.to_string());
+    }
+    // A character of a text changed: read as a SUCI that writes it again, or refused
+    let (mut read, mut refused) = (0, 0);
+    let alphabet = b"0123456789abcdef.@-ABxyz";
+    for text in made.iter().cycle().take(20_000) {
+        let mut changed = text.clone().into_bytes();
+        let at = (numbers.next() as usize) % changed.len();
+        changed[at] = alphabet[(numbers.next() as usize) % alphabet.len()];
+        let changed = String::from_utf8(changed).unwrap();
+        match changed.parse::<NaiSuci>() {
+            Ok(suci) => {
+                // Hexadecimal digits are written in lower case, and the rest as it came.
+                assert_eq!(nai_suci(&suci.to_string()), suci);
+                if !changed.bytes().any(|c| c.is_ascii_uppercase()) {
+                    assert_eq!(suci.to_string(), changed);
+                }
+                read += 1;
+            }
+            Err(_) => refused += 1,
+        }
+    }
+    assert!(
+        read > 1_000 && refused > 1_000,
         "{read} read, {refused} refused"
     );
 }
