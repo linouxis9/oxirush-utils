@@ -22,6 +22,13 @@
 //! masked: `Display` is the form that a log and a tree show, and `Debug` the same with
 //! the name of the type.
 //!
+//! What holds a text or a list needs the feature `alloc`: the SUPI that owns its text,
+//! the SUCI of an IMSI and the SUCI in the form of a NAI, TBCD strings, and identity
+//! digits as octets. The rest needs no allocator: the PLMN, the IMSI, the IMEI and the
+//! IMEISV as values, the GUTIs, the S-TMSIs and the TAIs, the types of identity, the
+//! routing indicator and the protection scheme of a SUCI, the grammar of a NAI, a SUPI
+//! that borrows its text, and the errors.
+//!
 //! ```
 //! use oxirush_utils::identity::{Guti5g, Imsi, Plmn};
 //!
@@ -48,10 +55,31 @@
 //!
 //! | Reader | Reads also | Why |
 //! |--------|-----------|-----|
-//! | [`digits::decode_tolerant`], and the `_tolerant` readers of [`Imsi`], [`Imei`] and [`Imeisv`] | another half octet than `1111` as the end mark of an even number of digits | TS 24.008 clause 10.5.1.4; PacketRusher sends an IMEISV so, and Open5GS, free5GC and pycrate read it |
+#![cfg_attr(
+    feature = "alloc",
+    doc = "| [`digits::decode_tolerant`], and the `_tolerant` readers of [`Imsi`], [`Imei`] and [`Imeisv`] | another half octet than `1111` as the end mark of an even number of digits | TS 24.008 clause 10.5.1.4; PacketRusher sends an IMEISV so, and Open5GS, free5GC and pycrate read it |"
+)]
+#![cfg_attr(
+    not(feature = "alloc"),
+    doc = "| `digits::decode_tolerant`, and the `_tolerant` readers of `Imsi`, `Imei` and `Imeisv` | another half octet than `1111` as the end mark of an even number of digits | TS 24.008 clause 10.5.1.4; PacketRusher sends an IMEISV so, and Open5GS, free5GC and pycrate read it |"
+)]
 //! | [`Guti5g::from_nas_octets_tolerant`], [`STmsi5g::from_nas_octets_tolerant`] | the spare bit 4 of the first octet as 1 | TS 24.007 clause 11.1.4: a receiver accepts a spare bit as 0 or as 1 |
-//! | [`ImsiSuci::from_nas_octets_tolerant`] | a spare bit of the first octet or of the octet of the scheme as 1; a SUPI format of 4 to 7 as that of an IMSI | TS 24.007 clause 11.1.4, and Open5GS reads neither bit 4 of the first octet nor the spare half of the scheme; TS 24.501 table 9.11.3.4.1: "All other values are interpreted as IMSI", as free5GC reads them |
-//! | [`NaiSuci::from_nas_octets_tolerant`] | a spare bit of the first octet as 1 | TS 24.007 clause 11.1.4 |
+#![cfg_attr(
+    feature = "alloc",
+    doc = "| [`ImsiSuci::from_nas_octets_tolerant`] | a spare bit of the first octet or of the octet of the scheme as 1; a SUPI format of 4 to 7 as that of an IMSI | TS 24.007 clause 11.1.4, and Open5GS reads neither bit 4 of the first octet nor the spare half of the scheme; TS 24.501 table 9.11.3.4.1: \"All other values are interpreted as IMSI\", as free5GC reads them |"
+)]
+#![cfg_attr(
+    not(feature = "alloc"),
+    doc = "| `ImsiSuci::from_nas_octets_tolerant` | a spare bit of the first octet or of the octet of the scheme as 1; a SUPI format of 4 to 7 as that of an IMSI | TS 24.007 clause 11.1.4, and Open5GS reads neither bit 4 of the first octet nor the spare half of the scheme; TS 24.501 table 9.11.3.4.1: \"All other values are interpreted as IMSI\", as free5GC reads them |"
+)]
+#![cfg_attr(
+    feature = "alloc",
+    doc = "| [`NaiSuci::from_nas_octets_tolerant`] | a spare bit of the first octet as 1 | TS 24.007 clause 11.1.4 |"
+)]
+#![cfg_attr(
+    not(feature = "alloc"),
+    doc = "| `NaiSuci::from_nas_octets_tolerant` | a spare bit of the first octet as 1 | TS 24.007 clause 11.1.4 |"
+)]
 //!
 //! Which reader a family calls is its own decision. A tolerant reader never makes a
 //! value up: octets that are not the identity however they are read stay an error.
@@ -66,12 +94,17 @@ mod supi;
 mod tai;
 mod types;
 
-pub use digits::{Imei, Imeisv, Imsi, tbcd};
+#[cfg(feature = "alloc")]
+pub use digits::tbcd;
+pub use digits::{Imei, Imeisv, Imsi};
 pub use error::{Error, Fault, Faults};
 pub use guti::{Guti5g, GutiEps, STmsi5g, STmsiEps};
+#[cfg(feature = "alloc")]
 pub use nai::NaiSuci;
 pub use plmn::Plmn;
-pub use suci::{ImsiSuci, ProtectionScheme, RoutingIndicator};
+#[cfg(feature = "alloc")]
+pub use suci::ImsiSuci;
+pub use suci::{ProtectionScheme, RoutingIndicator};
 pub use supi::{Supi, SupiType};
 pub use tai::{Tai5gs, TaiEps};
 pub use types::{IdentityType, MobileIdentityType5gs, MobileIdentityTypeEps};

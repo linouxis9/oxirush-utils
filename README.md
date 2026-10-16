@@ -35,9 +35,11 @@ This page describes 0.1.0, which is not on crates.io yet.
 
 ```toml
 [dependencies]
-oxirush-utils = "0.1"
-# With the tree and its paths:
+oxirush-utils = { version = "0.1", features = ["alloc"] }
+# With the tree and its paths, which need an allocator too:
 # oxirush-utils = { version = "0.1", features = ["tree"] }
+# Without an allocator, the values that have their digits in place:
+# oxirush-utils = "0.1"
 ```
 
 The minimum supported Rust version is 1.88.
@@ -403,6 +405,7 @@ fn main() {
 
 | Feature | Adds | Through |
 |---------|------|---------|
+| `alloc` | What holds a text or a list: the SUPI that owns its text, the SUCIs, TBCD strings, identity digits as octets. Without it the crate needs no allocator | |
 | `tree` | The tree of a message, its forms and its paths | `serde_json` with `preserve_order` |
 | `serde` | `Serialize` and `Deserialize` for a type through its tree | `serde_core` |
 | `idna` | The realm and the username of a NAI are also checked as internationalized names: Unicode normalization form C, and a realm that IDNA takes as it is written | `idna`, `unicode-normalization` |

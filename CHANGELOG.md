@@ -54,5 +54,8 @@ once.
 - `tree::serde`, with the feature `serde`: `Serialize` and `Deserialize` for
   a type through its tree, by `impl_serde!` or the two functions that it
   calls.
-- `no_std` with `alloc`, no `unsafe`, no dependency without a feature. The
+- `no_std`, no `unsafe`, no dependency without a feature. What holds a text
+  or a list is the feature `alloc`, which `tree` and `idna` turn on: without
+  it the crate needs no allocator, so that a program without one can take the
+  PLMN, the GUTIs and the other values that have their digits in place. The
   minimum supported Rust version is 1.88.

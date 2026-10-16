@@ -18,9 +18,10 @@
 //! The SUPI, and the types of SUPI by both of their numberings.
 
 use super::{Error, Fault, Imsi};
-use alloc::borrow::Cow;
+#[cfg(feature = "alloc")]
 use alloc::string::String;
 use core::fmt;
+#[cfg(feature = "alloc")]
 use core::str::FromStr;
 
 /// The type of a SUPI: an IMSI, a network specific identifier, a global line identifier
@@ -137,7 +138,8 @@ const LONGEST_NAI: usize = 253 + 1 + 253;
 /// It is written and read with its type before it, as `imsi-208930000000001` and
 /// `nai-user@example.com`, which is how the service-based interfaces write one (`Supi`
 /// in the OpenAPI of TS 29.571). It borrows its text, or owns it after
-/// [`into_owned`](Self::into_owned): one that is borrowed is made without an allocation.
+/// `into_owned`, with the feature `alloc`: one that is borrowed is made without an
+/// allocation.
 ///
 /// The NAI of a SUPI is a username, `@` and a realm that is not empty, of 507 octets at
 /// most. Its grammar, that of RFC 7542, is not checked here.
@@ -156,7 +158,52 @@ const LONGEST_NAI: usize = 253 + 1 + 253;
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Supi<'a> {
     kind: SupiType,
-    identity: Cow<'a, str>,
+    identity: Text<'a>,
+}
+
+/// The text of a SUPI: the caller's, or one of its own, which needs an allocator. Two are
+/// compared by their characters, whoever holds them.
+#[derive(Clone)]
+enum Text<'a> {
+    Borrowed(&'a str),
+    #[cfg(feature = "alloc")]
+    Owned(String),
+}
+
+impl Text<'_> {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Borrowed(text) => text,
+            #[cfg(feature = "alloc")]
+            Self::Owned(text) => text,
+        }
+    }
+}
+
+impl PartialEq for Text<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for Text<'_> {}
+
+impl PartialOrd for Text<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Text<'_> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl core::hash::Hash for Text<'_> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
+    }
 }
 
 impl<'a> Supi<'a> {
@@ -169,7 +216,7 @@ impl<'a> Supi<'a> {
         Imsi::new(imsi)?;
         Ok(Self {
             kind: SupiType::Imsi,
-            identity: Cow::Borrowed(imsi),
+            identity: Text::Borrowed(imsi),
         })
     }
 
@@ -207,7 +254,7 @@ impl<'a> Supi<'a> {
         match nai.rsplit_once('@') {
             Some((_, realm)) if !realm.is_empty() => Ok(Self {
                 kind,
-                identity: Cow::Borrowed(nai),
+                identity: Text::Borrowed(nai),
             }),
             _ => {
                 let expected = "a username, @ and a realm, as user@example.com";
@@ -249,38 +296,42 @@ impl<'a> Supi<'a> {
     /// The identity without its type: the digits of an IMSI, or the whole NAI. It is
     /// what the derivation of K_AMF takes as the SUPI (3GPP TS 33.501 annex A.7.0).
     pub fn identity(&self) -> &str {
-        &self.identity
+        self.identity.as_str()
     }
 
     /// The IMSI, when the SUPI is one.
     pub fn as_imsi(&self) -> Option<Imsi> {
         match self.kind {
-            SupiType::Imsi => Imsi::new(&self.identity).ok(),
+            SupiType::Imsi => Imsi::new(self.identity()).ok(),
             _ => None,
         }
     }
 
     /// The same SUPI, which owns its text.
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
     pub fn into_owned(self) -> Supi<'static> {
         Supi {
             kind: self.kind,
-            identity: Cow::Owned(self.identity.into_owned()),
+            identity: Text::Owned(String::from(self.identity())),
         }
     }
 }
 
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 impl From<Imsi> for Supi<'static> {
     fn from(imsi: Imsi) -> Self {
         Self {
             kind: SupiType::Imsi,
-            identity: Cow::Owned(String::from(imsi.as_str())),
+            identity: Text::Owned(String::from(imsi.as_str())),
         }
     }
 }
 
 impl fmt::Display for Supi<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.kind.prefix(), self.identity)
+        write!(f, "{}{}", self.kind.prefix(), self.identity())
     }
 }
 
@@ -290,6 +341,8 @@ impl fmt::Debug for Supi<'_> {
     }
 }
 
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 impl FromStr for Supi<'static> {
     type Err = Error;
 

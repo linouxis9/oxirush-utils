@@ -21,12 +21,17 @@
 //! a NAI too (3GPP TS 23.003 clauses 28.7.3, 28.15.5 and 28.16.5). Concealing an identity
 //! and reading a concealed one need keys, and are no part of this crate.
 
-use super::{Error, Fault, Faults, Plmn, ProtectionScheme, RoutingIndicator, SupiType, Tolerated};
-use alloc::format;
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
-use core::fmt;
-use core::str::FromStr;
+use super::{Error, Fault};
+#[cfg(feature = "alloc")]
+use super::{Faults, Plmn, ProtectionScheme, RoutingIndicator, SupiType, Tolerated};
+#[cfg(feature = "alloc")]
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+#[cfg(feature = "alloc")]
+use core::{fmt, str::FromStr};
 
 /// The longest realm, in octets: the longest domain name (RFC 1035 clause 2.3.4).
 const LONGEST_REALM: usize = 253;
@@ -35,20 +40,26 @@ const LONGEST_LABEL: usize = 63;
 /// The longest username of a SUPI, in octets, which is also the longest plaintext of a
 /// profile of ECIES.
 const LONGEST_USERNAME: usize = 253;
+#[cfg(feature = "alloc")]
 /// The longest output of a scheme of the home operator, in octets: 3000 and the size of
 /// its input (3GPP TS 33.501 annex C.1).
 const LONGEST_OPERATOR_OUTPUT: usize = 3000 + LONGEST_USERNAME;
+#[cfg(feature = "alloc")]
 /// The longest SUCI in the form of a NAI, in octets: the fields before the scheme output,
 /// the longest output in hexadecimal digits, `@` and the longest realm. Nothing longer is
 /// looked at.
 const LONGEST_NAI: usize = 64 + 2 * LONGEST_OPERATOR_OUTPUT + 1 + LONGEST_REALM;
+#[cfg(feature = "alloc")]
 /// The octets of the ephemeral public key of the profile A of ECIES (X25519), of the
 /// profile B (a compressed point of secp256r1), and of the MAC tag of both (TS 33.501
 /// annex C.3.4).
 const PROFILE_A_KEY: usize = 32;
+#[cfg(feature = "alloc")]
 const PROFILE_B_KEY: usize = 33;
+#[cfg(feature = "alloc")]
 const MAC_TAG: usize = 8;
 
+#[cfg(feature = "alloc")]
 /// What a NAI is written as, when it is no NAI.
 const A_NAI: &str = "a username, @ and a realm, as type1.rid678.schid0.useriduser17@example.com";
 
@@ -195,6 +206,8 @@ fn username_character(character: char) -> bool {
     }
 }
 
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 /// The realm of the SUCI of an IMSI in the form of a NAI: the home network domain of its
 /// PLMN, `5gc.mnc<MNC>.mcc<MCC>.3gppnetwork.org`, with the MNC of three digits (3GPP
 /// TS 23.003 clauses 28.2 and 28.7.3).
@@ -214,6 +227,7 @@ pub fn home_network_domain(plmn: Plmn) -> String {
     )
 }
 
+#[cfg(feature = "alloc")]
 /// Whether `realm` is a home network domain, with the NID of an SNPN or without it
 /// (TS 23.003 clauses 28.2 and 28.7.3): `5gc.[nid<NID>.]mnc<MNC>.mcc<MCC>.3gppnetwork.org`.
 fn is_home_network_domain(realm: &str) -> bool {
@@ -245,6 +259,7 @@ fn is_home_network_domain(realm: &str) -> bool {
         && labels.next().is_none()
 }
 
+#[cfg(feature = "alloc")]
 /// Whether `text` is a GLI: base64 of RFC 4648 as it is written, with its padding and no
 /// other bits, of 150 octets at most, which is 200 characters at most (TS 23.003 clause
 /// 28.16.4).
@@ -277,6 +292,7 @@ fn is_gli(text: &str) -> bool {
     }
 }
 
+#[cfg(feature = "alloc")]
 /// Check that `clear` is what a SUPI of type `kind` has before the `@` of its NAI, or the
 /// MSIN of an IMSI: the scheme output of the null scheme, and the plaintext of a profile.
 fn check_clear(kind: SupiType, clear: &str) -> Result<(), Error> {
@@ -309,6 +325,7 @@ fn check_clear(kind: SupiType, clear: &str) -> Result<(), Error> {
     }
 }
 
+#[cfg(feature = "alloc")]
 /// The octets of the ephemeral public key of a profile of ECIES.
 fn ephemeral_key_octets(scheme: ProtectionScheme) -> Option<usize> {
     match scheme {
@@ -318,6 +335,8 @@ fn ephemeral_key_octets(scheme: ProtectionScheme) -> Option<usize> {
     }
 }
 
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 /// The SUCI of a SUPI in the form of a NAI (3GPP TS 23.003 clauses 28.7.3, 28.15.5 and
 /// 28.16.5): its SUPI type, routing indicator, protection scheme, the identifier of the
 /// public key of the home network, the scheme output, and the realm, which the scheme
@@ -358,6 +377,7 @@ pub struct NaiSuci {
     realm: String,
 }
 
+#[cfg(feature = "alloc")]
 impl NaiSuci {
     /// The SUCI of a SUPI that is not concealed: the null scheme, the key identifier 0,
     /// and `clear` as the scheme output, which is the username of the NAI, or the MSIN of
@@ -691,6 +711,7 @@ impl NaiSuci {
     }
 }
 
+#[cfg(feature = "alloc")]
 /// The error of a field that is missing, or that does not begin with its name.
 fn missing(field: &'static str) -> Error {
     let expected = match field {
@@ -707,6 +728,7 @@ fn missing(field: &'static str) -> Error {
     Error::new(field, Fault::Form { expected })
 }
 
+#[cfg(feature = "alloc")]
 /// The decimal number of a field after its name: 1 to 3 digits of a number below 256,
 /// without a zero before it, so that a number is written in one way.
 fn number(field: &'static str, text: &str) -> Result<u8, Error> {
@@ -720,6 +742,7 @@ fn number(field: &'static str, text: &str) -> Result<u8, Error> {
     }
 }
 
+#[cfg(feature = "alloc")]
 /// The octets that a field writes in hexadecimal digits after its name: `fewest` to
 /// `most` of them.
 fn octets(
@@ -752,11 +775,13 @@ fn octets(
         .collect())
 }
 
+#[cfg(feature = "alloc")]
 /// Octets in lower-case hexadecimal digits.
 fn hexadecimal(f: &mut fmt::Formatter<'_>, octets: &[u8]) -> fmt::Result {
     octets.iter().try_for_each(|octet| write!(f, "{octet:02x}"))
 }
 
+#[cfg(feature = "alloc")]
 impl fmt::Display for NaiSuci {
     /// The NAI, as [`parse`](NaiSuci::parse) reads it: the octets in lower-case
     /// hexadecimal digits.
@@ -785,12 +810,14 @@ impl fmt::Display for NaiSuci {
     }
 }
 
+#[cfg(feature = "alloc")]
 impl fmt::Debug for NaiSuci {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "NaiSuci({self})")
     }
 }
 
+#[cfg(feature = "alloc")]
 impl FromStr for NaiSuci {
     type Err = Error;
 

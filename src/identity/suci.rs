@@ -19,9 +19,11 @@
 //! What conceals an identity and what reads a concealed one are no part of it.
 
 use super::plmn::FILLER;
-use super::{Error, Fault, Faults, Imsi, Plmn, Tolerated, tbcd};
-use alloc::string::String;
-use alloc::vec::Vec;
+use super::{Error, Fault};
+#[cfg(feature = "alloc")]
+use super::{Faults, Imsi, Plmn, Tolerated, tbcd};
+#[cfg(feature = "alloc")]
+use alloc::{string::String, vec::Vec};
 use core::fmt;
 use core::str::FromStr;
 
@@ -247,6 +249,8 @@ impl FromStr for RoutingIndicator {
 /// assert_eq!(ImsiSuci::from_nas_octets(&octets)?, suci);
 /// # Ok::<(), oxirush_utils::identity::Error>(())
 /// ```
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ImsiSuci {
     plmn: Plmn,
@@ -257,6 +261,7 @@ pub struct ImsiSuci {
     output: Vec<u8>,
 }
 
+#[cfg(feature = "alloc")]
 impl ImsiSuci {
     /// The SUCI of an IMSI that is not concealed: the null scheme, the key identifier
     /// 0, and the MSIN as the scheme output.
@@ -483,6 +488,7 @@ impl ImsiSuci {
     }
 }
 
+#[cfg(feature = "alloc")]
 impl fmt::Display for ImsiSuci {
     /// `suci-0-`, then the MCC, the MNC, the routing indicator, the scheme, the key
     /// identifier and the scheme output, with a hyphen between them, by the pattern of
@@ -507,12 +513,14 @@ impl fmt::Display for ImsiSuci {
     }
 }
 
+#[cfg(feature = "alloc")]
 impl fmt::Debug for ImsiSuci {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "ImsiSuci({self})")
     }
 }
 
+#[cfg(feature = "alloc")]
 impl FromStr for ImsiSuci {
     type Err = Error;
 

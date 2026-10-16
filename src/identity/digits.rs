@@ -18,10 +18,11 @@
 //! Digits in half octets: TBCD strings, the identity digits of a mobile identity, and the
 //! IMSI, the IMEI and the IMEISV.
 
-use super::plmn::FILLER;
-use super::{Error, Fault, Faults, Plmn, Tolerated};
-use alloc::string::String;
-use alloc::vec::Vec;
+use super::{Error, Fault, Plmn};
+#[cfg(feature = "alloc")]
+use super::{Faults, Tolerated, plmn::FILLER};
+#[cfg(feature = "alloc")]
+use alloc::{string::String, vec::Vec};
 use core::fmt;
 use core::str::FromStr;
 
@@ -39,6 +40,8 @@ use core::str::FromStr;
 /// assert_eq!(tbcd::decode(&[0x21, 0x43, 0xf5])?, "12345");
 /// # Ok::<(), oxirush_utils::identity::Error>(())
 /// ```
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 pub mod tbcd {
     use super::*;
 
@@ -120,6 +123,8 @@ pub mod tbcd {
 /// assert_eq!(digits::decode(&octets)?, (1, "208930000000001".to_string()));
 /// # Ok::<(), oxirush_utils::identity::Error>(())
 /// ```
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 pub fn encode(type_of_identity: u8, digits: &str) -> Result<Vec<u8>, Error> {
     if type_of_identity > 7 {
         let fault = Fault::Range {
@@ -147,6 +152,8 @@ pub fn encode(type_of_identity: u8, digits: &str) -> Result<Vec<u8>, Error> {
 /// There is no octet, a half octet is no decimal digit where a digit is, the odd/even
 /// indication says an even number of digits and the octets have one digit, or the end
 /// mark of an even number of digits is not `1111`.
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 pub fn decode(octets: &[u8]) -> Result<(u8, String), Error> {
     let (read, faults) = decode_tolerant(octets)?;
     match faults.first() {
@@ -169,6 +176,8 @@ pub fn decode(octets: &[u8]) -> Result<(u8, String), Error> {
 ///
 /// What [`decode`] refuses but for that end mark: octets that are not the digits of an
 /// identity however they are read.
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 pub fn decode_tolerant(octets: &[u8]) -> Result<Tolerated<(u8, String)>, Error> {
     let member = "identity-digits";
     let Some((first, rest)) = octets.split_first() else {
@@ -239,6 +248,7 @@ impl<const N: usize> Decimal<N> {
 
 /// The identity of `kind` that `octets` hold, strictly or with the faults of a tolerant
 /// reading.
+#[cfg(feature = "alloc")]
 fn read<T>(
     member: &'static str,
     type_of_identity: u8,
@@ -257,6 +267,7 @@ fn read<T>(
 }
 
 /// The value of a tolerant reading when it has no fault, and its first fault otherwise.
+#[cfg(feature = "alloc")]
 fn strict<T>(read: Tolerated<T>) -> Result<T, Error> {
     match read.1.first() {
         Some(fault) => Err(*fault),
@@ -279,6 +290,8 @@ macro_rules! digits_identity {
             /// # Errors
             ///
             /// `type_of_identity` is above 7.
+            #[cfg(feature = "alloc")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
             pub fn to_nas_octets(&self, type_of_identity: u8) -> Result<Vec<u8>, Error> {
                 encode(type_of_identity, self.as_str())
             }
@@ -290,6 +303,8 @@ macro_rules! digits_identity {
             ///
             /// What [`digits::decode`](decode) refuses, another type of identity, or
             /// another number of digits.
+            #[cfg(feature = "alloc")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
             pub fn from_nas_octets(type_of_identity: u8, octets: &[u8]) -> Result<Self, Error> {
                 strict(Self::from_nas_octets_tolerant(type_of_identity, octets)?)
             }
@@ -302,6 +317,8 @@ macro_rules! digits_identity {
             /// # Errors
             ///
             #[doc = concat!("Octets that are no ", $what, " however they are read.")]
+            #[cfg(feature = "alloc")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
             pub fn from_nas_octets_tolerant(
                 type_of_identity: u8,
                 octets: &[u8],
@@ -346,6 +363,7 @@ macro_rules! digits_identity {
 /// assert_eq!(imsi.msin(2)?, "0000000001");
 ///
 /// // In an EPS mobile identity, where the type of identity of an IMSI is 1
+/// # #[cfg(feature = "alloc")]
 /// assert_eq!(imsi.to_nas_octets(1)?, [0x29, 0x80, 0x39, 0x00, 0x00, 0x00, 0x00, 0x10]);
 /// # Ok::<(), oxirush_utils::identity::Error>(())
 /// ```
@@ -488,8 +506,10 @@ digits_identity!(Imei, "imei", 15, 15, "IMEI");
 /// assert_eq!((imeisv.tac(), imeisv.snr(), imeisv.svn()), ("49015420", "323751", "01"));
 ///
 /// // In a 5GS mobile identity, where the type of identity of an IMEISV is 5
+/// # #[cfg(feature = "alloc")] {
 /// let octets = imeisv.to_nas_octets(5)?;
 /// assert_eq!(octets, [0x45, 0x09, 0x51, 0x24, 0x30, 0x32, 0x57, 0x01, 0xf1]);
+/// # }
 /// # Ok::<(), oxirush_utils::identity::Error>(())
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

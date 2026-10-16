@@ -21,6 +21,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
       - run: cargo test --features tree
+      - run: cargo test --features alloc
       - run: cargo test
 
   msrv:
@@ -54,6 +55,7 @@ jobs:
           targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --lib --target thumbv7em-none-eabihf
+      - run: cargo build --lib --target thumbv7em-none-eabihf --features alloc
       - run: cargo build --lib --target thumbv7em-none-eabihf --all-features
 
   clippy:
@@ -66,6 +68,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo clippy --all-targets --features alloc -- -D warnings
       - run: cargo clippy --all-targets -- -D warnings
 
   doc:
@@ -80,6 +83,9 @@ jobs:
           RUSTDOCFLAGS: -D warnings
       # Without a feature, as a workspace that has the crate as a member documents it.
       - run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - run: cargo doc --no-deps --features alloc
         env:
           RUSTDOCFLAGS: -D warnings
 

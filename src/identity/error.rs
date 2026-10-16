@@ -128,6 +128,7 @@ impl Error {
     }
 
     /// The same fault, of another member: that of the identity which holds the first.
+    #[cfg(feature = "alloc")]
     pub(crate) const fn of(mut self, member: &'static str) -> Self {
         self.member = member;
         self
@@ -245,6 +246,7 @@ impl Faults {
 
     /// The same faults, each of the member `member`: that of the identity which holds
     /// what was read.
+    #[cfg(feature = "alloc")]
     pub(crate) fn of(mut self, member: &'static str) -> Self {
         for fault in &mut self.faults {
             *fault = fault.of(member);
