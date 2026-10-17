@@ -66,11 +66,11 @@
 //! | [`Guti5g::from_nas_octets_tolerant`], [`STmsi5g::from_nas_octets_tolerant`] | the spare bit 4 of the first octet as 1 | TS 24.007 clause 11.1.4: a receiver accepts a spare bit as 0 or as 1 |
 #![cfg_attr(
     feature = "alloc",
-    doc = "| [`ImsiSuci::from_nas_octets_tolerant`] | a spare bit of the first octet or of the octet of the scheme as 1; a SUPI format of 4 to 7 as that of an IMSI | TS 24.007 clause 11.1.4, and Open5GS reads neither bit 4 of the first octet nor the spare half of the scheme; TS 24.501 table 9.11.3.4.1: \"All other values are interpreted as IMSI\", as free5GC reads them |"
+    doc = "| [`ImsiSuci::from_nas_octets_tolerant`] | a spare bit of the first octet or of the octet of the scheme as 1; a SUPI format of 4 to 7 as that of an IMSI; a scheme output of another length than its scheme gives it | TS 24.007 clause 11.1.4, and Open5GS reads neither bit 4 of the first octet nor the spare half of the scheme; TS 24.501 table 9.11.3.4.1: \"All other values are interpreted as IMSI\", as free5GC reads them; the scheme output is opaque to all but the home network, whose de-concealment refuses what is not of its profile (TS 33.501 annex C.3.3, TS 33.514 clause 4.2.1.3) |"
 )]
 #![cfg_attr(
     not(feature = "alloc"),
-    doc = "| `ImsiSuci::from_nas_octets_tolerant` | a spare bit of the first octet or of the octet of the scheme as 1; a SUPI format of 4 to 7 as that of an IMSI | TS 24.007 clause 11.1.4, and Open5GS reads neither bit 4 of the first octet nor the spare half of the scheme; TS 24.501 table 9.11.3.4.1: \"All other values are interpreted as IMSI\", as free5GC reads them |"
+    doc = "| `ImsiSuci::from_nas_octets_tolerant` | a spare bit of the first octet or of the octet of the scheme as 1; a SUPI format of 4 to 7 as that of an IMSI; a scheme output of another length than its scheme gives it | TS 24.007 clause 11.1.4, and Open5GS reads neither bit 4 of the first octet nor the spare half of the scheme; TS 24.501 table 9.11.3.4.1: \"All other values are interpreted as IMSI\", as free5GC reads them; the scheme output is opaque to all but the home network, whose de-concealment refuses what is not of its profile (TS 33.501 annex C.3.3, TS 33.514 clause 4.2.1.3) |"
 )]
 #![cfg_attr(
     feature = "alloc",

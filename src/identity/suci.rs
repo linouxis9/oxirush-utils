@@ -313,6 +313,22 @@ impl ImsiSuci {
         key_id: u8,
         output: Vec<u8>,
     ) -> Result<Self, Error> {
+        let suci = Self::of_any_output(plmn, routing_indicator, scheme, key_id, output)?;
+        match suci.output_length() {
+            Some(fault) => Err(fault),
+            None => Ok(suci),
+        }
+    }
+
+    /// The SUCI of an IMSI that a scheme conceals, whatever the length of its output:
+    /// [`concealed`](Self::concealed) without the check of that length.
+    fn of_any_output(
+        plmn: Plmn,
+        routing_indicator: RoutingIndicator,
+        scheme: ProtectionScheme,
+        key_id: u8,
+        output: Vec<u8>,
+    ) -> Result<Self, Error> {
         if scheme.is_null() {
             let expected = "a scheme that conceals: 1, 2 or 12 to 15";
             return Err(Error::new(
@@ -326,12 +342,24 @@ impl ImsiSuci {
             let fault = Fault::Value { given, expected };
             return Err(Error::new("home-network-public-key-identifier", fault));
         }
-        // The output of a profile of ECIES is the ephemeral public key, the ciphertext
-        // of the scheme input and the MAC tag, and that of a scheme of the operator 3000
-        // octets at most beside its input (TS 33.501 annex C.1). The input is the MSIN
-        // in packed BCD (annex C.3.1): one octet for two of its digits.
-        let input = (15 - plmn.digits().len()).div_ceil(2);
-        let (shortest, longest) = match scheme {
+        Ok(Self {
+            plmn,
+            routing_indicator,
+            scheme,
+            key_id,
+            output,
+        })
+    }
+
+    /// Why the output of a scheme that conceals has another length than its scheme gives
+    /// it; `None` for one of its length. The output of a profile of ECIES is the
+    /// ephemeral public key, the ciphertext of the scheme input and the MAC tag, and that
+    /// of a scheme of the operator 3000 octets at most beside its input (TS 33.501 annex
+    /// C.1). The input is the MSIN in packed BCD (annex C.3.1): one octet for two of its
+    /// digits.
+    fn output_length(&self) -> Option<Error> {
+        let input = (15 - self.plmn.digits().len()).div_ceil(2);
+        let (shortest, longest) = match self.scheme {
             ProtectionScheme::PROFILE_A => {
                 (PROFILE_A_KEY + 1 + MAC_TAG, PROFILE_A_KEY + input + MAC_TAG)
             }
@@ -340,23 +368,10 @@ impl ImsiSuci {
             }
             _ => (1, 3000 + input),
         };
-        if !(shortest..=longest).contains(&output.len()) {
-            let length = output.len();
-            return Err(Error::length(
-                "scheme-output",
-                "octets",
-                length,
-                shortest,
-                longest,
-            ));
-        }
-        Ok(Self {
-            plmn,
-            routing_indicator,
-            scheme,
-            key_id,
-            output,
-        })
+        let length = self.output.len();
+        let unit = "octets";
+        (!(shortest..=longest).contains(&length))
+            .then(|| Error::length("scheme-output", unit, length, shortest, longest))
     }
 
     /// The SUCI of an IMSI that is not concealed, for an MNC of `mnc_digits` digits and
@@ -451,12 +466,16 @@ impl ImsiSuci {
     /// send them: the value, and what a sender by the clause would have written
     /// otherwise.
     ///
-    /// Three departures are read, each a fault: a spare bit of the first octet that is
+    /// Four departures are read, each a fault: a spare bit of the first octet that is
     /// 1, a spare bit of the octet of the scheme that is 1 (3GPP TS 24.007 clause
     /// 11.1.4: a receiver accepts a spare bit as 0 or as 1; Open5GS reads neither bit 4
-    /// of the first octet nor the spare half of the scheme), and a SUPI format of 4 to
-    /// 7, which TS 24.501 table 9.11.3.4.1 has a receiver interpret as IMSI, as
-    /// free5GC does.
+    /// of the first octet nor the spare half of the scheme), a SUPI format of 4 to 7,
+    /// which TS 24.501 table 9.11.3.4.1 has a receiver interpret as IMSI, as free5GC
+    /// does, and a scheme output of a scheme that conceals of another length than its
+    /// scheme gives it. That output is opaque to every node but the home network,
+    /// whose de-concealment decides (TS 33.501 annex C.3.3; TS 33.514 clause 4.2.1.3
+    /// has it refuse an uncompressed ephemeral key of profile B): the value holds it
+    /// as it was received, and writes it back, so that a node passes it on.
     ///
     /// # Errors
     ///
@@ -508,7 +527,16 @@ impl ImsiSuci {
                 let msin = tbcd::decode(output).map_err(|error| error.of("msin"))?;
                 Self::null(plmn, routing_indicator, &msin)?
             }
-            false => Self::concealed(plmn, routing_indicator, scheme, *key_id, output.to_vec())?,
+            false => {
+                let output = output.to_vec();
+                let suci = Self::of_any_output(plmn, routing_indicator, scheme, *key_id, output)?;
+                // The output is opaque to every node but the home network, whose
+                // de-concealment decides: one of another length is read, as a fault.
+                if let Some(fault) = suci.output_length() {
+                    faults.push(fault);
+                }
+                suci
+            }
         };
         Ok((suci, faults))
     }

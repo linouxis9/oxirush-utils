@@ -100,15 +100,31 @@ pub fn identity(octets: &[u8]) {
         assert_eq!(guti.to_nas_octets(), octets);
         assert_eq!(guti.to_string().parse(), Ok(guti));
     }
-    // The SUCI of an IMSI, and its routing indicator.
+    // The SUCI of an IMSI, and its routing indicator. The value of a tolerant reading is
+    // canonical but for a scheme output of another length than its profile gives it,
+    // which it keeps for the home network: its octets are read again with that fault
+    // alone, and the text of the SUCI, which is read strictly, is refused.
     let strict = ImsiSuci::from_nas_octets(octets);
     match ImsiSuci::from_nas_octets_tolerant(octets) {
         Ok((suci, faults)) => {
             assert_eq!(strict.is_ok(), faults.is_empty());
             let canonical = suci.to_nas_octets();
-            assert_eq!(ImsiSuci::from_nas_octets(&canonical).as_ref(), Ok(&suci));
-            assert_eq!(faults.is_empty(), canonical == octets);
-            assert_eq!(suci.to_string().parse().as_ref(), Ok(&suci));
+            let kept = faults.iter().any(|fault| fault.member == "scheme-output");
+            let of_the_output = faults.iter().all(|fault| fault.member == "scheme-output");
+            assert_eq!(of_the_output, canonical == octets);
+            match kept {
+                false => {
+                    assert_eq!(ImsiSuci::from_nas_octets(&canonical).as_ref(), Ok(&suci));
+                    assert_eq!(suci.to_string().parse().as_ref(), Ok(&suci));
+                }
+                true => {
+                    let (again, faults) = ImsiSuci::from_nas_octets_tolerant(&canonical).unwrap();
+                    assert_eq!(again, suci);
+                    let members: Vec<_> = faults.iter().map(|fault| fault.member).collect();
+                    assert_eq!(members, ["scheme-output"]);
+                    assert!(suci.to_string().parse::<ImsiSuci>().is_err());
+                }
+            }
             assert_eq!(suci.msin().is_some(), suci.concealed_output().is_none());
             assert_eq!(suci.msin().is_some(), suci.imsi().is_some());
         }

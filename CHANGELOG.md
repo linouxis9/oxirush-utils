@@ -27,8 +27,9 @@ once.
   `type1.rid678.schid0.useriduser17@example.com` and the 5GS mobile identity
   that holds it, with the rules of each SUPI type, the key identifier of the
   scheme and the fields of a profile of ECIES. The scheme output of either
-  form has the lengths of the parts of its profile (TS 33.501 annex C.3.4):
-  41 to 45 octets for an IMSI with profile A, 42 to 46 with profile B.
+  form that is made has the lengths of the parts of its profile (TS 33.501
+  annex C.3.4): 41 to 45 octets for an IMSI with profile A, 42 to 46 with
+  profile B.
   `nai::check_realm` and `nai::check_username` check the grammar of RFC 7542,
   and `nai::home_network_domain` writes the realm of an IMSI. With the
   feature `idna` a realm and a username are also in Unicode normalization
@@ -39,7 +40,9 @@ once.
   implementations are known to send, with a list of what was not by the
   clause, which allocates nothing: another end mark than `1111` after an even
   number of identity digits, the spare bit of the first octet of a 5G-GUTI or
-  a 5G-S-TMSI, and the spare bits and the spare SUPI formats of a SUCI.
+  a 5G-S-TMSI, the spare bits and the spare SUPI formats of a SUCI, and the
+  scheme output of a SUCI of an IMSI of another length than its profile gives
+  it, which only the home network reads, and refuses.
 - `tree`, with the feature `tree`: the tree of a message as a `tree::Value`,
   JSON whose objects keep their members in the order in which they were
   written, which `tree!` writes in the code as `serde_json::json!` does. It

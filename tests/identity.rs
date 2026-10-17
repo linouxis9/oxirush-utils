@@ -1924,4 +1924,34 @@ fn the_output_of_a_profile_of_ecies_has_the_lengths_of_its_parts() {
     let mut octets = suci.to_nas_octets();
     octets.pop();
     assert!(ImsiSuci::from_nas_octets(&octets).is_err());
+
+    // What a peer sends is read with another length, as a fault: the scheme output is
+    // opaque to every node but the home network, whose de-concealment decides, as it
+    // refuses the uncompressed ephemeral key of profile B (TS 33.514 clause 4.2.1.3).
+    // The value writes the octets that were received, so that a node passes them on.
+    let mut uncompressed = concealed(2, 46).unwrap().to_nas_octets();
+    uncompressed.extend([0x5a; 32]);
+    for (octets, said) in [
+        (&octets, "`scheme-output` has 40 octets, and has 41 to 45"),
+        (
+            &uncompressed,
+            "`scheme-output` has 78 octets, and has 42 to 46",
+        ),
+    ] {
+        let (read, faults) = ImsiSuci::from_nas_octets_tolerant(octets).unwrap();
+        assert_eq!(faults.len(), 1);
+        assert_eq!(faults[0].to_string(), said);
+        assert_eq!(read.concealed_output(), Some(&octets[8..]));
+        assert_eq!(&read.to_nas_octets(), octets);
+        assert_eq!(ImsiSuci::from_nas_octets(octets), Err(faults[0]));
+    }
+    // With the spare bits, four faults: as many as one reading has.
+    let mut spare = uncompressed.clone();
+    (spare[0], spare[6]) = (0xc9, 0x12);
+    let (_, faults) = ImsiSuci::from_nas_octets_tolerant(&spare).unwrap();
+    let members: Vec<_> = faults.iter().map(|fault| fault.member).collect();
+    assert_eq!(
+        members,
+        ["supi-format", "suci", "protection-scheme", "scheme-output"]
+    );
 }
