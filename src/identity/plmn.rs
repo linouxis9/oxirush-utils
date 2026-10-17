@@ -17,6 +17,7 @@
 
 //! The PLMN identity, and its two codings.
 
+use super::digits::decimal;
 use super::{Error, Fault};
 use core::fmt;
 use core::str::FromStr;
@@ -65,20 +66,8 @@ impl Plmn {
     ///
     /// `mcc` is not three decimal digits, or `mnc` not two or three.
     pub fn new(mcc: &str, mnc: &str) -> Result<Self, Error> {
-        let digits = |member, text: &str, min, max| {
-            if !(min..=max).contains(&text.len()) {
-                return Err(Error::length(member, "digits", text.len(), min, max));
-            }
-            match text.chars().find(|character| !character.is_ascii_digit()) {
-                Some(given) => {
-                    let expected = "decimal digits";
-                    Err(Error::new(member, Fault::Character { given, expected }))
-                }
-                None => Ok(()),
-            }
-        };
-        digits("mcc", mcc, 3, 3)?;
-        digits("mnc", mnc, 2, 3)?;
+        decimal("mcc", mcc, 3, 3)?;
+        decimal("mnc", mnc, 2, 3)?;
         let mut all = [b'0'; 6];
         all[..3].copy_from_slice(mcc.as_bytes());
         all[3..3 + mnc.len()].copy_from_slice(mnc.as_bytes());

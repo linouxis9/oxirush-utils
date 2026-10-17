@@ -55,8 +55,8 @@
 //! checked as internationalized names (see [`identity::nai::check_realm`]).
 //!
 //! A tree keeps the order of the specification by itself: the crate turns on no
-//! feature of `serde_json`, and the JSON of a program that depends on it keeps the
-//! order that the program chose.
+//! feature of `serde_json` that orders a map, and the JSON of a program that depends on
+//! it keeps the order that the program chose.
 
 #![no_std]
 #![forbid(unsafe_code)]

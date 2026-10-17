@@ -19,6 +19,8 @@
 //! are written, whatever the features of `serde_json` in a build.
 
 use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
@@ -66,14 +68,24 @@ pub enum Value {
 /// that is added goes at the end, one that is given another value keeps its place, and
 /// one that is taken out leaves the others in theirs.
 ///
-/// It is a list: a member is found by its name in a time that grows with the number of
-/// members, which a value of a protocol has a few dozen of at most. What reads or compares
-/// a whole object, as a reader of JSON, `collect` or `==`, takes a time that grows as
-/// n log n whatever its size.
+/// It is a list. An object of more than 32 members also keeps the position of each name
+/// in an index, a copy of its names in their order, so that a member is found by its name
+/// in a time that grows as log n: whatever builds an object of n members with
+/// [`insert`](Self::insert), finds each of them, reads one from JSON or compares two takes
+/// a time that grows as n log n. Moving or taking out a member, which moves those after
+/// it, takes a time that grows as n.
 #[derive(Clone, Default)]
 pub struct Map {
     members: Vec<(String, Value)>,
+    /// For an object of more than [`INDEXED`] members, the position of each name. In a
+    /// box, it leaves a value of a tree the size that it has without an index.
+    #[allow(clippy::box_collection, reason = "a value of a tree keeps its size")]
+    index: Option<Box<BTreeMap<String, usize>>>,
 }
+
+/// The number of members above which an object keeps an index of its names: a value of a
+/// protocol has fewer, and a search of so few names takes less than the index.
+const INDEXED: usize = 32;
 
 impl Map {
     /// An object without members.
@@ -85,6 +97,7 @@ impl Map {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             members: Vec::with_capacity(capacity),
+            index: None,
         }
     }
 
@@ -101,34 +114,68 @@ impl Map {
     /// Take every member out.
     pub fn clear(&mut self) {
         self.members.clear();
+        self.index = None;
     }
 
+    /// The position of the member of this name.
     fn position(&self, name: &str) -> Option<usize> {
-        self.members.iter().position(|(known, _)| known == name)
+        match &self.index {
+            Some(index) => index.get(name).copied(),
+            None => self.members.iter().position(|(known, _)| known == name),
+        }
+    }
+
+    /// Add a member of a name that the object does not have, at the end.
+    fn push(&mut self, name: String, value: Value) {
+        if let Some(index) = &mut self.index {
+            index.insert(name.clone(), self.members.len());
+        }
+        self.members.push((name, value));
+        if self.index.is_none() && self.members.len() > INDEXED {
+            self.reindex(0);
+        }
+    }
+
+    /// Give the index the positions of the members from `from`, which have moved, or make
+    /// it, or leave it out for an object of [`INDEXED`] members or fewer.
+    fn reindex(&mut self, from: usize) {
+        if self.members.len() <= INDEXED {
+            self.index = None;
+            return;
+        }
+        let index = self.index.get_or_insert_with(Default::default);
+        let from = if index.is_empty() { 0 } else { from };
+        for (position, (name, _)) in self.members.iter().enumerate().skip(from) {
+            match index.get_mut(name.as_str()) {
+                Some(known) => *known = position,
+                None => {
+                    index.insert(name.clone(), position);
+                }
+            }
+        }
     }
 
     /// The member of this name.
     pub fn get(&self, name: &str) -> Option<&Value> {
-        self.members
-            .iter()
-            .find(|(known, _)| known == name)
-            .map(|(_, value)| value)
+        self.get_key_value(name).map(|(_, value)| value)
     }
 
     /// The member of this name, to change.
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Value> {
-        self.members
-            .iter_mut()
-            .find(|(known, _)| known == name)
-            .map(|(_, value)| value)
+        let member = match &self.index {
+            Some(index) => self.members.get_mut(*index.get(name)?),
+            None => self.members.iter_mut().find(|(known, _)| known == name),
+        };
+        member.map(|(_, value)| value)
     }
 
     /// The member of this name, with its name as the object has it.
     pub fn get_key_value(&self, name: &str) -> Option<(&String, &Value)> {
-        self.members
-            .iter()
-            .find(|(known, _)| known == name)
-            .map(|(name, value)| (name, value))
+        let member = match &self.index {
+            Some(index) => self.members.get(*index.get(name)?),
+            None => self.members.iter().find(|(known, _)| known == name),
+        };
+        member.map(|(name, value)| (name, value))
     }
 
     /// Whether it has a member of this name.
@@ -142,7 +189,7 @@ impl Map {
         match self.get_mut(&name) {
             Some(was) => Some(core::mem::replace(was, value)),
             None => {
-                self.members.push((name, value));
+                self.push(name, value);
                 None
             }
         }
@@ -153,15 +200,21 @@ impl Map {
     /// any.
     pub fn shift_insert(&mut self, position: usize, name: String, value: Value) -> Option<Value> {
         let was = self.shift_remove(&name);
-        self.members
-            .insert(position.min(self.members.len()), (name, value));
+        let position = position.min(self.members.len());
+        self.members.insert(position, (name, value));
+        self.reindex(position);
         was
     }
 
     /// Take the member `name` out, and leave the others in their order.
     pub fn shift_remove(&mut self, name: &str) -> Option<Value> {
         let position = self.position(name)?;
-        Some(self.members.remove(position).1)
+        let (name, value) = self.members.remove(position);
+        if let Some(index) = &mut self.index {
+            index.remove(&name);
+        }
+        self.reindex(position);
+        Some(value)
     }
 
     /// Take the member `name` out, and leave the others in their order: as
@@ -182,7 +235,12 @@ impl Map {
 
     /// Keep the members for which `keep` says so.
     pub fn retain(&mut self, mut keep: impl FnMut(&String, &mut Value) -> bool) {
+        let before = self.members.len();
         self.members.retain_mut(|(name, value)| keep(name, value));
+        if self.members.len() != before {
+            self.index = None;
+            self.reindex(0);
+        }
     }
 
     /// The members, in their order.
@@ -214,10 +272,14 @@ impl Map {
         self.members.iter_mut().map(|(_, value)| value)
     }
 
-    /// The members, from the first: what an object of a tree has, in its order, when
-    /// the names that it repeats are not known to be none.
+    /// The members, from the first, which have each their own name.
     pub(crate) fn from_members(members: Vec<(String, Value)>) -> Self {
-        Self { members }
+        let mut map = Self {
+            members,
+            index: None,
+        };
+        map.reindex(0);
+        map
     }
 
     /// The positions of the members, in the order of their names, and in that of the
@@ -226,36 +288,6 @@ impl Map {
         let mut order: Vec<usize> = (0..self.members.len()).collect();
         order.sort_by(|a, b| self.members[*a].0.cmp(&self.members[*b].0));
         order
-    }
-
-    /// Fold the members of a name that comes more than once into the first of them, which
-    /// takes the value of the last: a time that grows as n log n.
-    fn fold_repeated(&mut self) {
-        let order = self.by_name();
-        let mut folds = Vec::new();
-        for run in order.chunk_by(|a, b| self.members[*a].0 == self.members[*b].0) {
-            if let [first, .., last] = run {
-                folds.push((*first, *last, run.len()));
-            }
-        }
-        if folds.is_empty() {
-            return;
-        }
-        let mut gone = alloc::vec![false; self.members.len()];
-        for (first, last, _) in &folds {
-            let value = core::mem::take(&mut self.members[*last].1);
-            self.members[*first].1 = value;
-        }
-        for run in order.chunk_by(|a, b| self.members[*a].0 == self.members[*b].0) {
-            for other in run.iter().skip(1) {
-                gone[*other] = true;
-            }
-        }
-        let mut position = 0;
-        self.members.retain(|_| {
-            position += 1;
-            !gone[position - 1]
-        });
     }
 }
 
@@ -278,7 +310,7 @@ impl<'m> Entry<'m> {
         match self {
             Entry::Occupied(value) => value,
             Entry::Vacant(map, name) => {
-                map.members.push((name, value()));
+                map.push(name, value());
                 &mut map
                     .members
                     .last_mut()
@@ -363,8 +395,8 @@ impl FromIterator<(String, Value)> for Map {
     /// The members in the order of the iterator; a name that comes again gives its member
     /// the last value, at the place of the first.
     fn from_iter<I: IntoIterator<Item = (String, Value)>>(members: I) -> Self {
-        let mut map = Map::from_members(members.into_iter().collect());
-        map.fold_repeated();
+        let mut map = Map::new();
+        map.extend(members);
         map
     }
 }
@@ -373,8 +405,9 @@ impl Extend<(String, Value)> for Map {
     /// The members after those of the object, as [`insert`](Map::insert) adds them one
     /// after the other.
     fn extend<I: IntoIterator<Item = (String, Value)>>(&mut self, members: I) {
-        self.members.extend(members);
-        self.fold_repeated();
+        for (name, value) in members {
+            self.insert(name, value);
+        }
     }
 }
 

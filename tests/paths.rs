@@ -1373,7 +1373,8 @@ fn the_members_keep_the_order_in_which_they_are_written() {
 
 /// The third finding of the review of the move of the paths to oxirush-utils: the feature
 /// `tree` turned on `serde_json/preserve_order`, which changed every `serde_json::Map` of
-/// the program that used the crate. It turns on no feature of `serde_json` now: in this
+/// the program that used the crate. It turns on no feature of `serde_json` that orders a
+/// map now: in this
 /// build, which has every feature of the crate, a `serde_json::Map` is still in the order
 /// of its names, and a tree keeps its own order when it goes through one.
 #[test]

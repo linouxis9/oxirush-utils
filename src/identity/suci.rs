@@ -18,6 +18,7 @@
 //! The SUCI of an IMSI as a value, with its routing indicator and its protection scheme.
 //! What conceals an identity and what reads a concealed one are no part of it.
 
+use super::digits::decimal;
 #[cfg(feature = "alloc")]
 use super::nai::{MAC_TAG, PROFILE_A_KEY, PROFILE_B_KEY};
 use super::plmn::FILLER;
@@ -130,14 +131,7 @@ impl RoutingIndicator {
     ///
     /// `digits` are not one to four decimal digits.
     pub fn new(digits: &str) -> Result<Self, Error> {
-        let member = "routing-indicator";
-        if !(1..=4).contains(&digits.len()) {
-            return Err(Error::length(member, "digits", digits.len(), 1, 4));
-        }
-        if let Some(given) = digits.chars().find(|character| !character.is_ascii_digit()) {
-            let expected = "decimal digits";
-            return Err(Error::new(member, Fault::Character { given, expected }));
-        }
+        decimal("routing-indicator", digits, 1, 4)?;
         let mut all = [b'0'; 4];
         all[..digits.len()].copy_from_slice(digits.as_bytes());
         Ok(Self {
@@ -277,14 +271,7 @@ impl ImsiSuci {
         routing_indicator: RoutingIndicator,
         msin: &str,
     ) -> Result<Self, Error> {
-        let longest = 15 - plmn.digits().len();
-        if !(1..=longest).contains(&msin.len()) {
-            return Err(Error::length("msin", "digits", msin.len(), 1, longest));
-        }
-        if let Some(given) = msin.chars().find(|character| !character.is_ascii_digit()) {
-            let expected = "decimal digits";
-            return Err(Error::new("msin", Fault::Character { given, expected }));
-        }
+        decimal("msin", msin, 1, 15 - plmn.digits().len())?;
         Ok(Self {
             plmn,
             routing_indicator,

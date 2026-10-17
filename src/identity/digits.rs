@@ -207,17 +207,21 @@ pub fn decode_tolerant(octets: &[u8]) -> Result<Tolerated<(u8, String)>, Error> 
     Ok(((kind, digits), faults))
 }
 
-/// Check that `text` is `min` to `max` decimal digits.
-fn decimal(member: &'static str, text: &str, min: usize, max: usize) -> Result<(), Error> {
-    if !(min..=max).contains(&text.len()) {
-        return Err(Error::length(member, "digits", text.len(), min, max));
+/// Check that `text` is `min` to `max` decimal digits: a character that is no digit is
+/// refused as such, before the digits are counted.
+pub(crate) fn decimal(
+    member: &'static str,
+    text: &str,
+    min: usize,
+    max: usize,
+) -> Result<(), Error> {
+    if let Some(given) = text.chars().find(|character| !character.is_ascii_digit()) {
+        let expected = "decimal digits";
+        return Err(Error::new(member, Fault::Character { given, expected }));
     }
-    match text.chars().find(|character| !character.is_ascii_digit()) {
-        Some(given) => {
-            let expected = "decimal digits";
-            Err(Error::new(member, Fault::Character { given, expected }))
-        }
-        None => Ok(()),
+    match (min..=max).contains(&text.len()) {
+        true => Ok(()),
+        false => Err(Error::length(member, "digits", text.len(), min, max)),
     }
 }
 

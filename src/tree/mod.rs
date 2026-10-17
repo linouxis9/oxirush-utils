@@ -63,8 +63,9 @@
 //!
 //! The members of an object of a tree keep the order in which they were written, which
 //! is that of the specification: [`Map`] is a list of members, which a member that is
-//! taken out leaves in their order. The crate turns on no feature of `serde_json`, so the
-//! `serde_json::Map` of a program keeps the order that the program chose, and a tree is
+//! taken out leaves in their order. The crate turns on no feature of `serde_json` that
+//! orders a map, so the `serde_json::Map` of a program keeps the order that the program
+//! chose, and a tree is
 //! the same whatever a build enables. A tree converts to and from a `serde_json::Value`:
 //! a `serde_json::Map` sorts its members by their names, unless a crate of the program
 //! turns on `serde_json/preserve_order`.

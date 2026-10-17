@@ -14,7 +14,9 @@ once.
   `Guti5g` and `STmsi5g`, `GutiEps` and `STmsiEps`; `Tai5gs` and `TaiEps`; the
   types of identity of TS 24.501, TS 24.301 and TS 24.008. A value is checked
   when it is made, prints whole, and is `Eq`, `Ord` and `Hash`, and `Copy`
-  where it holds no text. An error names the member at fault and says why.
+  where it holds no text. An error names the member at fault and says why: a
+  character that is no digit is refused as that character, before the digits
+  are counted.
 - `Supi` with its `SupiType`, whose number in TS 23.003 clause 2.2B and whose
   SUPI format in TS 24.501 table 9.11.3.4.1 differ for a GLI and a GCI.
   `ImsiSuci`, the SUCI of an IMSI as the value of its parts, with
@@ -46,9 +48,12 @@ once.
 - `tree`, with the feature `tree`: the tree of a message as a `tree::Value`,
   JSON whose objects keep their members in the order in which they were
   written, which `tree!` writes in the code as `serde_json::json!` does. It
-  converts to and from a `serde_json::Value`, and the crate turns on no
-  feature of `serde_json`: the JSON of a program that depends on it keeps the
-  order that the program chose. A name written twice in an object of JSON is
+  converts to and from a `serde_json::Value`. Of the features of
+  `serde_json`, the crate turns on `float_roundtrip` alone: the JSON of a
+  program that depends on it keeps the order that the program chose, and a
+  number with a fraction that a tree prints is read back as it was. An
+  object of more than 32 members keeps an index of its names, so that one is
+  found in a time that grows as log n. A name written twice in an object of JSON is
   refused. `Tree`, `Members` and `Reading` write a type as a tree and read it
   from one, with refusals that say the member and why. Octets are
   hexadecimal in lower case, read in either; a number is a JSON number; a

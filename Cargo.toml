@@ -2,12 +2,12 @@
 name = "oxirush-utils"
 version = "0.1.0"
 edition = "2024"
-description = "What the OxiRush crates share: 3GPP identities as values (PLMN, IMSI, IMEI, GUTI, TAI) and one JSON tree with paths for every message family"
+description = "What the OxiRush crates share: the identities of 3GPP networks as values, and one JSON tree with paths for the messages of every family"
 license = "Apache-2.0"
 repository = "https://github.com/linouxis9/oxirush-utils"
 authors = ["Valentin D'Emmanuele"]
 rust-version = "1.88"
-keywords = ["3gpp", "5g", "lte", "plmn", "imsi"]
+keywords = ["3gpp", "5g", "lte", "imsi", "telecom"]
 categories = ["network-programming", "encoding", "no-std"]
 readme = "README.md"
 include = [
@@ -27,7 +27,7 @@ include = [
 alloc = []
 # The tree of a message, its forms and its paths. A tree is a `tree::Value`, whose objects
 # keep their members in the order in which they are written: the crate turns on no
-# feature of `serde_json`, and the `serde_json::Map` of a program is as the program has it.
+# feature of `serde_json` that orders a `serde_json::Map`, which is as the program has it.
 tree = ["alloc", "dep:serde_json", "dep:serde_core"]
 # `Serialize` and `Deserialize` for a type through its tree.
 serde = ["tree"]
@@ -47,8 +47,10 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)', 'cfg(docsrs)'] 
 
 [dependencies]
 # Its `Number` is that of a tree, and it reads and writes the text of one. 1.0.154 is the
-# first that builds on `serde_core` with `alloc` alone.
-serde_json = { version = "1.0.154", optional = true, default-features = false, features = ["alloc"] }
+# first that builds on `serde_core` with `alloc` alone. With `float_roundtrip`, a number is
+# read as the nearest f64, so that a tree reads back the number that it prints. serde_json
+# then reads so every number with a fraction of a program, in about twice the time.
+serde_json = { version = "1.0.154", optional = true, default-features = false, features = ["alloc", "float_roundtrip"] }
 serde_core = { version = "1.0.220", optional = true, default-features = false, features = ["alloc"] }
 idna = { version = "1", optional = true, default-features = false, features = ["alloc", "compiled_data"] }
 unicode-normalization = { version = "0.1.13", optional = true, default-features = false }

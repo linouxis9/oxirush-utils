@@ -153,6 +153,10 @@ fn a_plmn_is_refused_with_its_member_and_the_reason() {
         "`mcc` has the character `o`, and has decimal digits"
     );
     assert_eq!(
+        error(Plmn::new("208", "9-3")),
+        "`mnc` has the character `-`, and has decimal digits"
+    );
+    assert_eq!(
         error("20893".parse()),
         "`plmn` is written as an MCC of three digits, a hyphen and an MNC of two or three, as \
          208-93"
@@ -318,6 +322,7 @@ fn an_imsi_has_its_plmn_and_its_msin_by_the_length_of_the_mnc() {
         "`imsi` has 16 digits, and has 6 to 15"
     );
     assert!(error("20893000000000x").contains("the character `x`"));
+    assert!(error("208-93-0000000001").contains("the character `-`"));
     // The type of identity of an IMSI is 1 in TS 24.008 and in TS 24.301.
     let octets = imsi
         .to_nas_octets(MobileIdentityTypeEps::Imsi.bits())
@@ -365,6 +370,15 @@ fn an_imei_has_a_spare_digit_or_its_check_digit() {
         "4901542032375101 Imeisv(4901542032375101)"
     );
     assert!(Imeisv::new("490154203237510").is_err());
+    // A character that is no digit is refused as such, and not counted as a digit.
+    assert_eq!(
+        "90420156-025763-0".parse::<Imei>().unwrap_err().to_string(),
+        "`imei` has the character `-`, and has decimal digits"
+    );
+    assert_eq!(
+        Imeisv::new("4901542032375101x").unwrap_err().to_string(),
+        "`imeisv` has the character `x`, and has decimal digits"
+    );
 }
 
 /// Captured: PacketRusher 20250225 sends this IMEISV in its SECURITY MODE COMPLETE, with
@@ -843,6 +857,7 @@ fn a_routing_indicator_is_one_to_four_digits_which_all_count() {
         "`routing-indicator` has 5 digits, and has 1 to 4"
     );
     assert!(error(RoutingIndicator::new("1a")).contains("the character `a`"));
+    assert!(error(RoutingIndicator::new("1-2-3")).contains("the character `-`"));
     // No digit at all, a digit after a filler, and a half octet that is neither.
     for octets in [[0xff, 0xff], [0xf6, 0xf8], [0x76, 0x8f], [0xa6, 0xff]] {
         assert!(
@@ -982,6 +997,10 @@ fn a_suci_is_refused_with_its_member_and_the_reason() {
         "`msin` has 0 digits, and has 1 to 9"
     );
     assert!(error(ImsiSuci::null(plmn("208-93"), routing, "12a")).contains("the character `a`"));
+    assert!(
+        error(ImsiSuci::null(plmn("208-93"), routing, "000-000-00012"))
+            .contains("the character `-`")
+    );
     // TS 23.003 clause 2.2B: the key identifier is 0 if and only if the scheme is the
     // null one. TS 24.501 table 9.11.3.4.1: 255 is reserved.
     let concealed =
@@ -1754,6 +1773,9 @@ fn an_imsi_in_the_form_of_a_nai_has_the_home_network_domain() {
     ] {
         assert_eq!(refused_member(text), member, "{text}");
     }
+    let hyphens = "type0.rid678.schid0.userid0123-4567-89@5gc.mnc015.mcc234.3gppnetwork.org";
+    let error = hyphens.parse::<NaiSuci>().unwrap_err().to_string();
+    assert!(error.contains("the character `-`"), "{error}");
     assert_eq!(
         nai::home_network_domain(plmn("234-15")),
         "5gc.mnc015.mcc234.3gppnetwork.org"

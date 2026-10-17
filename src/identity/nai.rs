@@ -21,6 +21,8 @@
 //! a NAI too (3GPP TS 23.003 clauses 28.7.3, 28.15.5 and 28.16.5). Concealing an identity
 //! and reading a concealed one need keys, and are no part of this crate.
 
+#[cfg(feature = "alloc")]
+use super::digits::decimal;
 use super::{Error, Fault};
 #[cfg(feature = "alloc")]
 use super::{Faults, Plmn, ProtectionScheme, RoutingIndicator, SupiType, Tolerated};
@@ -300,18 +302,7 @@ fn check_clear(kind: SupiType, clear: &str) -> Result<(), Error> {
     match kind {
         // The realm does not say how many digits the MNC has: an MSIN of 10 digits at
         // most goes with any PLMN.
-        SupiType::Imsi => {
-            if !(1..=10).contains(&clear.len()) {
-                return Err(Error::length("msin", "digits", clear.len(), 1, 10));
-            }
-            match clear.chars().find(|character| !character.is_ascii_digit()) {
-                Some(given) => {
-                    let expected = "decimal digits";
-                    Err(Error::new("msin", Fault::Character { given, expected }))
-                }
-                None => Ok(()),
-            }
-        }
+        SupiType::Imsi => decimal("msin", clear, 1, 10),
         // An anonymous SUCI has no username (TS 23.003 clause 28.7.3).
         SupiType::NetworkSpecific if clear.is_empty() => Ok(()),
         SupiType::NetworkSpecific | SupiType::Gci => check_username(clear),

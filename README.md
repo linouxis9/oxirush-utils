@@ -419,9 +419,10 @@ fn main() {
 No feature is on by default.
 
 A `tree::Value` keeps its members in order by itself and converts to and
-from a `serde_json::Value`; the crate turns on no feature of `serde_json`, so
-the JSON of a program that depends on it keeps the order that the program
-chose.
+from a `serde_json::Value`. Of the features of `serde_json`, the crate turns
+on `float_roundtrip` alone: the JSON of a program that depends on it keeps
+the order that the program chose, and a number with a fraction is read as the
+nearest f64.
 
 ## What it does not do
 
