@@ -127,6 +127,52 @@ pub fn named<T: AsRef<str>>(names: &[T], name: &str) -> Option<usize> {
         .or_else(|| position(&|known| same_name(known, name)))
 }
 
+/// The names of `names` that are nearest to `name`, which none of them is: `most` of them
+/// at most, the nearest first, and none that differs from it in more than a third of its
+/// letters and its digits (two for a short name). For the error of a name that is
+/// misspelled, which says what it may be.
+///
+/// ```
+/// use oxirush_utils::tree::nearest;
+///
+/// let names = ["AMF-UE-NGAP-ID", "RAN-UE-NGAP-ID", "NAS-PDU", "Cause"];
+/// assert_eq!(nearest(&names, "AMF-UE-NGAP-IDD", 3), ["AMF-UE-NGAP-ID", "RAN-UE-NGAP-ID"]);
+/// assert!(nearest(&names, "TimeToWait", 3).is_empty());
+/// ```
+pub fn nearest<'n, T: AsRef<str>>(names: &'n [T], name: &str, most: usize) -> Vec<&'n str> {
+    let written: Vec<u8> = letters(name).collect();
+    let farthest = (written.len() / 3).max(2);
+    let mut near: Vec<(usize, usize, &str)> = names
+        .iter()
+        .enumerate()
+        .filter_map(|(position, known)| {
+            let known = known.as_ref();
+            let distance = distance(&written, &letters(known).collect::<Vec<_>>());
+            (distance <= farthest).then_some((distance, position, known))
+        })
+        .collect();
+    near.sort_unstable();
+    near.into_iter().take(most).map(|(.., name)| name).collect()
+}
+
+/// The edits of one letter that make `a` into `b` (Levenshtein).
+fn distance(a: &[u8], b: &[u8]) -> usize {
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, x) in a.iter().enumerate() {
+        let mut diagonal = row[0];
+        row[0] = i + 1;
+        for (j, y) in b.iter().enumerate() {
+            let above = row[j + 1];
+            row[j + 1] = match x == y {
+                true => diagonal,
+                false => 1 + diagonal.min(above).min(row[j]),
+            };
+            diagonal = above;
+        }
+    }
+    row[b.len()]
+}
+
 /// The name of `members` that `name` is, as [`named`] finds it.
 pub(crate) fn key<'m>(members: &'m Map, name: &str) -> Option<&'m str> {
     // The name as it is written is the usual case, and is found without a search.

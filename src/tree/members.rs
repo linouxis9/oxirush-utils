@@ -17,7 +17,7 @@
 
 //! A type as a tree: the trait, the writer of members and their reader.
 
-use super::forms::{hex, key, named, unhex};
+use super::forms::{hex, key, named, nearest, unhex};
 use super::value::{Map, Value};
 use super::{Error, ErrorKind};
 use alloc::format;
@@ -113,6 +113,25 @@ fn written(value: &Value) -> String {
     }
 }
 
+/// What a refusal says of the names of a type that `name` is none of: each of them, or of
+/// a type of many the nearest to it, or the first.
+fn some_of(names: &[&str], name: &str) -> String {
+    /// The names that a refusal lists all of.
+    const ALL: usize = 12;
+    if names.len() <= ALL {
+        return names.join(", ");
+    }
+    let count = names.len();
+    match nearest(names, name, 3)[..] {
+        [] => format!("{}, and {} more", names[..8].join(", "), count - 8),
+        [one] => format!("the nearest of its {count} is {one}"),
+        [ref near @ .., last] => format!(
+            "the nearest of its {count} are {} and {last}",
+            near.join(", ")
+        ),
+    }
+}
+
 // ── From a value to a tree ──────────────────────────────────────────────────
 
 /// The tree of a value that has members, to which each member that is there is added by
@@ -163,6 +182,8 @@ pub struct Reading {
     at: Vec<Name>,
     /// The first fault: its kind, the names on the way to it, and what is wrong there.
     refusal: Option<(ErrorKind, String, String)>,
+    /// Whether what is read holds a secret, of which a refusal shows nothing.
+    secret: bool,
 }
 
 /// The members of a value that is being read: the object, and where each member that
@@ -180,6 +201,7 @@ impl Reading {
         Self {
             at: Vec::new(),
             refusal: None,
+            secret: false,
         }
     }
 
@@ -209,8 +231,32 @@ impl Reading {
     /// Refuse a value that is not written as its type is: `expected` says what is
     /// expected, where `found` is written.
     pub fn mismatch(&mut self, expected: &str, found: &Value) -> Refused {
-        let why = format!("{expected} is expected, and {} is written", written(found));
+        let why = format!(
+            "{expected} is expected, and {} is written",
+            self.shown(found)
+        );
         self.refuse(ErrorKind::Value, why)
+    }
+
+    /// Read with `read` a value that holds a secret, as a key: a refusal says why, and
+    /// nothing of what is written.
+    pub fn secret<T>(
+        &mut self,
+        read: impl FnOnce(&mut Self) -> Result<T, Refused>,
+    ) -> Result<T, Refused> {
+        let was = core::mem::replace(&mut self.secret, true);
+        let read = read(self);
+        self.secret = was;
+        read
+    }
+
+    /// What a refusal says of `value`, which is written where another value is expected:
+    /// the start of it, or nothing of it in a [`secret`](Self::secret).
+    pub fn shown(&self, value: &Value) -> String {
+        match self.secret {
+            true => "a secret value".to_string(),
+            false => written(value),
+        }
     }
 
     // ── Members, lists and alternatives ─────────────────────────────────────
@@ -365,12 +411,19 @@ impl Reading {
 
     /// One of the names `names`: its position among them. A name is read [however it is
     /// written](super::same_name); another name is refused with the names that exist.
+    /// `true` and `false` are the names `true` and `false` where the type has them, as a
+    /// writer of YAML leaves them unquoted.
     pub fn named(&mut self, value: &Value, names: &[&str]) -> Result<usize, Refused> {
-        let Some(text) = value.as_str() else {
-            return Err(self.mismatch("a name", value));
+        let text = match value {
+            Value::Bool(true) if names.contains(&"true") => "true",
+            Value::Bool(false) if names.contains(&"false") => "false",
+            _ => match value.as_str() {
+                Some(text) => text,
+                None => return Err(self.mismatch("a name", value)),
+            },
         };
         named(names, text).ok_or_else(|| {
-            let why = format!("{text:?} is none of its names: {}", names.join(", "));
+            let why = format!("{text:?} is none of its names: {}", some_of(names, text));
             self.refuse(ErrorKind::Value, why)
         })
     }
@@ -415,7 +468,7 @@ impl Reading {
             None => {
                 let why = format!(
                     "octets in hexadecimal, two digits for each, are expected, and {} is written",
-                    written(value)
+                    self.shown(value)
                 );
                 Err(self.refuse(ErrorKind::Value, why))
             }
@@ -426,9 +479,12 @@ impl Reading {
     pub fn octet_array<const N: usize>(&mut self, value: &Value) -> Result<[u8; N], Refused> {
         let octets = self.octets(value)?;
         <[u8; N]>::try_from(octets).map_err(|octets| {
+            let written = match self.secret {
+                true => "what is written".to_string(),
+                false => hex(&octets),
+            };
             let why = format!(
-                "{N} octets are expected, and {} has {}",
-                hex(&octets),
+                "{N} octets are expected, and {written} has {}",
                 octets.len()
             );
             self.refuse(ErrorKind::Value, why)

@@ -55,7 +55,11 @@ once.
   object of more than 32 members keeps an index of its names, so that one is
   found in a time that grows as log n. A name written twice in an object of JSON is
   refused. `Tree`, `Members` and `Reading` write a type as a tree and read it
-  from one, with refusals that say the member and why. Octets are
+  from one, with refusals that say the member and why, and nothing of what
+  is written in `Reading::secret`, where a key is read. `Reading::named`
+  reads `true` and `false` as those names of a type that has them, as YAML
+  leaves them unquoted, and refuses another name of a type of more than 12
+  with the nearest of them (`tree::nearest`), or its first. Octets are
   hexadecimal in lower case, read in either; a number is a JSON number; a
   name is read by its letters and its digits, however it is written.
 - Paths on a tree: `select`, `paths`, `set`, `remove` and `insert`, with

@@ -165,3 +165,107 @@ fn yaml_carries_the_same_tree() {
         "{error}"
     );
 }
+
+/// `GW-Context-Release-Indication ::= ENUMERATED { true, ... }`, one of the ENUMERATED types
+/// of NGAP and S1AP that have a value named `true`.
+#[derive(Debug, PartialEq)]
+struct Indication(usize);
+
+impl Tree for Indication {
+    const NAME: &'static str = "GW-Context-Release-Indication";
+
+    fn to_tree(&self) -> Value {
+        tree::text(["true", "false"][self.0])
+    }
+
+    fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+        reading.named(value, &["true", "false"]).map(Self)
+    }
+}
+
+oxirush_utils::impl_serde!(Indication);
+
+/// The review of the release candidate found that a YAML author writes the name `true` of
+/// an ENUMERATED unquoted, which YAML reads as a boolean, and that it was refused: a
+/// boolean is the name `true` or `false` of a type that has the name, and nothing else.
+#[test]
+fn a_boolean_is_the_name_true_or_false_where_the_type_has_it() {
+    assert_eq!(
+        serde_yaml::from_str::<Indication>("true").unwrap(),
+        Indication(0)
+    );
+    assert_eq!(
+        serde_yaml::from_str::<Indication>("false").unwrap(),
+        Indication(1)
+    );
+    assert_eq!(
+        serde_json::from_str::<Indication>("\"true\"").unwrap(),
+        Indication(0)
+    );
+    assert_eq!(serde_yaml::to_string(&Indication(0)).unwrap(), "'true'\n");
+    // Where the type has no such name, a boolean is no name.
+    struct Only;
+    impl Tree for Only {
+        const NAME: &'static str = "Only";
+        fn to_tree(&self) -> Value {
+            tree::text("yes")
+        }
+        fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+            reading.named(value, &["yes"]).map(|_| Only)
+        }
+    }
+    let error = tree::from_value::<Only>(&Value::Bool(true)).err().unwrap();
+    assert_eq!(
+        error.to_string(),
+        "this is not a value of Only: a name is expected, and true is written"
+    );
+}
+
+/// A key, which a refusal shows nothing of: the review of the release candidate found 16
+/// octets of a K_gNB in the error of a tree that wrote it in a wrong form.
+struct Key([u8; 32]);
+
+impl Tree for Key {
+    const NAME: &'static str = "SecurityKey";
+
+    fn to_tree(&self) -> Value {
+        tree::octets(&self.0)
+    }
+
+    fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+        reading
+            .secret(|reading| reading.octet_array(value))
+            .map(Self)
+    }
+}
+
+#[test]
+fn a_refusal_of_a_secret_shows_nothing_of_what_is_written() {
+    let key = "5a".repeat(32);
+    for (written, why) in [
+        (
+            oxirush_utils::tree!({ "key": key.clone() }),
+            "octets in hexadecimal, two digits for each, are expected, and a secret value is \
+             written",
+        ),
+        (
+            Value::String(format!("{key}5")),
+            "octets in hexadecimal, two digits for each, are expected, and a secret value is \
+             written",
+        ),
+        (
+            Value::String("5a".repeat(31)),
+            "32 octets are expected, and what is written has 31",
+        ),
+    ] {
+        let error = tree::from_value::<Key>(&written).err().unwrap().to_string();
+        assert_eq!(error, format!("this is not a value of SecurityKey: {why}"));
+    }
+    // Outside the secret, a refusal shows what is written.
+    let error = tree::from_value::<Slice>(&oxirush_utils::tree!({"sst": "5a5a"})).unwrap_err();
+    assert!(error.to_string().contains("\"5a5a\" is written"), "{error}");
+    assert_eq!(
+        tree::from_value::<Key>(&Value::String(key)).unwrap().0,
+        [0x5a; 32]
+    );
+}

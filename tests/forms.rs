@@ -382,3 +382,62 @@ fn a_refusal_says_the_member_and_why() {
         )
     );
 }
+
+/// The review of the release candidate found a refusal of a misspelled name of an
+/// ENUMERATED that listed every name of its 68: a type of more than 12 names says the
+/// nearest of them, or its first, and the count.
+#[test]
+fn a_name_that_a_type_has_not_is_refused_with_the_nearest_of_many() {
+    use oxirush_utils::tree::{Reading, Refused, Tree, Value, nearest};
+
+    struct Many(usize);
+    const NAMES: [&str; 14] = [
+        "unspecified",
+        "user-inactivity",
+        "radio-connection-with-ue-lost",
+        "interaction-with-other-procedure",
+        "unknown-PDU-session-ID",
+        "handover-cancelled",
+        "partial-handover",
+        "cell-not-available",
+        "radio-resources-not-available",
+        "ue-in-rrc-inactive-state-not-reachable",
+        "redirection",
+        "resources-not-available",
+        "unknown-local-UE-NGAP-ID",
+        "inconsistent-remote-UE-NGAP-ID",
+    ];
+    impl Tree for Many {
+        const NAME: &'static str = "CauseRadioNetwork";
+        fn to_tree(&self) -> Value {
+            oxirush_utils::tree::text(NAMES[self.0])
+        }
+        fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+            reading.named(value, &NAMES).map(Many)
+        }
+    }
+    let refused = |name: &str| {
+        oxirush_utils::tree::from_value::<Many>(&Value::String(name.into()))
+            .err()
+            .unwrap()
+            .to_string()
+    };
+    assert_eq!(
+        refused("user-inactive"),
+        "this is not a value of CauseRadioNetwork: \"user-inactive\" is none of its names: \
+         the nearest of its 14 is user-inactivity"
+    );
+    assert_eq!(
+        refused("resource-not-available"),
+        "this is not a value of CauseRadioNetwork: \"resource-not-available\" is none of its \
+         names: the nearest of its 14 are resources-not-available and radio-resources-not-available"
+    );
+    assert_eq!(
+        refused("x"),
+        "this is not a value of CauseRadioNetwork: \"x\" is none of its names: unspecified, \
+         user-inactivity, radio-connection-with-ue-lost, interaction-with-other-procedure, \
+         unknown-PDU-session-ID, handover-cancelled, partial-handover, cell-not-available, and \
+         6 more"
+    );
+    assert_eq!(nearest(&NAMES, "partial handover", 3), ["partial-handover"]);
+}

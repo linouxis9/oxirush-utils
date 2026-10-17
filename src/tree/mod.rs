@@ -102,7 +102,7 @@ mod walk;
 
 pub use error::{Error, ErrorKind};
 pub use forms::{
-    Form, alternative, bits, hex, named, octets, same_name, signed, text, unhex, unsigned,
+    Form, alternative, bits, hex, named, nearest, octets, same_name, signed, text, unhex, unsigned,
     written_as,
 };
 pub use members::{Members, Read, Reading, Refused, Tree, from_value, member, to_value};
