@@ -20,18 +20,19 @@
 
 use super::forms::{Form, key, same_name};
 use super::path::{MAX_SEGMENTS, MAX_SELECTED, escape, position, segments};
+use super::value::{Map, Value};
 use super::{Error, ErrorKind};
 use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
-use serde_json::{Map, Value};
 
 // ── What a family says ──────────────────────────────────────────────────────
 
-/// The first segment of the paths of a family.
+/// The first segment of the paths of a family: [`Root::new`] makes one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Root<'a> {
     /// The name of the root, as `nas`: a path starts with `/nas`. Empty for a family
     /// whose paths start at the tree itself.
@@ -44,17 +45,28 @@ pub struct Root<'a> {
     pub required: bool,
 }
 
-impl Root<'_> {
+impl<'a> Root<'a> {
     /// No root: a path starts at the tree itself.
-    pub const NONE: Self = Self {
+    pub const NONE: Root<'static> = Root {
         name: "",
         stands_for: &[],
         required: false,
     };
+
+    /// The root `name`, which is short for the segments `stands_for` from the tree, and
+    /// which a path has to start with when it is `required`.
+    pub const fn new(name: &'a str, stands_for: &'a [&'a str], required: bool) -> Self {
+        Self {
+            name,
+            stands_for,
+            required,
+        }
+    }
 }
 
 /// What an edit does at its path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Edit {
     /// Give a member or an entry a value.
     Set,
@@ -69,6 +81,7 @@ pub enum Edit {
 /// One step from the tree to a place of it: the name of a member as the tree has it, the
 /// position of an entry of a list, or the end of a list, where `insert` adds.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Key {
     /// A member, by its name.
     Name(String),
@@ -118,8 +131,8 @@ pub struct Next<'v, S> {
     tracking: bool,
     edit: Option<Edit>,
     last: bool,
-    /// The keys of a place that the family opens, and the value that it opens there.
-    opened: Option<(Option<Rc<Link>>, Value)>,
+    /// The keys of each place that the family opens, and the value that it opens there.
+    opened: Vec<(Option<Rc<Link>>, Value)>,
 }
 
 impl<'v, S> Next<'v, S> {
@@ -187,12 +200,11 @@ impl<'v, S> Next<'v, S> {
     }
 
     /// Show the value at `place` as `value`, which the family opens from it, where the
-    /// edit is [`Edit::Open`]: the value takes the place of the one there, and the path
-    /// is taken again from the tree. See [`open_in`].
+    /// edit is [`Edit::Open`]: the value takes the place of the one there once the
+    /// segment is taken at every place, and the path is taken again from the tree. See
+    /// [`open_in`].
     pub fn open(&mut self, place: &Place<'v, S>, value: Value) {
-        if self.opened.is_none() {
-            self.opened = Some((place.at.clone(), value));
-        }
+        self.opened.push((place.at.clone(), value));
     }
 
     /// Take the segment in the member `name` of `place` as if the name stood before it,
@@ -238,6 +250,7 @@ impl<'v, S> Next<'v, S> {
 
 /// What a family does with a segment at a place.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Step<S> {
     /// The family added to [`Next`] what the segment selects there, which may be nothing.
     Taken,
@@ -250,6 +263,7 @@ pub enum Step<S> {
 
 /// What a family says of a name that an object does not have.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Absent<S> {
     /// The family knows nothing of the name. `select` refuses it with the kind
     /// `NoSuchMember`, so that a misspelt name is not a member that is absent; `set`
@@ -263,6 +277,7 @@ pub enum Absent<S> {
 
 /// How [`paths`] lists a member.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Listed {
     /// Under its name.
     Member,
@@ -278,6 +293,7 @@ pub enum Listed {
 
 /// How a member is taken out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Removal {
     /// The member goes.
     Take,
@@ -297,8 +313,7 @@ pub enum Removal {
 /// and the engine knows no codec.
 ///
 /// ```
-/// use oxirush_utils::tree::{self, Family, Next, Place, Root, Step};
-/// use serde_json::json;
+/// use oxirush_utils::{tree, tree::{Family, Next, Place, Root, Step, Value}};
 ///
 /// /// A list of `{"id": .., "value": ..}` whose entries are selected by their `id`.
 /// struct ById;
@@ -307,7 +322,7 @@ pub enum Removal {
 ///     type Shape = ();
 ///
 ///     fn root(&self) -> Root<'_> {
-///         Root { name: "list", stands_for: &[], required: true }
+///         Root::new("list", &[], true)
 ///     }
 ///
 ///     fn step<'v>(
@@ -319,7 +334,7 @@ pub enum Removal {
 ///         let Some(entries) = place.value().and_then(|value| value.as_array()) else {
 ///             return Ok(Step::Plain);
 ///         };
-///         let named = |entry: &serde_json::Value| entry["id"].as_str() == Some(segment);
+///         let named = |entry: &Value| entry["id"].as_str() == Some(segment);
 ///         if !entries.iter().any(named) {
 ///             return Ok(Step::Plain);
 ///         }
@@ -330,9 +345,9 @@ pub enum Removal {
 ///     }
 /// }
 ///
-/// let mut list = json!([{"id": "cause", "value": 3}, {"id": "timer", "value": 60}]);
-/// assert_eq!(tree::select_in(&ById, &list, "/list/timer/value")?, [&json!(60)]);
-/// tree::set_in(&ById, &mut list, "/list/cause/value", json!(7))?;
+/// let mut list = tree!([{"id": "cause", "value": 3}, {"id": "timer", "value": 60}]);
+/// assert_eq!(tree::select_in(&ById, &list, "/list/timer/value")?, [&tree!(60)]);
+/// tree::set_in(&ById, &mut list, "/list/cause/value", 7)?;
 /// assert_eq!(list[0]["value"], 7);
 /// # Ok::<(), tree::Error>(())
 /// ```
@@ -421,6 +436,15 @@ pub trait Family {
         Form::Plain
     }
 
+    /// Whether `null` at a place of `shape` is a value: the one value of a type that has
+    /// no other, as the NULL of ASN.1, which a CHOICE has as an alternative. A tree is
+    /// written so, `{"pLMNWide": null}`; elsewhere `null` is read as a member that is
+    /// absent, and selects nothing.
+    fn null_is_value(&self, shape: &Self::Shape) -> bool {
+        let _ = shape;
+        false
+    }
+
     /// What else an edit changes: it is called for each place that was edited, with the
     /// tree as the edit left it, the keys to the place and what the family knew of the
     /// place when the path reached it. It cannot refuse the edit, which is done: a family
@@ -467,7 +491,7 @@ fn resolve(root: Root<'_>, path: &str) -> Result<(Vec<String>, bool), Error> {
 }
 
 /// Why a name selects nothing in an object: the names that it has.
-fn no_member(members: &Map<String, Value>, part: &str, path: &str) -> Error {
+fn no_member(members: &Map, part: &str, path: &str) -> Error {
     const SHOWN: usize = 12;
     let mut names: Vec<&str> = members.keys().take(SHOWN).map(String::as_str).collect();
     if members.len() > SHOWN {
@@ -494,7 +518,8 @@ fn plain<'v, F: Family>(
     let shape = &place.shape;
     match place.value {
         // Nothing is there, and nothing is selected in it.
-        None | Some(Value::Null) => Ok(()),
+        None => Ok(()),
+        Some(Value::Null) if !family.null_is_value(shape) => Ok(()),
         Some(Value::Object(members)) => {
             if part == "*" {
                 for (name, value) in members {
@@ -560,7 +585,7 @@ fn advance<'v, F: Family>(
 ) -> Result<(), Error> {
     next.from = place.at.clone();
     match family.step(place, part, next)? {
-        Step::Taken if next.opened.is_some() && next.edit != Some(Edit::Open) => {
+        Step::Taken if !next.opened.is_empty() && next.edit != Some(Edit::Open) => {
             let reason = "the family opens a value where the edit is not to open one";
             Err(Error::new(ErrorKind::Refused, path, reason))
         }
@@ -607,15 +632,15 @@ fn walk<'v, F: Family>(
     }
 }
 
-/// Where a walk ends: at the places that the path selects, or at a place that the family
-/// opens first, with the value that it opens there.
+/// Where a walk ends: at the places that the path selects, or at the first segment where
+/// the family opens values, with the places that it opens there and their values.
 enum Walked<'v, S> {
     Places(Vec<Place<'v, S>>),
-    Open(Vec<Key>, Value),
+    Open(Vec<(Vec<Key>, Value)>),
 }
 
-/// The places that `path` selects in `tree`, or the first place on the way that the
-/// family opens.
+/// The places that `path` selects in `tree`, or the places of the first segment on the
+/// way where the family opens values.
 fn walk_to_open<'v, F: Family>(
     family: &F,
     tree: &'v Value,
@@ -635,7 +660,7 @@ fn walk_to_open<'v, F: Family>(
             tracking: edit.is_some(),
             edit,
             last: index + 1 == parts.len(),
-            opened: None,
+            opened: Vec::new(),
         };
         let mut refusal = None;
         for place in &places {
@@ -646,13 +671,17 @@ fn walk_to_open<'v, F: Family>(
                 }
                 Err(error) => refusal = refusal.or(Some(error.located(path))),
             }
-            if let Some((at, value)) = next.opened.take() {
-                return Ok(Walked::Open(keys(&at), value));
-            }
-            if next.found.len() > MAX_SELECTED {
+            if next.found.len() + next.opened.len() > MAX_SELECTED {
                 let reason = format!("a path selects {MAX_SELECTED} values at most");
                 return Err(Error::new(ErrorKind::Limit, path, reason));
             }
+        }
+        // What the family opens at this segment, at every place, is opened at once.
+        if !next.opened.is_empty() {
+            let opened = next.opened.into_iter();
+            return Ok(Walked::Open(
+                opened.map(|(at, value)| (keys(&at), value)).collect(),
+            ));
         }
         // What one place refuses, another may have: an error when none has it.
         if let (true, Some(refusal)) = (next.found.is_empty(), refusal) {
@@ -674,7 +703,7 @@ fn walk_to_open<'v, F: Family>(
 ///
 /// # Errors
 ///
-/// The kinds `Path` and `Limit` of [`segments`], and `Limit` for more than 4096 values;
+/// The kinds `Path` and `Limit` of [`segments`], and `Limit` for more than 65,536 values;
 /// `NoSuchMember` for a name that the value at that place does not have, so that a
 /// misspelt name is not a member that is absent; `NotAList` for a segment that is no
 /// position in a list; `Scalar` for a path that goes on into a number or a string; and
@@ -685,8 +714,8 @@ pub fn select_in<'v, F: Family>(
     path: &str,
 ) -> Result<Vec<&'v Value>, Error> {
     let places = walk(family, tree, path, None)?;
-    let values = places.into_iter().filter_map(|place| place.value);
-    Ok(values.filter(|value| !value.is_null()).collect())
+    let values = places.into_iter().filter_map(|place| there(family, &place));
+    Ok(values.collect())
 }
 
 /// [`select_in`], with how each value is written at its place: what a comparison with a
@@ -702,10 +731,17 @@ pub fn select_forms_in<'v, F: Family>(
 ) -> Result<Vec<(&'v Value, Form)>, Error> {
     let places = walk(family, tree, path, None)?;
     let selected = places.into_iter().filter_map(|place| {
-        let value = place.value.filter(|value| !value.is_null())?;
+        let value = there(family, &place)?;
         Some((value, family.form(&place.shape, value)))
     });
     Ok(selected.collect())
+}
+
+/// The value of a place that is there: one that is not `null`, or `null` where the family
+/// says that it is a value.
+fn there<'v, F: Family>(family: &F, place: &Place<'v, F::Shape>) -> Option<&'v Value> {
+    let value = place.value?;
+    (!value.is_null() || family.null_is_value(&place.shape)).then_some(value)
 }
 
 /// The places that `path` selects in a tree of the family `family`, in the order of the
@@ -729,11 +765,10 @@ pub fn places_in<'v, F: Family>(
 ///
 /// ```
 /// use oxirush_utils::tree;
-/// use serde_json::json;
 ///
-/// let tree = json!({"slices": [{"sst": 1}, {"sst": 2, "sd": "0000ff"}], "t3512": null});
-/// assert_eq!(tree::select(&tree, "/slices/*/sst")?, [&json!(1), &json!(2)]);
-/// assert_eq!(tree::select(&tree, "/Slices/1/SD")?, [&json!("0000ff")]);
+/// let tree = tree!({"slices": [{"sst": 1}, {"sst": 2, "sd": "0000ff"}], "t3512": null});
+/// assert_eq!(tree::select(&tree, "/slices/*/sst")?, [&tree!(1), &tree!(2)]);
+/// assert_eq!(tree::select(&tree, "/Slices/1/SD")?, [&tree!("0000ff")]);
 ///
 /// // What is not there selects nothing, and a name that the value has not is an error
 /// assert!(tree::select(&tree, "/slices/5/sst")?.is_empty());
@@ -782,14 +817,13 @@ pub fn paths_in<F: Family>(family: &F, tree: &Value) -> Vec<(String, Value)> {
 ///
 /// ```
 /// use oxirush_utils::tree;
-/// use serde_json::json;
 ///
-/// let tree = json!({"cause": 3, "slices": [{"sst": 1}], "tac": [0, 0, 1], "t3512": null});
+/// let tree = tree!({"cause": 3, "slices": [{"sst": 1}], "tac": [0, 0, 1], "t3512": null});
 /// let paths = tree::paths(&tree);
 /// assert_eq!(paths, [
-///     ("/cause".to_string(), json!(3)),
-///     ("/slices/0/sst".to_string(), json!(1)),
-///     ("/tac".to_string(), json!([0, 0, 1])),
+///     ("/cause".to_string(), tree!(3)),
+///     ("/slices/0/sst".to_string(), tree!(1)),
+///     ("/tac".to_string(), tree!([0, 0, 1])),
 /// ]);
 /// ```
 pub fn paths(tree: &Value) -> Vec<(String, Value)> {
@@ -835,8 +869,11 @@ fn list<F: Family>(
         // A path has no more segments than this.
         _ if depth >= MAX_SEGMENTS => found.push((path.clone(), value.clone())),
         Value::Object(members) if !members.is_empty() => {
-            for (name, member) in members.iter().filter(|(_, member)| !member.is_null()) {
+            for (name, member) in members.iter() {
                 let of_member = family.member(shape, name, Some(member));
+                if member.is_null() && !family.null_is_value(&of_member) {
+                    continue;
+                }
                 match family.listed(shape, name) {
                     Listed::Member => inside(family, name, member, &of_member, path, depth, found),
                     Listed::As(other) => {
@@ -863,12 +900,11 @@ fn list<F: Family>(
         Value::Array(entries) if entries.iter().any(|e| e.is_object() || e.is_array()) => {
             // Once for the list, whatever its length.
             let names = family.entry_names(shape, entries);
-            let there = entries
-                .iter()
-                .enumerate()
-                .filter(|(_, entry)| !entry.is_null());
-            for (index, entry) in there {
+            for (index, entry) in entries.iter().enumerate() {
                 let of_entry = family.entry(shape, Some(entry));
+                if entry.is_null() && !family.null_is_value(&of_entry) {
+                    continue;
+                }
                 let named = names
                     .as_ref()
                     .and_then(|names| names.get(index)?.as_deref());
@@ -903,11 +939,27 @@ pub fn set_in<F: Family>(
     family: &F,
     tree: &mut Value,
     path: &str,
-    value: Value,
+    value: impl Into<Value>,
 ) -> Result<(), Error> {
-    match value {
-        Value::Null => edit(family, tree, path, Edit::Remove, None),
+    match value.into() {
+        Value::Null if !null_is_value_at(family, tree, path) => {
+            edit(family, tree, path, Edit::Remove, None)
+        }
         value => edit(family, tree, path, Edit::Set, Some(value)),
+    }
+}
+
+/// Whether `path` selects places where `null` is a value, and only such places: `null`
+/// is then set there, where elsewhere it takes a member out.
+fn null_is_value_at<F: Family>(family: &F, tree: &Value, path: &str) -> bool {
+    match walk(family, tree, path, Some(Edit::Set)) {
+        Ok(places) => {
+            !places.is_empty()
+                && places
+                    .iter()
+                    .all(|place| family.null_is_value(&place.shape))
+        }
+        Err(_) => false,
     }
 }
 
@@ -932,33 +984,32 @@ pub fn insert_in<F: Family>(
     family: &F,
     tree: &mut Value,
     path: &str,
-    value: Value,
+    value: impl Into<Value>,
 ) -> Result<(), Error> {
-    edit(family, tree, path, Edit::Insert, Some(value))
+    edit(family, tree, path, Edit::Insert, Some(value.into()))
 }
 
 /// [`set_in`] for [`Plain`]: a tree of objects and lists.
 ///
 /// ```
 /// use oxirush_utils::tree;
-/// use serde_json::json;
 ///
-/// let mut tree = json!({"slices": [{"sst": 1}]});
-/// tree::set(&mut tree, "/slices/0/sd", json!("0000ff"))?;
-/// tree::insert(&mut tree, "/slices/-", json!({"sst": 2}))?;
-/// tree::insert(&mut tree, "/slices/0", json!({"sst": 0}))?;
+/// let mut tree = tree!({"slices": [{"sst": 1}]});
+/// tree::set(&mut tree, "/slices/0/sd", tree!("0000ff"))?;
+/// tree::insert(&mut tree, "/slices/-", tree!({"sst": 2}))?;
+/// tree::insert(&mut tree, "/slices/0", tree!({"sst": 0}))?;
 /// tree::remove(&mut tree, "/slices/1/sst")?;
-/// assert_eq!(tree, json!({"slices": [{"sst": 0}, {"sd": "0000ff"}, {"sst": 2}]}));
+/// assert_eq!(tree, tree!({"slices": [{"sst": 0}, {"sd": "0000ff"}, {"sst": 2}]}));
 ///
 /// // An edit that selects nothing is an error, and the tree is as it was
-/// assert!(tree::set(&mut tree, "/slices/7/sst", json!(1)).is_err());
+/// assert!(tree::set(&mut tree, "/slices/7/sst", tree!(1)).is_err());
 /// # Ok::<(), tree::Error>(())
 /// ```
 ///
 /// # Errors
 ///
 /// Those of [`set_in`].
-pub fn set(tree: &mut Value, path: &str, value: Value) -> Result<(), Error> {
+pub fn set(tree: &mut Value, path: &str, value: impl Into<Value>) -> Result<(), Error> {
     set_in(&Plain, tree, path, value)
 }
 
@@ -976,7 +1027,7 @@ pub fn remove(tree: &mut Value, path: &str) -> Result<(), Error> {
 /// # Errors
 ///
 /// Those of [`insert_in`].
-pub fn insert(tree: &mut Value, path: &str, value: Value) -> Result<(), Error> {
+pub fn insert(tree: &mut Value, path: &str, value: impl Into<Value>) -> Result<(), Error> {
     insert_in(&Plain, tree, path, value)
 }
 
@@ -1007,7 +1058,7 @@ fn edit<F: Family>(
             Edit::Set | Edit::Open => true,
             // What is not there is not taken out, and nothing is inserted before it.
             Edit::Remove | Edit::Insert => {
-                place.value.is_some_and(|value| !value.is_null())
+                there(family, place).is_some()
                     || matches!(place.at.as_deref(), Some(Link { key: Key::End, .. }))
             }
         });
@@ -1055,8 +1106,7 @@ fn edit<F: Family>(
 /// and a path that selects nothing is no error.
 ///
 /// ```
-/// use oxirush_utils::tree::{self, Edit, Family, Next, Place, Step};
-/// use serde_json::json;
+/// use oxirush_utils::{tree, tree::{Edit, Family, Next, Place, Step}};
 ///
 /// /// Text that holds a number, which is opened as the number.
 /// struct Numbers;
@@ -1073,7 +1123,7 @@ fn edit<F: Family>(
 ///         match (place.value().and_then(|value| value.as_str()), segment, next.edit()) {
 ///             (Some(text), "number", Some(Edit::Open)) => match text.parse::<u64>() {
 ///                 Ok(number) => {
-///                     next.open(place, json!({"number": number}));
+///                     next.open(place, tree!({"number": number}));
 ///                     Ok(Step::Taken)
 ///                 }
 ///                 Err(_) => Ok(Step::Plain),
@@ -1083,10 +1133,10 @@ fn edit<F: Family>(
 ///     }
 /// }
 ///
-/// let mut tree = json!({"timers": ["60", "3600"]});
+/// let mut tree = tree!({"timers": ["60", "3600"]});
 /// tree::open_in(&Numbers, &mut tree, "/timers/*/number")?;
-/// assert_eq!(tree, json!({"timers": [{"number": 60}, {"number": 3600}]}));
-/// assert_eq!(tree::select_in(&Numbers, &tree, "/timers/1/number")?, [&json!(3600)]);
+/// assert_eq!(tree, tree!({"timers": [{"number": 60}, {"number": 3600}]}));
+/// assert_eq!(tree::select_in(&Numbers, &tree, "/timers/1/number")?, [&tree!(3600)]);
 /// # Ok::<(), tree::Error>(())
 /// ```
 ///
@@ -1095,27 +1145,31 @@ fn edit<F: Family>(
 /// Those of [`select_in`]: the tree is then as it was, with nothing opened.
 pub fn open_in<F: Family>(family: &F, tree: &mut Value, path: &str) -> Result<(), Error> {
     let mut undo = Vec::new();
-    // A value is opened once, and a path selects 4096 values at most: each turn opens
-    // one, and the next takes the path again from the tree.
-    for _ in 0..=MAX_SELECTED {
+    // Each turn opens what the family opens at one segment, at each of its places, and
+    // the next takes the path again from the tree to the segments after it: a path has
+    // as many turns as segments at most, and a turn walks the tree once.
+    for _ in 0..=MAX_SEGMENTS {
         let walked = walk_to_open(family, tree, path, Some(Edit::Open));
-        let (at, value) = match walked {
+        let opened = match walked {
             Ok(Walked::Places(_)) => return Ok(()),
-            Ok(Walked::Open(at, value)) => (at, value),
+            Ok(Walked::Open(opened)) => opened,
             Err(error) => {
                 take_back(tree, undo);
                 return Err(error);
             }
         };
-        let Some(place) = at_mut(tree, &at) else {
-            take_back(tree, undo);
-            let reason = "the family opens a value at a place that the tree does not have";
-            return Err(Error::new(ErrorKind::Refused, path, reason));
-        };
-        undo.push(Undo::Was(at, core::mem::replace(place, value)));
+        // The last first, as an edit does: no place is in another one.
+        for (at, value) in opened.into_iter().rev() {
+            let Some(place) = at_mut(tree, &at) else {
+                take_back(tree, undo);
+                let reason = "the family opens a value at a place that the tree does not have";
+                return Err(Error::new(ErrorKind::Refused, path, reason));
+            };
+            undo.push(Undo::Was(at, core::mem::replace(place, value)));
+        }
     }
     take_back(tree, undo);
-    let reason = format!("a path opens {MAX_SELECTED} values at most");
+    let reason = format!("a path opens values at {MAX_SEGMENTS} segments at most");
     Err(Error::new(ErrorKind::Limit, path, reason))
 }
 

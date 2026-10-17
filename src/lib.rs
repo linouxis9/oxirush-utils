@@ -35,11 +35,11 @@
 // A module that a feature turns on is a link when the build has it.
 #![cfg_attr(
     feature = "tree",
-    doc = "| [`tree`] | The tree of a message as a `serde_json::Value`: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |"
+    doc = "| [`tree`](mod@tree) | The tree of a message as a JSON value that keeps the order of its members, and `tree!` that writes one: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |"
 )]
 #![cfg_attr(
     not(feature = "tree"),
-    doc = "| `tree` | The tree of a message as a `serde_json::Value`: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |"
+    doc = "| `tree` | The tree of a message as a JSON value that keeps the order of its members, and `tree!` that writes one: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |"
 )]
 #![cfg_attr(
     feature = "serde",
@@ -54,10 +54,9 @@
 //! `unsafe`. With the feature `idna`, the realm and the username of a NAI are also
 //! checked as internationalized names (see [`identity::nai::check_realm`]).
 //!
-//! The feature `tree` turns on `serde_json/preserve_order`, so that the members of a
-//! tree keep the order of the specification whatever else a build enables. Cargo
-//! unifies features: every `serde_json::Map` of a program that depends on this feature
-//! then keeps the order in which its members were inserted.
+//! A tree keeps the order of the specification by itself: the crate turns on no
+//! feature of `serde_json`, and the JSON of a program that depends on it keeps the
+//! order that the program chose.
 
 #![no_std]
 #![forbid(unsafe_code)]

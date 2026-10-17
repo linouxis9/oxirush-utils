@@ -1002,7 +1002,7 @@ fn a_suci_is_refused_with_its_member_and_the_reason() {
     );
     assert_eq!(
         error(empty),
-        "`scheme-output` has 0 octets, and has 1 at least"
+        "`scheme-output` has 0 octets, and has 41 to 45"
     );
     for (octets, reason) in [
         (
@@ -1126,12 +1126,18 @@ fn the_text_of_a_suci_is_the_one_of_the_service_based_interfaces() {
                 0 => ImsiSuci::null(plmn("208-093"), routing, "123456789"),
                 _ => {
                     let scheme = ProtectionScheme::new(scheme).unwrap();
+                    // The shortest output of the scheme (TS 33.501 annex C.1).
+                    let length = match scheme.identifier() {
+                        1 => 41,
+                        2 => 42,
+                        _ => 1,
+                    };
                     ImsiSuci::concealed(
                         plmn("208-093"),
                         routing,
                         scheme,
                         key,
-                        vec![scheme.identifier()],
+                        vec![scheme.identifier(); length],
                     )
                 }
             };
@@ -1151,6 +1157,8 @@ fn the_text_of_a_suci_is_the_one_of_the_service_based_interfaces() {
     let routings = ["0", "12", "0000", "12345", "a", ""];
     let schemes = ["0", "1", "2", "5", "c", "C", "f", "g", "12", "00", ""];
     let keys = ["0", "1", "27", "254", "255", "256", "01", "00", "a", ""];
+    // An output of 42 octets, which the two profiles of ECIES take (TS 33.501 annex C.1).
+    let ecies = "5a".repeat(42);
     let outputs = [
         "1",
         "0999999999",
@@ -1160,6 +1168,7 @@ fn the_text_of_a_suci_is_the_one_of_the_service_based_interfaces() {
         "abc",
         "zz",
         "",
+        &ecies,
     ];
     let (mut read, mut of_the_pattern_only) = (0, 0);
     for routing in routings {
@@ -1179,7 +1188,15 @@ fn the_text_of_a_suci_is_the_one_of_the_service_based_interfaces() {
                                 && (1..=10).contains(&output.len());
                             let odd = scheme != "0" && output.len() % 2 == 1;
                             let reserved = key == "255" || scheme == "5";
-                            assert!(reserved || odd || (scheme == "0" && !msin), "{text}");
+                            // The output of a profile of ECIES has its lengths (TS 33.501
+                            // annex C.1), which the pattern does not say.
+                            let octets = output.len() / 2;
+                            let ecies = (scheme == "1" && !(41..=45).contains(&octets))
+                                || (scheme == "2" && !(42..=46).contains(&octets));
+                            assert!(
+                                reserved || odd || ecies || (scheme == "0" && !msin),
+                                "{text}"
+                            );
                             of_the_pattern_only += 1;
                         }
                         Err(_) => {}
@@ -1188,12 +1205,14 @@ fn the_text_of_a_suci_is_the_one_of_the_service_based_interfaces() {
             }
         }
     }
-    // 3 routing indicators, by 2 MSINs under the null scheme and by 5 schemes, 3 key
-    // identifiers and 3 outputs under the others; the pattern has 6 schemes, 4 key
-    // identifiers and 6 outputs there.
+    // 3 routing indicators, by 2 MSINs under the null scheme and by 3 key identifiers
+    // under the others: the profiles of ECIES take the output of 42 octets alone, and
+    // the 3 schemes of the operator 4 outputs. The pattern has 7 outputs under the null
+    // scheme, and 6 schemes, 4 key identifiers and 7 outputs under the others.
+    let concealed = 3 * (2 + 3 * 4);
     assert_eq!(
         (read, of_the_pattern_only),
-        (3 * (2 + 5 * 3 * 3), 3 * (6 + 6 * 4 * 6 - 5 * 3 * 3))
+        (3 * (2 + concealed), 3 * (7 + 6 * 4 * 7 - concealed))
     );
 }
 
@@ -1272,9 +1291,14 @@ fn any_suci_of_an_imsi_is_read_from_what_it_writes() {
             _ => {
                 let scheme = [1, 2, 12, 13, 14, 15][numbers.next() as usize % 6];
                 let scheme = ProtectionScheme::new(scheme).unwrap();
-                let output: Vec<u8> = (0..1 + numbers.next() % 60)
-                    .map(|_| numbers.next() as u8)
-                    .collect();
+                // The output of a profile of ECIES has its key, the ciphertext of the
+                // MSIN and its MAC tag (TS 33.501 annex C.1).
+                let length = match scheme.identifier() {
+                    1 => 41 + numbers.next() % 5,
+                    2 => 42 + numbers.next() % 5,
+                    _ => 1 + numbers.next() % 60,
+                };
+                let output: Vec<u8> = (0..length).map(|_| numbers.next() as u8).collect();
                 ImsiSuci::concealed(
                     plmn,
                     routing,
@@ -1300,8 +1324,14 @@ fn any_suci_of_an_imsi_is_read_from_what_it_writes() {
         // Three in four start as a SUCI of an IMSI does.
         if numbers.next() & 3 != 0 {
             octets[..8].copy_from_slice(&[0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0x00, 0x00]);
-            octets[6] = (numbers.next() % 3) as u8;
+            octets[6] = [0, 1, 2, 12][numbers.next() as usize % 4];
             octets[7] = (numbers.next() % 3) as u8;
+            // A profile of ECIES has an output of its lengths, or one octet more or less.
+            if let 1 | 2 = octets[6] {
+                let shortest = 40 + usize::from(octets[6]);
+                let length = 8 + shortest - 1 + numbers.next() as usize % 7;
+                octets.resize_with(length, || numbers.next() as u8);
+            }
         }
         match ImsiSuci::from_nas_octets(&octets) {
             Ok(suci) => {
@@ -1653,7 +1683,16 @@ fn the_grammar_of_rfc_7542_is_strict() {
     for username in ["user\u{85}name", "user\u{7f}name"] {
         assert!(nai::check_username(username).is_err(), "{username:?}");
     }
-    for realm in ["bücher.example", "xn--bcher-kva.example", "a-b.c-d.example"] {
+    // A realm is a domain name, whose case is not significant (RFC 7542 clause 2.4,
+    // RFC 4343), in Unicode as in ASCII.
+    for realm in [
+        "bücher.example",
+        "xn--bcher-kva.example",
+        "a-b.c-d.example",
+        "BÜCHER.example",
+        "Bücher.EXAMPLE",
+        "XN--BCHER-KVA.example",
+    ] {
         assert_eq!(nai::check_realm(realm), Ok(()), "{realm}");
     }
     // A realm and a username that are not normalized, and realms that IDNA maps to another
@@ -1851,4 +1890,38 @@ fn any_suci_in_the_form_of_a_nai_is_read_from_what_it_writes() {
         read > 1_000 && refused > 1_000,
         "{read} read, {refused} refused"
     );
+}
+
+/// TS 33.501 annex C.1: the output of profile A is a public key of 256 bits, the
+/// ciphertext of the scheme input and a MAC of 64 bits; profile B has a key of 264 bits;
+/// a scheme of the operator 3000 octets at most beside its input. The input of an IMSI
+/// is its MSIN in packed BCD (annex C.3.1): 5 octets at most for an MSIN of 10 digits.
+#[test]
+fn the_output_of_a_profile_of_ecies_has_the_lengths_of_its_parts() {
+    let routing = RoutingIndicator::default();
+    let concealed = |scheme: u8, length: usize| {
+        let scheme = ProtectionScheme::new(scheme).unwrap();
+        ImsiSuci::concealed(plmn("208-93"), routing, scheme, 1, vec![0x5a; length])
+    };
+    // Profile A: 32 + 1..=5 + 8 octets.
+    assert_eq!(
+        concealed(1, 1).unwrap_err().to_string(),
+        "`scheme-output` has 1 octet, and has 41 to 45"
+    );
+    assert!(concealed(1, 41).is_ok() && concealed(1, 45).is_ok());
+    assert!(concealed(1, 40).is_err() && concealed(1, 46).is_err());
+    // Profile B: 33 + 1..=5 + 8 octets.
+    assert!(concealed(2, 42).is_ok() && concealed(2, 46).is_ok());
+    assert!(concealed(2, 41).is_err() && concealed(2, 47).is_err());
+    // A scheme of the operator: its output, 3000 octets at most beside the input.
+    assert!(concealed(12, 1).is_ok() && concealed(12, 3005).is_ok());
+    assert_eq!(
+        concealed(15, 3006).unwrap_err().to_string(),
+        "`scheme-output` has 3006 octets, and has 1 to 3005"
+    );
+    // The octets of a NAS message and the text are read with the same lengths.
+    let suci = concealed(1, 41).unwrap();
+    let mut octets = suci.to_nas_octets();
+    octets.pop();
+    assert!(ImsiSuci::from_nas_octets(&octets).is_err());
 }

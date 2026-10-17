@@ -33,8 +33,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
 
-  # The oldest versions that the manifest allows: serde_json 1.0.154 is the first whose
-  # `preserve_order` needs no `std`.
+  # The oldest versions that the manifest allows: serde_json 1.0.154 is the first that
+  # builds on `serde_core` with `alloc` alone.
   minimal-versions:
     name: Minimal versions
     runs-on: ubuntu-24.04
@@ -44,6 +44,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo +nightly update -Z direct-minimal-versions
       - run: cargo test --all-features --locked
+
+  # 32 bits, where a `usize` holds less than a `u64`.
+  i686:
+    name: Tests on 32 bits (i686-unknown-linux-musl)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-features --target i686-unknown-linux-musl
 
   no-std:
     name: no_std (thumbv7em-none-eabihf)

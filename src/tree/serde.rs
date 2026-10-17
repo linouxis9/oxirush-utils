@@ -24,8 +24,7 @@
 //! YAML do: the tree is read first, then the value from it.
 //!
 //! ```
-//! use oxirush_utils::tree::{self, Members, Reading, Refused, Tree};
-//! use serde_json::{Value, json};
+//! use oxirush_utils::{tree, tree::{Members, Reading, Refused, Tree, Value}};
 //!
 //! #[derive(Debug, PartialEq)]
 //! struct Tai {
@@ -64,9 +63,9 @@
 //! assert!(error.to_string().starts_with("this is not a value of TAI: a number from 0 to 16777215"));
 //! ```
 
+use super::value::Value;
 use super::{Tree, from_value, to_value};
 use serde_core::de::Error as _;
-use serde_json::Value;
 
 // The traits of serde, which `impl_serde!` names here: a crate that calls it need not
 // depend on serde itself.

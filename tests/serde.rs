@@ -1,8 +1,8 @@
 //! `Serialize` and `Deserialize` through the tree: the same form in JSON and in another
 //! format that describes itself.
 
-use oxirush_utils::tree::{self, Members, Reading, Refused, Tree};
-use serde_json::{Value, json};
+use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
+use serde_json::json;
 
 #[derive(Debug, PartialEq)]
 struct Slice {

@@ -36,13 +36,12 @@ fn the_first_sample_prints_what_the_readme_shows() {
 #[test]
 fn the_sample_of_the_tree_module_prints_what_its_documentation_shows() {
     use oxirush_utils::tree;
-    use serde_json::json;
 
-    let mut message = json!({
+    let mut message = tree!({
         "message-type": "registration-request",
         "requested-nssai": [{"sst": 1}, {"sst": 2, "sd": "0000ff"}],
     });
-    tree::set(&mut message, "/requested-nssai/0/sd", json!("000001")).unwrap();
+    tree::set(&mut message, "/requested-nssai/0/sd", tree!("000001")).unwrap();
     tree::remove(&mut message, "/requested-nssai/1").unwrap();
     let shown =
         r#"{"message-type":"registration-request","requested-nssai":[{"sst":1,"sd":"000001"}]}"#;

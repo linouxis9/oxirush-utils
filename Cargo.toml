@@ -25,13 +25,12 @@ include = [
 # the TAIs, the types of identity, the routing indicator and the protection scheme of a
 # SUCI, the grammar of a NAI and the errors.
 alloc = []
-# The tree of a message as a `serde_json::Value`, its forms and its paths. It turns on
-# `serde_json/preserve_order` for the whole build, as cargo unifies features: the members
-# of every `serde_json::Map` of a program that depends on this feature keep the order in
-# which they were written.
-tree = ["alloc", "dep:serde_json"]
+# The tree of a message, its forms and its paths. A tree is a `tree::Value`, whose objects
+# keep their members in the order in which they are written: the crate turns on no
+# feature of `serde_json`, and the `serde_json::Map` of a program is as the program has it.
+tree = ["alloc", "dep:serde_json", "dep:serde_core"]
 # `Serialize` and `Deserialize` for a type through its tree.
-serde = ["tree", "dep:serde_core"]
+serde = ["tree"]
 # The realm and the username of a NAI are also checked as internationalized names:
 # Unicode normalization form C, and a realm that IDNA takes as it is written. Without it
 # they are checked by the grammar of RFC 7542 alone. It brings the Unicode tables of
@@ -47,8 +46,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)', 'cfg(docsrs)'] }
 
 [dependencies]
-# 1.0.154 is the first whose `preserve_order` needs `alloc` alone.
-serde_json = { version = "1.0.154", optional = true, default-features = false, features = ["alloc", "preserve_order"] }
+# Its `Number` is that of a tree, and it reads and writes the text of one. 1.0.154 is the
+# first that builds on `serde_core` with `alloc` alone.
+serde_json = { version = "1.0.154", optional = true, default-features = false, features = ["alloc"] }
 serde_core = { version = "1.0.220", optional = true, default-features = false, features = ["alloc"] }
 idna = { version = "1", optional = true, default-features = false, features = ["alloc", "compiled_data"] }
 unicode-normalization = { version = "0.1.13", optional = true, default-features = false }
@@ -76,4 +76,8 @@ required-features = ["serde"]
 
 [[test]]
 name = "readme"
+required-features = ["tree"]
+
+[[test]]
+name = "value"
 required-features = ["tree"]

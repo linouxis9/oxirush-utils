@@ -42,6 +42,14 @@ oxirush-utils = { version = "0.1", features = ["alloc"] }
 # oxirush-utils = "0.1"
 ```
 
+0.1.0 is not on crates.io yet: until it is, a program takes the crate from its
+repository.
+
+```toml
+[dependencies]
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", features = ["tree"] }
+```
+
 The minimum supported Rust version is 1.88.
 
 ## Identities
@@ -198,15 +206,15 @@ lists each tolerance with its clause and its evidence.
 
 ## Trees
 
-With the feature `tree`, a message is a `serde_json::Value` in one form for
-every family: octets in lower-case hexadecimal, numbers as JSON numbers, names
-read however they are written, members in the order of the specification.
+With the feature `tree`, a message is a `tree::Value`, a JSON value in one
+form for every family: octets in lower-case hexadecimal, numbers as JSON
+numbers, names read however they are written, members in the order of the
+specification. `tree!` writes one as `serde_json::json!` does, in that order.
 
 ### A type as a tree
 
 ```rust
-use oxirush_utils::tree::{self, Members, Reading, Refused, Tree};
-use serde_json::{Value, json};
+use oxirush_utils::{tree, tree::{Members, Reading, Refused, Tree, Value}};
 
 #[derive(Debug)]
 struct Slice {
@@ -235,14 +243,14 @@ impl Tree for Slice {
 
 fn main() -> Result<(), oxirush_utils::tree::Error> {
     let slice = Slice { sst: 1, sd: Some([0, 0, 0xff]) };
-    assert_eq!(tree::to_value(&slice), json!({"sst": 1, "sd": "0000ff"}));
+    assert_eq!(tree::to_value(&slice), tree!({"sst": 1, "sd": "0000ff"}));
 
     // A name is read however it is written, and octets in either case
-    let read: Slice = tree::from_value(&json!({"SST": 2, "sd": "0000FF"}))?;
+    let read: Slice = tree::from_value(&tree!({"SST": 2, "sd": "0000FF"}))?;
     assert_eq!((read.sst, read.sd), (2, Some([0, 0, 0xff])));
 
     // A refusal says where and why
-    let error = tree::from_value::<Slice>(&json!({"sst": 256})).unwrap_err();
+    let error = tree::from_value::<Slice>(&tree!({"sst": 256})).unwrap_err();
     assert_eq!(
         error.to_string(),
         "this is not a value of S-NSSAI: a number from 0 to 255 is expected, and 256 is written, at sst"
@@ -258,17 +266,16 @@ for each of them, and `-` for the end of a list in an insertion.
 
 ```rust
 use oxirush_utils::tree;
-use serde_json::json;
 
 fn main() -> Result<(), oxirush_utils::tree::Error> {
-    let mut message = json!({
+    let mut message = tree!({
         "message-type": "registration-request",
         "requested-nssai": [{"sst": 1}, {"sst": 2, "sd": "0000ff"}],
         "t3512-value": null,
     });
 
     // Select, by names however they are written
-    assert_eq!(tree::select(&message, "/Requested NSSAI/*/sst")?, [&json!(1), &json!(2)]);
+    assert_eq!(tree::select(&message, "/Requested NSSAI/*/sst")?, [&tree!(1), &tree!(2)]);
 
     // What is not there selects nothing; a name that the value does not have is an error
     assert!(tree::select(&message, "/t3512-value/unit")?.is_empty());
@@ -284,10 +291,10 @@ fn main() -> Result<(), oxirush_utils::tree::Error> {
     ]);
 
     // An edit is done whole, or not at all
-    tree::set(&mut message, "/requested-nssai/0/sd", json!("000001"))?;
-    tree::insert(&mut message, "/requested-nssai/-", json!({"sst": 3}))?;
+    tree::set(&mut message, "/requested-nssai/0/sd", tree!("000001"))?;
+    tree::insert(&mut message, "/requested-nssai/-", tree!({"sst": 3}))?;
     tree::remove(&mut message, "/requested-nssai/1")?;
-    assert_eq!(message["requested-nssai"], json!([{"sst": 1, "sd": "000001"}, {"sst": 3}]));
+    assert_eq!(message["requested-nssai"], tree!([{"sst": 1, "sd": "000001"}, {"sst": 3}]));
     Ok(())
 }
 ```
@@ -299,8 +306,7 @@ A family of messages whose trees are more than objects and lists implements
 absent and could be there. The functions that end with `_in` take one.
 
 ```rust
-use oxirush_utils::tree::{self, Family, Next, Place, Root, Step};
-use serde_json::{Value, json};
+use oxirush_utils::{tree, tree::{Family, Next, Place, Root, Step, Value}};
 
 /// A list of `{"id", "value"}` whose entries are selected by their `id`.
 struct ById;
@@ -309,7 +315,7 @@ impl Family for ById {
     type Shape = ();
 
     fn root(&self) -> Root<'_> {
-        Root { name: "ies", stands_for: &[], required: true }
+        Root::new("ies", &[], true)
     }
 
     fn step<'v>(
@@ -333,9 +339,9 @@ impl Family for ById {
 }
 
 fn main() -> Result<(), tree::Error> {
-    let mut ies = json!([{"id": "cause", "value": 3}, {"id": "timer", "value": 60}]);
-    assert_eq!(tree::select_in(&ById, &ies, "/ies/timer/value")?, [&json!(60)]);
-    tree::set_in(&ById, &mut ies, "/ies/cause/value", json!(7))?;
+    let mut ies = tree!([{"id": "cause", "value": 3}, {"id": "timer", "value": 60}]);
+    assert_eq!(tree::select_in(&ById, &ies, "/ies/timer/value")?, [&tree!(60)]);
+    tree::set_in(&ById, &mut ies, "/ies/cause/value", tree!(7))?;
     assert_eq!(ies[0]["value"], 7);
     Ok(())
 }
@@ -348,14 +354,13 @@ brings a written value to the form that the tree shows at a place, so that a
 comparison does not depend on how its writer spelled it.
 
 ```rust
-use oxirush_utils::tree::{Form, written_as};
-use serde_json::json;
+use oxirush_utils::{tree, tree::{Form, written_as}};
 
 // At a place of octets, C0 is the octets c0
-assert_eq!(written_as(Form::Octets, &json!("C0")), json!("c0"));
+assert_eq!(written_as(Form::Octets, &tree!("C0")), tree!("c0"));
 
 // At a place of text, C0 is other text than c0
-assert_eq!(written_as(Form::Plain, &json!("C0")), json!("C0"));
+assert_eq!(written_as(Form::Plain, &tree!("C0")), tree!("C0"));
 ```
 
 `select_forms_in` gives each selected value with the form that its family
@@ -367,8 +372,7 @@ With the feature `serde`, a type is serialized and deserialized through its
 tree, so YAML and JSON carry the same form.
 
 ```rust
-use oxirush_utils::tree::{self, Members, Reading, Refused, Tree};
-use serde_json::Value;
+use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
 
 #[derive(Debug, PartialEq)]
 struct Timer {
@@ -398,6 +402,8 @@ fn main() {
     let timer = Timer { seconds: 3600 };
     assert_eq!(serde_json::to_string(&timer).unwrap(), r#"{"seconds":3600}"#);
     assert_eq!(serde_json::from_str::<Timer>(r#"{"Seconds": 3600}"#).unwrap(), timer);
+    assert_eq!(serde_yaml::to_string(&timer).unwrap(), "seconds: 3600\n");
+    assert_eq!(serde_yaml::from_str::<Timer>("Seconds: 3600").unwrap(), timer);
 }
 ```
 
@@ -406,17 +412,16 @@ fn main() {
 | Feature | Adds | Through |
 |---------|------|---------|
 | `alloc` | What holds a text or a list: the SUPI that owns its text, the SUCIs, TBCD strings, identity digits as octets. Without it the crate needs no allocator | |
-| `tree` | The tree of a message, its forms and its paths | `serde_json` with `preserve_order` |
+| `tree` | The tree of a message, its forms and its paths | `serde_json` |
 | `serde` | `Serialize` and `Deserialize` for a type through its tree | `serde_core` |
 | `idna` | The realm and the username of a NAI are also checked as internationalized names: Unicode normalization form C, and a realm that IDNA takes as it is written | `idna`, `unicode-normalization` |
 
 No feature is on by default.
 
-The feature `tree` turns on `serde_json/preserve_order`, so that the members
-of a tree keep the order of the specification whatever else a build enables.
-Cargo unifies features: in a program that depends on this crate with `tree`,
-every `serde_json::Map` keeps the order in which its members were inserted,
-those of the program too.
+A `tree::Value` keeps its members in order by itself and converts to and
+from a `serde_json::Value`; the crate turns on no feature of `serde_json`, so
+the JSON of a program that depends on it keeps the order that the program
+chose.
 
 ## What it does not do
 
@@ -434,7 +439,7 @@ The identities are tested against their clauses, against what Open5GS,
 free5GC and PacketRusher sent in lab runs, and against themselves: every
 value is read from the octets that it writes, and any octets are a value that
 writes them back or none. The paths hold the tests of the crates of messages
-on trees that are written out, and a tree of 65,535 entries within a time
+on trees that are written out, and trees of 65,536 entries within a time
 bound.
 
 ```sh

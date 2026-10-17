@@ -1,7 +1,7 @@
 //! The forms of the plain values of a tree, the writer of members and their reader.
 
-use oxirush_utils::tree::{self, ErrorKind, Members, Reading, Refused, Tree};
-use serde_json::{Value, json};
+use oxirush_utils::tree;
+use oxirush_utils::tree::{ErrorKind, Members, Reading, Refused, Tree, Value};
 
 /// Numbers that look random, the same in every run.
 struct Numbers(u64);
@@ -23,7 +23,7 @@ fn octets_are_hexadecimal_in_lower_case_and_are_read_in_either() {
         tree::hex(&[0x00, 0x9a, 0xbc, 0xde, 0xf0, 0xff]),
         "009abcdef0ff"
     );
-    assert_eq!(tree::octets(&[0x02, 0xf8, 0x39]), json!("02f839"));
+    assert_eq!(tree::octets(&[0x02, 0xf8, 0x39]), tree!("02f839"));
     for text in ["02f839", "02F839", "02f8 39".replace(' ', "").as_str()] {
         assert_eq!(tree::unhex(text), Some(vec![0x02, 0xf8, 0x39]), "{text}");
     }
@@ -93,15 +93,15 @@ fn a_name_is_its_letters_and_its_digits() {
     }
     assert_eq!(tree::named(&names, "nssai"), None);
     assert_eq!(tree::named::<&str>(&[], "x"), None);
-    let object = json!({"5gmm-cause": 1, "5GMM Cause": 2});
+    let object = tree!({"5gmm-cause": 1, "5GMM Cause": 2});
     let members = object.as_object().unwrap();
     assert_eq!(
         tree::member(members, "5gmm_cause"),
-        Some(("5gmm-cause", &json!(1)))
+        Some(("5gmm-cause", &tree!(1)))
     );
     assert_eq!(
         tree::member(members, "5GMM Cause"),
-        Some(("5GMM Cause", &json!(2)))
+        Some(("5GMM Cause", &tree!(2)))
     );
     assert_eq!(tree::member(members, "cause"), None);
 }
@@ -141,7 +141,7 @@ impl Tree for Sample {
         let mut members = Members::new();
         members.put("count", tree::unsigned(self.count));
         members.put("offset", tree::signed(self.offset));
-        members.put("flag", json!(self.flag));
+        members.put("flag", tree!(self.flag));
         members.put("kind", tree::text(KINDS[self.kind]));
         members.put("name", tree::text(&self.name));
         members.put("payload", tree::octets(&self.payload));
@@ -222,7 +222,7 @@ fn a_value_is_written_with_its_members_in_their_order_and_read_back() {
     assert_eq!(tree::from_value::<Sample>(&written), Ok(sample()));
     // A name however it is written, octets in either case, a member that is null, a
     // string of bits as its octets alone, an alternative without content.
-    let other = json!({
+    let other = tree!({
         "Count": 0, "OFFSET": 7, "flag": false, "kind": "PLMN not allowed", "name": "",
         "payload": "C0FF", "fixed": "02F839", "mask": "c0", "either": "Nothing", "list": [],
         "maybe": null,
@@ -238,7 +238,7 @@ fn a_value_is_written_with_its_members_in_their_order_and_read_back() {
         ((vec![0xc0], 8), Either::Nothing, None)
     );
     let mut with = written.clone();
-    with["maybe"] = json!(255);
+    with["maybe"] = tree!(255);
     assert_eq!(tree::from_value::<Sample>(&with).unwrap().maybe, Some(255));
 }
 
@@ -263,92 +263,92 @@ fn a_refusal_says_the_member_and_why() {
     let value = |at: &str, why: &str| (ErrorKind::Value, at.to_string(), why.to_string());
     // One spelling for each plain value.
     assert_eq!(
-        refused(&|tree| tree["count"] = json!("7")),
+        refused(&|tree| tree["count"] = tree!("7")),
         value(
             "count",
             "a number from 0 to 18446744073709551615 is expected, and \"7\" is written"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["count"] = json!(1.0)),
+        refused(&|tree| tree["count"] = tree!(1.0)),
         value(
             "count",
             "a number from 0 to 18446744073709551615 is expected, and 1.0 is written"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["count"] = json!(-1)),
+        refused(&|tree| tree["count"] = tree!(-1)),
         value(
             "count",
             "a number from 0 to 18446744073709551615 is expected, and -1 is written"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["offset"] = json!(8)),
+        refused(&|tree| tree["offset"] = tree!(8)),
         value(
             "offset",
             "a number from -8 to 7 is expected, and 8 is written"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["flag"] = json!("true")),
+        refused(&|tree| tree["flag"] = tree!("true")),
         value("flag", "true or false is expected, and \"true\" is written")
     );
     assert_eq!(
-        refused(&|tree| tree["payload"] = json!("0xc0ff")),
+        refused(&|tree| tree["payload"] = tree!("0xc0ff")),
         value(
             "payload",
             "octets in hexadecimal, two digits for each, are expected, and \"0xc0ff\" is written"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["payload"] = json!([192, 255])),
+        refused(&|tree| tree["payload"] = tree!([192, 255])),
         value(
             "payload",
             "octets in hexadecimal, two digits for each, are expected, and [192,255] is written"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["fixed"] = json!("02f8")),
+        refused(&|tree| tree["fixed"] = tree!("02f8")),
         value("fixed", "3 octets are expected, and 02f8 has 2")
     );
     assert_eq!(
-        refused(&|tree| tree["kind"] = json!("congestio")),
+        refused(&|tree| tree["kind"] = tree!("congestio")),
         value(
             "kind",
             "\"congestio\" is none of its names: plmn-not-allowed, congestion, 5gs-services-not-allowed"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["kind"] = json!(1)),
+        refused(&|tree| tree["kind"] = tree!(1)),
         value("kind", "a name is expected, and 1 is written")
     );
     // A string of bits has the octets of its length, and zero bits after it.
     assert_eq!(
-        refused(&|tree| tree["mask"] = json!({"value": "c0", "length": 9})),
+        refused(&|tree| tree["mask"] = tree!({"value": "c0", "length": 9})),
         value("mask", "9 bits are not 1 octets")
     );
     assert_eq!(
-        refused(&|tree| tree["mask"] = json!({"value": "c1", "length": 3})),
+        refused(&|tree| tree["mask"] = tree!({"value": "c1", "length": 3})),
         value("mask", "the bits after the 3 of the string are not zero")
     );
     // Where in a list, and in an alternative.
     assert_eq!(
-        refused(&|tree| tree["list"] = json!([1, 256, 3])),
+        refused(&|tree| tree["list"] = tree!([1, 256, 3])),
         value(
             "list/1",
             "a number from 0 to 255 is expected, and 256 is written"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["either"] = json!({"number": 10})),
+        refused(&|tree| tree["either"] = tree!({"number": 10})),
         value(
             "either/number",
             "a number from 0 to 9 is expected, and 10 is written"
         )
     );
     assert_eq!(
-        refused(&|tree| tree["either"] = json!({"number": 1, "other": 2})),
+        refused(&|tree| tree["either"] = tree!({"number": 1, "other": 2})),
         value(
             "either",
             "an object with one member, the name of an alternative with its value, is expected, \
@@ -356,7 +356,7 @@ fn a_refusal_says_the_member_and_why() {
         )
     );
     // A member that the type has not, one that is missing, one that is there twice.
-    let (kind, at, why) = refused(&|tree| tree["cuont"] = json!(1));
+    let (kind, at, why) = refused(&|tree| tree["cuont"] = tree!(1));
     assert_eq!((kind, at.as_str()), (ErrorKind::NoSuchMember, ""));
     assert!(
         why.starts_with("\"cuont\" is not a member that its type has: it has count, offset, "),
@@ -367,13 +367,13 @@ fn a_refusal_says_the_member_and_why() {
         value("flag", "the member is missing")
     );
     assert_eq!(
-        refused(&|tree| tree["FLAG"] = json!(true)),
+        refused(&|tree| tree["FLAG"] = tree!(true)),
         value("", "the member \"flag\" is written twice")
     );
-    let (_, _, why) = refused(&|tree| *tree = json!([1, 2]));
+    let (_, _, why) = refused(&|tree| *tree = tree!([1, 2]));
     assert_eq!(why, "an object is expected, and [1,2] is written");
     // What is written is shown as far as it says which value it is.
-    let (_, _, why) = refused(&|tree| tree["name"] = json!(["x".repeat(100)]));
+    let (_, _, why) = refused(&|tree| tree["name"] = tree!(["x".repeat(100)]));
     assert_eq!(
         why,
         format!(

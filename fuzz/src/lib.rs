@@ -31,8 +31,8 @@ use oxirush_utils::identity::{
     Guti5g, GutiEps, Imei, Imeisv, Imsi, ImsiSuci, NaiSuci, Plmn, RoutingIndicator, STmsi5g, Supi,
     Tai5gs, TaiEps, digits, nai, tbcd,
 };
+use oxirush_utils::tree::Value;
 use oxirush_utils::tree::{self, Family, Next, Place, Root, Step};
-use serde_json::Value;
 
 /// Read `octets`, and the text that they are, as each identity.
 pub fn identity(octets: &[u8]) {
@@ -201,11 +201,7 @@ impl Family for ById {
     type Shape = ();
 
     fn root(&self) -> Root<'_> {
-        Root {
-            name: "t",
-            stands_for: &[],
-            required: true,
-        }
+        Root::new("t", &[], true)
     }
 
     fn step<'v>(

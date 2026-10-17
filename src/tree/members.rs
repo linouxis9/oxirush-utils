@@ -18,17 +18,16 @@
 //! A type as a tree: the trait, the writer of members and their reader.
 
 use super::forms::{hex, key, named, unhex};
+use super::value::{Map, Value};
 use super::{Error, ErrorKind};
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use serde_json::{Map, Value};
 
 /// A type whose values are written as a tree and read from one.
 ///
 /// ```
-/// use oxirush_utils::tree::{self, Members, Reading, Refused, Tree};
-/// use serde_json::{Value, json};
+/// use oxirush_utils::{tree, tree::{Members, Reading, Refused, Tree, Value}};
 ///
 /// #[derive(Debug)]
 /// struct Slice {
@@ -56,12 +55,12 @@ use serde_json::{Map, Value};
 /// }
 ///
 /// let slice = Slice { sst: 1, sd: Some([0, 0, 0xff]) };
-/// assert_eq!(tree::to_value(&slice), json!({"sst": 1, "sd": "0000ff"}));
+/// assert_eq!(tree::to_value(&slice), tree!({"sst": 1, "sd": "0000ff"}));
 ///
 /// // A name is read however it is written, and a refusal says where and why
-/// let read: Slice = tree::from_value(&json!({"SST": 2}))?;
+/// let read: Slice = tree::from_value(&tree!({"SST": 2}))?;
 /// assert_eq!((read.sst, read.sd), (2, None));
-/// let error = tree::from_value::<Slice>(&json!({"sst": 256})).unwrap_err();
+/// let error = tree::from_value::<Slice>(&tree!({"sst": 256})).unwrap_err();
 /// assert_eq!(
 ///     error.to_string(),
 ///     "this is not a value of S-NSSAI: a number from 0 to 255 is expected, and 256 is written, at sst"
@@ -120,7 +119,7 @@ fn written(value: &Value) -> String {
 /// its name. The members keep the order in which they are put, which is that of the
 /// specification.
 #[derive(Debug, Default)]
-pub struct Members(Map<String, Value>);
+pub struct Members(Map);
 
 impl Members {
     /// A value without a member yet.
@@ -470,7 +469,7 @@ impl Reading {
 }
 
 /// The member of `members` that `name` names, [however it is written](super::same_name).
-pub fn member<'m>(members: &'m Map<String, Value>, name: &str) -> Option<(&'m str, &'m Value)> {
+pub fn member<'m>(members: &'m Map, name: &str) -> Option<(&'m str, &'m Value)> {
     let known = key(members, name)?;
     Some((known, &members[known]))
 }

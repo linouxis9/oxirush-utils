@@ -39,7 +39,7 @@ const LONGEST_REALM: usize = 253;
 const LONGEST_LABEL: usize = 63;
 /// The longest username of a SUPI, in octets, which is also the longest plaintext of a
 /// profile of ECIES.
-const LONGEST_USERNAME: usize = 253;
+pub(super) const LONGEST_USERNAME: usize = 253;
 #[cfg(feature = "alloc")]
 /// The longest output of a scheme of the home operator, in octets: 3000 and the size of
 /// its input (3GPP TS 33.501 annex C.1).
@@ -53,11 +53,11 @@ const LONGEST_NAI: usize = 64 + 2 * LONGEST_OPERATOR_OUTPUT + 1 + LONGEST_REALM;
 /// The octets of the ephemeral public key of the profile A of ECIES (X25519), of the
 /// profile B (a compressed point of secp256r1), and of the MAC tag of both (TS 33.501
 /// annex C.3.4).
-const PROFILE_A_KEY: usize = 32;
+pub(super) const PROFILE_A_KEY: usize = 32;
 #[cfg(feature = "alloc")]
-const PROFILE_B_KEY: usize = 33;
+pub(super) const PROFILE_B_KEY: usize = 33;
 #[cfg(feature = "alloc")]
-const MAC_TAG: usize = 8;
+pub(super) const MAC_TAG: usize = 8;
 
 #[cfg(feature = "alloc")]
 /// What a NAI is written as, when it is no NAI.
@@ -120,7 +120,8 @@ pub fn check_realm(realm: &str) -> Result<(), Error> {
 }
 
 /// Whether a realm of the grammar of one is normalized and is a domain name that IDNA
-/// takes as it is written.
+/// takes as it is written, whatever its case: the case of a domain name is not
+/// significant (RFC 7542 clause 2.4, RFC 4343), and IDNA gives it in lower case.
 #[cfg(feature = "idna")]
 fn internationalized(realm: &str) -> Result<(), Error> {
     normalized("realm", realm)?;
@@ -131,7 +132,7 @@ fn internationalized(realm: &str) -> Result<(), Error> {
         return Ok(());
     }
     let (unicode, status) = idna::domain_to_unicode(&ascii);
-    match status.is_ok() && unicode == realm {
+    match status.is_ok() && unicode == realm.to_lowercase() {
         true => Ok(()),
         false => Err(refused),
     }

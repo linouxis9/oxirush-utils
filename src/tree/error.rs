@@ -28,7 +28,7 @@ pub enum ErrorKind {
     /// starts with another root than that of the tree.
     Path,
     /// A limit: a path of more than 4096 octets or 64 segments, or one that selects more
-    /// than 4096 values.
+    /// than 65,536 values.
     Limit,
     /// A name that the value at that place does not have and cannot have.
     NoSuchMember,
@@ -48,10 +48,9 @@ pub enum ErrorKind {
 /// Why a tree is not read, or a path not taken: the kind of error, where it is, and why.
 ///
 /// ```
-/// use oxirush_utils::tree::{self, ErrorKind};
-/// use serde_json::json;
+/// use oxirush_utils::{tree, tree::{ErrorKind}};
 ///
-/// let tree = json!({"cause": {"value": "congestion"}});
+/// let tree = tree!({"cause": {"value": "congestion"}});
 /// let error = tree::select(&tree, "/cause/valeu").unwrap_err();
 /// assert_eq!(error.kind(), ErrorKind::NoSuchMember);
 /// assert_eq!(error.at(), "/cause/valeu");

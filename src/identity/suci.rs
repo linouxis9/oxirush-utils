@@ -18,6 +18,8 @@
 //! The SUCI of an IMSI as a value, with its routing indicator and its protection scheme.
 //! What conceals an identity and what reads a concealed one are no part of it.
 
+#[cfg(feature = "alloc")]
+use super::nai::{MAC_TAG, PROFILE_A_KEY, PROFILE_B_KEY};
 use super::plmn::FILLER;
 use super::{Error, Fault};
 #[cfg(feature = "alloc")]
@@ -299,8 +301,11 @@ impl ImsiSuci {
     ///
     /// `scheme` is the null scheme, `key_id` is 0, which a SUCI has "if and only if"
     /// its scheme is the null one (TS 23.003 clause 2.2B), or 255, which is reserved
-    /// (TS 24.501 table 9.11.3.4.1), or `output` is empty. Open5GS takes the key
-    /// identifiers 1 to 254, and the UDM of free5GC refuses 0.
+    /// (TS 24.501 table 9.11.3.4.1), or `output` has another length than its scheme
+    /// gives it: for profile A, 32 octets of public key, the ciphertext of the MSIN in
+    /// packed BCD and 8 of MAC tag; for profile B, 33 of public key; for a scheme of the
+    /// operator, 3000 octets at most beside the MSIN (TS 33.501 annex C.1). Open5GS takes
+    /// the key identifiers 1 to 254, and the UDM of free5GC refuses 0.
     pub fn concealed(
         plmn: Plmn,
         routing_indicator: RoutingIndicator,
@@ -321,8 +326,29 @@ impl ImsiSuci {
             let fault = Fault::Value { given, expected };
             return Err(Error::new("home-network-public-key-identifier", fault));
         }
-        if output.is_empty() {
-            return Err(Error::length("scheme-output", "octets", 0, 1, usize::MAX));
+        // The output of a profile of ECIES is the ephemeral public key, the ciphertext
+        // of the scheme input and the MAC tag, and that of a scheme of the operator 3000
+        // octets at most beside its input (TS 33.501 annex C.1). The input is the MSIN
+        // in packed BCD (annex C.3.1): one octet for two of its digits.
+        let input = (15 - plmn.digits().len()).div_ceil(2);
+        let (shortest, longest) = match scheme {
+            ProtectionScheme::PROFILE_A => {
+                (PROFILE_A_KEY + 1 + MAC_TAG, PROFILE_A_KEY + input + MAC_TAG)
+            }
+            ProtectionScheme::PROFILE_B => {
+                (PROFILE_B_KEY + 1 + MAC_TAG, PROFILE_B_KEY + input + MAC_TAG)
+            }
+            _ => (1, 3000 + input),
+        };
+        if !(shortest..=longest).contains(&output.len()) {
+            let length = output.len();
+            return Err(Error::length(
+                "scheme-output",
+                "octets",
+                length,
+                shortest,
+                longest,
+            ));
         }
         Ok(Self {
             plmn,

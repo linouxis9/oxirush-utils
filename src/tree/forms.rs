@@ -17,10 +17,10 @@
 
 //! The forms of the plain values of a tree: octets, numbers, names, bit strings.
 
+use super::value::{Map, Number, Value};
 use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
-use serde_json::{Map, Number, Value};
 
 // ── Octets ──────────────────────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ pub fn named<T: AsRef<str>>(names: &[T], name: &str) -> Option<usize> {
 }
 
 /// The name of `members` that `name` is, as [`named`] finds it.
-pub(crate) fn key<'m>(members: &'m Map<String, Value>, name: &str) -> Option<&'m str> {
+pub(crate) fn key<'m>(members: &'m Map, name: &str) -> Option<&'m str> {
     // The name as it is written is the usual case, and is found without a search.
     if let Some((known, _)) = members.get_key_value(name) {
         return Some(known);
@@ -168,9 +168,8 @@ pub fn text(text: &str) -> Value {
 ///
 /// ```
 /// use oxirush_utils::tree;
-/// use serde_json::json;
 ///
-/// assert_eq!(tree::bits(&[0xc0], 3), json!({"value": "c0", "length": 3}));
+/// assert_eq!(tree::bits(&[0xc0], 3), tree!({"value": "c0", "length": 3}));
 /// ```
 pub fn bits(octets: &[u8], length: usize) -> Value {
     let mut members = Map::new();
@@ -214,18 +213,18 @@ pub enum Form {
 /// stays in its case.
 ///
 /// ```
+/// use oxirush_utils::tree;
 /// use oxirush_utils::tree::{Form, written_as};
-/// use serde_json::json;
 ///
 /// // The tree shows octets in lower case, whatever the writer chose
-/// assert_eq!(written_as(Form::Octets, &json!("C0")), json!("c0"));
+/// assert_eq!(written_as(Form::Octets, &tree!("C0")), tree!("c0"));
 ///
 /// // Text is compared as it is written
-/// assert_eq!(written_as(Form::Plain, &json!("C0")), json!("C0"));
+/// assert_eq!(written_as(Form::Plain, &tree!("C0")), tree!("C0"));
 ///
 /// // A name is the one of its set
 /// let causes = &["congestion", "plmn-not-allowed"];
-/// assert_eq!(written_as(Form::Named(causes), &json!("PLMN not allowed")), json!("plmn-not-allowed"));
+/// assert_eq!(written_as(Form::Named(causes), &tree!("PLMN not allowed")), tree!("plmn-not-allowed"));
 /// ```
 pub fn written_as(form: Form, written: &Value) -> Value {
     match (form, written) {

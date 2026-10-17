@@ -26,35 +26,48 @@ once.
   28.7.3, 28.15.5 and 28.16.5): the text
   `type1.rid678.schid0.useriduser17@example.com` and the 5GS mobile identity
   that holds it, with the rules of each SUPI type, the key identifier of the
-  scheme and the fields of a profile of ECIES. `nai::check_realm` and
-  `nai::check_username` check the grammar of RFC 7542, and
-  `nai::home_network_domain` writes the realm of an IMSI. With the feature
-  `idna` a realm and a username are also in Unicode normalization form C, and
-  a realm is a name that IDNA takes as it is written.
+  scheme and the fields of a profile of ECIES. The scheme output of either
+  form has the lengths of the parts of its profile (TS 33.501 annex C.3.4):
+  41 to 45 octets for an IMSI with profile A, 42 to 46 with profile B.
+  `nai::check_realm` and `nai::check_username` check the grammar of RFC 7542,
+  and `nai::home_network_domain` writes the realm of an IMSI. With the
+  feature `idna` a realm and a username are also in Unicode normalization
+  form C, and a realm is a name that IDNA takes as it is written, in either
+  case (TS 23.003 clause 28.7.2).
 - A reader of octets is canonical: it gives a value only for the octets that
   the value is written as. The readers named `_tolerant` also take what other
   implementations are known to send, with a list of what was not by the
   clause, which allocates nothing: another end mark than `1111` after an even
   number of identity digits, the spare bit of the first octet of a 5G-GUTI or
   a 5G-S-TMSI, and the spare bits and the spare SUPI formats of a SUCI.
-- `tree`, with the feature `tree`: the tree of a message as a
-  `serde_json::Value`. `Tree`, `Members` and `Reading` write a type as a tree
-  and read it from one, with refusals that say the member and why. Octets are
+- `tree`, with the feature `tree`: the tree of a message as a `tree::Value`,
+  JSON whose objects keep their members in the order in which they were
+  written, which `tree!` writes in the code as `serde_json::json!` does. It
+  converts to and from a `serde_json::Value`, and the crate turns on no
+  feature of `serde_json`: the JSON of a program that depends on it keeps the
+  order that the program chose. A name written twice in an object of JSON is
+  refused. `Tree`, `Members` and `Reading` write a type as a tree and read it
+  from one, with refusals that say the member and why. Octets are
   hexadecimal in lower case, read in either; a number is a JSON number; a
-  name is read by its letters and its digits, however it is written. The
-  members of a tree keep the order in which they were written: the feature
-  turns on `serde_json/preserve_order`, for the whole build.
+  name is read by its letters and its digits, however it is written.
 - Paths on a tree: `select`, `paths`, `set`, `remove` and `insert`, with
-  4096 octets, 64 segments and 4096 selected values at most, one error type
+  4096 octets, 64 segments and 65,536 selected values at most (the longest
+  list of the protocols, the connections of an NG RESET), one error type
   with a kind, and edits that are done whole or not at all, in the place of
   the tree: what an edit changes is kept and put back when a later place
   cannot take it, and nothing of the tree is copied. `Family` is what a
   family of messages adds where its trees are more than objects and lists;
   the functions that end with `_in` take one, `places_in` gives the places of
   a path with what the family knows of each, and `open_in` shows the values
-  on the way of a path as the family opens them. A family refuses an edit in
-  its step, before anything changes, takes a segment in a member with its own
-  rule there (`Next::through`), and gives its errors a code of its own.
+  on the way of a path as the family opens them, every place of a segment in
+  one walk of the tree. `null` is read as absent, but where the family says
+  that the type of the place is NULL (`Family::null_is_value`): an
+  alternative `{"pLMNWide": null}` is then a value that a path lists and
+  selects. `Root`, `Edit`, `Key`, `Step`, `Absent`, `Listed` and `Removal`
+  are `#[non_exhaustive]`, and `Root::new` makes a root. A family refuses an
+  edit in its step, before anything changes, takes a segment in a member with
+  its own rule there (`Next::through`), and gives its errors a code of its
+  own.
   `written_as` brings a value that someone wrote to the form that a tree
   shows at a place, for a comparison.
 - `tree::serde`, with the feature `serde`: `Serialize` and `Deserialize` for
