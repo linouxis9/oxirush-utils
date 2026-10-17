@@ -97,10 +97,29 @@ pub fn deserialize<'de, T: Tree, D: Deserializer<'de>>(deserializer: D) -> Resul
 /// [`serialize`](crate::tree::serde::serialize) and
 /// [`deserialize`](crate::tree::serde::deserialize).
 ///
-/// A type with generic parameters or lifetimes writes the two implementations itself, in
-/// three lines each.
+/// A type is named by its name, with its lifetime after it, as `Name<'a>`, when it has
+/// one: the value that is deserialized is one of any lifetime. A type with generic
+/// parameters writes the two implementations itself, in three lines each.
 #[macro_export]
 macro_rules! impl_serde {
+    ($($name:ident $(<$life:lifetime>)?),+ $(,)?) => {$(
+        impl$(<$life>)? $crate::tree::serde::Serialize for $name$(<$life>)? {
+            fn serialize<S: $crate::tree::serde::Serializer>(
+                &self,
+                serializer: S,
+            ) -> ::core::result::Result<S::Ok, S::Error> {
+                $crate::tree::serde::serialize(self, serializer)
+            }
+        }
+
+        impl<'de $(, $life)?> $crate::tree::serde::Deserialize<'de> for $name$(<$life>)? {
+            fn deserialize<D: $crate::tree::serde::Deserializer<'de>>(
+                deserializer: D,
+            ) -> ::core::result::Result<Self, D::Error> {
+                $crate::tree::serde::deserialize(deserializer)
+            }
+        }
+    )+};
     ($($name:ty),+ $(,)?) => {$(
         impl $crate::tree::serde::Serialize for $name {
             fn serialize<S: $crate::tree::serde::Serializer>(

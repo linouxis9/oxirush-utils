@@ -356,11 +356,11 @@ impl Reading {
         }
     }
 
-    /// Text.
+    /// Text: a string.
     pub fn text<'v>(&mut self, value: &'v Value) -> Result<&'v str, Refused> {
         match value.as_str() {
             Some(text) => Ok(text),
-            None => Err(self.mismatch("text", value)),
+            None => Err(self.mismatch("a string", value)),
         }
     }
 
@@ -413,7 +413,13 @@ impl Reading {
     pub fn octets(&mut self, value: &Value) -> Result<Vec<u8>, Refused> {
         match value.as_str().and_then(unhex) {
             Some(octets) => Ok(octets),
-            None => Err(self.mismatch("octets in hexadecimal, two digits for each,", value)),
+            None => {
+                let why = format!(
+                    "octets in hexadecimal, two digits for each, are expected, and {} is written",
+                    written(value)
+                );
+                Err(self.refuse(ErrorKind::Value, why))
+            }
         }
     }
 

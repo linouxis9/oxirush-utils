@@ -61,6 +61,35 @@ impl Tree for Request {
 
 oxirush_utils::impl_serde!(Slice, Request);
 
+/// A name that borrows its text, as the bindings of a protocol borrow their octets: a
+/// value of any lifetime is deserialized, which owns its text.
+#[derive(Debug, PartialEq)]
+struct Name<'a>(std::borrow::Cow<'a, str>);
+
+impl Tree for Name<'_> {
+    const NAME: &'static str = "Name";
+
+    fn to_tree(&self) -> Value {
+        tree::text(&self.0)
+    }
+
+    fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+        Ok(Self(reading.text(value)?.to_string().into()))
+    }
+}
+
+oxirush_utils::impl_serde!(Name<'a>);
+
+#[test]
+fn a_type_with_a_lifetime_is_written_and_read_through_its_tree() {
+    let text = String::from("gnb-1");
+    let name = Name(text.as_str().into());
+    let written = serde_json::to_string(&name).unwrap();
+    assert_eq!(written, r#""gnb-1""#);
+    let read: Name<'static> = serde_json::from_str(&written).unwrap();
+    assert_eq!(read, name);
+}
+
 fn request() -> Request {
     Request {
         slices: vec![

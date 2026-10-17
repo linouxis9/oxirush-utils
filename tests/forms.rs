@@ -298,14 +298,14 @@ fn a_refusal_says_the_member_and_why() {
         refused(&|tree| tree["payload"] = json!("0xc0ff")),
         value(
             "payload",
-            "octets in hexadecimal, two digits for each, is expected, and \"0xc0ff\" is written"
+            "octets in hexadecimal, two digits for each, are expected, and \"0xc0ff\" is written"
         )
     );
     assert_eq!(
         refused(&|tree| tree["payload"] = json!([192, 255])),
         value(
             "payload",
-            "octets in hexadecimal, two digits for each, is expected, and [192,255] is written"
+            "octets in hexadecimal, two digits for each, are expected, and [192,255] is written"
         )
     );
     assert_eq!(
@@ -376,6 +376,9 @@ fn a_refusal_says_the_member_and_why() {
     let (_, _, why) = refused(&|tree| tree["name"] = json!(["x".repeat(100)]));
     assert_eq!(
         why,
-        format!("text is expected, and [\"{}… is written", "x".repeat(38))
+        format!(
+            "a string is expected, and [\"{}… is written",
+            "x".repeat(38)
+        )
     );
 }
