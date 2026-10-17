@@ -1,0 +1,17 @@
+# The figures of the README: the tree of the crate against a `serde_json::Value`, and the
+# identities. A package of its own, so that the crate keeps no dependency: nothing here is
+# published.
+[package]
+name = "oxirush-utils-benches"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[dependencies]
+oxirush-utils = { path = "..", features = ["serde"] }
+# The `Value` of serde_json, with its default features: its objects sorted by their names.
+serde_json = "1.0.154"
+
+# Not a member of a workspace that the crate may be in.
+[workspace]

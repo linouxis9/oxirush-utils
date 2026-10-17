@@ -156,11 +156,15 @@ fn a_plmn_is_refused_with_its_member_and_the_reason() {
         error(Plmn::new("208", "9-3")),
         "`mnc` has the character `-`, and has decimal digits"
     );
-    assert_eq!(
-        error("20893".parse()),
-        "`plmn` is written as an MCC of three digits, a hyphen and an MNC of two or three, as \
-         208-93"
-    );
+    // The digits alone are no PLMN: the review of the release candidate found the trees of
+    // the protocol crates reading "310410" as octets, where the text of a PLMN has a hyphen.
+    for digits in ["20893", "310410", "001001"] {
+        assert_eq!(
+            error(digits.parse()),
+            "`plmn` is written as an MCC of three digits, a hyphen and an MNC of two or three, \
+             as 208-93"
+        );
+    }
     assert_eq!(
         error(Plmn::from_digits([2, 0, 8], &[9, 10])),
         "`mnc` has the half octet 0xa where a digit is, and a digit is 0 to 9"

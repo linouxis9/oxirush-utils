@@ -10,6 +10,8 @@ rust-version = "1.88"
 keywords = ["3gpp", "5g", "lte", "imsi", "telecom"]
 categories = ["network-programming", "encoding", "no-std"]
 readme = "README.md"
+# `benches/` is a package of its own, whose files are no benchmark of the crate.
+autobenches = false
 include = [
     "src/**/*.rs",
     "tests/**/*.rs",
@@ -78,7 +80,7 @@ required-features = ["serde"]
 
 [[test]]
 name = "readme"
-required-features = ["tree"]
+required-features = ["serde"]
 
 [[test]]
 name = "value"
