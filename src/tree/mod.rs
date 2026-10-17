@@ -77,7 +77,13 @@
 //!
 //! A family of messages whose trees are more than objects and lists says so through
 //! [`Family`]: its root, an entry that a name selects, a member that is absent and
-//! could be there. The functions that end with `_in` take one.
+//! could be there, a value that it shows opened ([`open_in`]). The functions that end
+//! with `_in` take one.
+//!
+//! An edit is done in the place of the tree, whole or not at all: what it changes is
+//! kept and put back when a later place cannot take it, and nothing of the tree is
+//! copied, so that an edit of one value of a tree of 65,535 entries takes what the
+//! walk to it takes.
 
 mod error;
 mod forms;
@@ -97,5 +103,6 @@ pub use members::{Members, Read, Reading, Refused, Tree, from_value, member, to_
 pub use path::{MAX_OCTETS, MAX_SEGMENTS, MAX_SELECTED, escape, position, segments};
 pub use walk::{
     Absent, Edit, Family, Key, Listed, Next, Place, Plain, Removal, Root, Step, insert, insert_in,
-    paths, paths_in, remove, remove_in, select, select_forms_in, select_in, set, set_in,
+    open_in, paths, paths_in, places_in, remove, remove_in, select, select_forms_in, select_in,
+    set, set_in,
 };

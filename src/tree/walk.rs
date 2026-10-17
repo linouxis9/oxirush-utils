@@ -62,6 +62,8 @@ pub enum Edit {
     Remove,
     /// Add an entry to a list.
     Insert,
+    /// Show a value on the way of the path as the family opens it: see [`open_in`].
+    Open,
 }
 
 /// One step from the tree to a place of it: the name of a member as the tree has it, the
@@ -116,6 +118,8 @@ pub struct Next<'v, S> {
     tracking: bool,
     edit: Option<Edit>,
     last: bool,
+    /// The keys of a place that the family opens, and the value that it opens there.
+    opened: Option<(Option<Rc<Link>>, Value)>,
 }
 
 impl<'v, S> Next<'v, S> {
@@ -151,11 +155,74 @@ impl<'v, S> Next<'v, S> {
         self.found.push(Place { value, shape, at });
     }
 
+    /// The end of the list at the place, where [`insert_in`] adds an entry: what `-`
+    /// selects, as the last segment of an insertion.
+    pub fn end(&mut self, shape: S) {
+        let at = self.link(|| Key::End);
+        self.found.push(Place {
+            value: None,
+            shape,
+            at,
+        });
+    }
+
+    /// [`absent`](Self::absent), unless a place without a value of the same shape is
+    /// there already: a family that selects by its types, where a tree has no value,
+    /// adds each type once.
+    pub fn absent_once(&mut self, name: &str, shape: S)
+    where
+        S: PartialEq,
+    {
+        let known = |place: &Place<'v, S>| place.value.is_none() && place.shape == shape;
+        if !self.found.iter().any(known) {
+            self.absent(name, shape);
+        }
+    }
+
     /// The same place again, as `place`, with what the family now knows of it: for a
     /// segment that says what the place is and does not go into it.
     pub fn stay(&mut self, place: &Place<'v, S>, shape: S) {
         let (value, at) = (place.value, place.at.clone());
         self.found.push(Place { value, shape, at });
+    }
+
+    /// Show the value at `place` as `value`, which the family opens from it, where the
+    /// edit is [`Edit::Open`]: the value takes the place of the one there, and the path
+    /// is taken again from the tree. See [`open_in`].
+    pub fn open(&mut self, place: &Place<'v, S>, value: Value) {
+        if self.opened.is_none() {
+            self.opened = Some((place.at.clone(), value));
+        }
+    }
+
+    /// Take the segment in the member `name` of `place` as if the name stood before it,
+    /// as [`Step::Through`] does, with the family's own rule there: `step` adds what the
+    /// segment selects in that member, which the places that it adds are under. What
+    /// `step` returns is returned, so that a family words what the member refuses as
+    /// its own refusal. The member is a place without a value when `place` has no such
+    /// member.
+    pub fn through<R>(
+        &mut self,
+        place: &Place<'v, S>,
+        name: &str,
+        shape: S,
+        step: impl FnOnce(&Place<'v, S>, &mut Self) -> R,
+    ) -> R {
+        let members = place.value.and_then(Value::as_object);
+        let held = members.and_then(|members| {
+            let name = key(members, name)?;
+            Some((name, &members[name]))
+        });
+        let at = self.link(|| Key::Name(held.map_or(name, |(name, _)| name).to_string()));
+        let inside = Place {
+            value: held.map(|(_, value)| value),
+            shape,
+            at,
+        };
+        let from = core::mem::replace(&mut self.from, inside.at.clone());
+        let taken = step(&inside, self);
+        self.from = from;
+        taken
     }
 
     /// What the path is for: `None` for `select`.
@@ -355,14 +422,13 @@ pub trait Family {
     }
 
     /// What else an edit changes: it is called for each place that was edited, with the
-    /// tree as the edit left it and the keys to the place.
-    ///
-    /// # Errors
-    ///
-    /// Why the family refuses the edit: the tree that was given stays as it was.
-    fn edited(&self, tree: &mut Value, at: &[Key], edit: Edit) -> Result<(), Error> {
-        let _ = (tree, at, edit);
-        Ok(())
+    /// tree as the edit left it, the keys to the place and what the family knew of the
+    /// place when the path reached it. It cannot refuse the edit, which is done: a family
+    /// refuses one in its [`step`](Self::step), which sees what the edit is
+    /// ([`Next::edit`]) and whether the segment is the last, before anything of the tree
+    /// changes.
+    fn edited(&self, tree: &mut Value, at: &[Key], shape: &Self::Shape, edit: Edit) {
+        let _ = (tree, at, shape, edit);
     }
 }
 
@@ -460,9 +526,7 @@ fn plain<'v, F: Family>(
                     next.entry(position, entry, family.entry(shape, Some(entry)));
                 }
             } else if part == "-" && next.last && next.edit == Some(Edit::Insert) {
-                let at = next.link(|| Key::End);
-                let (value, shape) = (None, family.entry(shape, None));
-                next.found.push(Place { value, shape, at });
+                next.end(family.entry(shape, None));
             } else if let Some(position) = position(part) {
                 // An entry past the end is one that is not there.
                 if let Some(entry) = entries.get(position) {
@@ -496,6 +560,10 @@ fn advance<'v, F: Family>(
 ) -> Result<(), Error> {
     next.from = place.at.clone();
     match family.step(place, part, next)? {
+        Step::Taken if next.opened.is_some() && next.edit != Some(Edit::Open) => {
+            let reason = "the family opens a value where the edit is not to open one";
+            Err(Error::new(ErrorKind::Refused, path, reason))
+        }
         Step::Taken => Ok(()),
         Step::Plain => plain(family, place, part, path, next),
         Step::Through(name, shape) => {
@@ -528,6 +596,32 @@ fn walk<'v, F: Family>(
     path: &str,
     edit: Option<Edit>,
 ) -> Result<Vec<Place<'v, F::Shape>>, Error> {
+    match walk_to_open(family, tree, path, edit)? {
+        Walked::Places(places) => Ok(places),
+        // Only an edit that opens is told that a value is opened.
+        Walked::Open(..) => Err(Error::new(
+            ErrorKind::Refused,
+            path,
+            "the family opens a value where the edit is not to open one",
+        )),
+    }
+}
+
+/// Where a walk ends: at the places that the path selects, or at a place that the family
+/// opens first, with the value that it opens there.
+enum Walked<'v, S> {
+    Places(Vec<Place<'v, S>>),
+    Open(Vec<Key>, Value),
+}
+
+/// The places that `path` selects in `tree`, or the first place on the way that the
+/// family opens.
+fn walk_to_open<'v, F: Family>(
+    family: &F,
+    tree: &'v Value,
+    path: &str,
+    edit: Option<Edit>,
+) -> Result<Walked<'v, F::Shape>, Error> {
     let (parts, rooted) = resolve(family.root(), path)?;
     let mut places = vec![Place {
         value: Some(tree),
@@ -541,6 +635,7 @@ fn walk<'v, F: Family>(
             tracking: edit.is_some(),
             edit,
             last: index + 1 == parts.len(),
+            opened: None,
         };
         let mut refusal = None;
         for place in &places {
@@ -550,6 +645,9 @@ fn walk<'v, F: Family>(
                     return Err(error.located(path));
                 }
                 Err(error) => refusal = refusal.or(Some(error.located(path))),
+            }
+            if let Some((at, value)) = next.opened.take() {
+                return Ok(Walked::Open(keys(&at), value));
             }
             if next.found.len() > MAX_SELECTED {
                 let reason = format!("a path selects {MAX_SELECTED} values at most");
@@ -562,7 +660,7 @@ fn walk<'v, F: Family>(
         }
         places = next.found;
     }
-    Ok(places)
+    Ok(Walked::Places(places))
 }
 
 // ── Select ──────────────────────────────────────────────────────────────────
@@ -608,6 +706,23 @@ pub fn select_forms_in<'v, F: Family>(
         Some((value, family.form(&place.shape, value)))
     });
     Ok(selected.collect())
+}
+
+/// The places that `path` selects in a tree of the family `family`, in the order of the
+/// tree: each with its value, or with none where the family says that one could be
+/// ([`Next::absent`]), and with what the family knows of it. [`select_in`] gives the
+/// values of those that have one; a family that reads its own tables at the places
+/// takes them all.
+///
+/// # Errors
+///
+/// Those of [`select_in`].
+pub fn places_in<'v, F: Family>(
+    family: &F,
+    tree: &'v Value,
+    path: &str,
+) -> Result<Vec<Place<'v, F::Shape>>, Error> {
+    walk(family, tree, path, None)
 }
 
 /// The values at `path` in a tree of objects and lists: [`select_in`] for [`Plain`].
@@ -681,6 +796,15 @@ pub fn paths(tree: &Value) -> Vec<(String, Value)> {
     paths_in(&Plain, tree)
 }
 
+/// Whether a value is an object or a list with nothing in it.
+fn is_empty(value: &Value) -> bool {
+    match value {
+        Value::Object(members) => members.is_empty(),
+        Value::Array(entries) => entries.is_empty(),
+        _ => false,
+    }
+}
+
 /// List `child`, which is under `segment` in the value at `path`.
 fn inside<F: Family>(
     family: &F,
@@ -719,6 +843,9 @@ fn list<F: Family>(
                         inside(family, other, member, &of_member, path, depth, found);
                     }
                     Listed::Hidden => {}
+                    // A member that is listed in the place of its holder and has nothing
+                    // in it lists nothing: its own value is not one at that place.
+                    Listed::Through if is_empty(member) => {}
                     Listed::Through => list(family, member, &of_member, path, depth, found),
                     Listed::Root => {
                         let mut rooted = format!("/{}", family.root().name);
@@ -769,8 +896,9 @@ fn list<F: Family>(
 /// # Errors
 ///
 /// Those of [`select_in`], and the kind `NothingSelected` for a path that selects
-/// nothing. After an error the tree is as it was: an edit is done on a copy, whole or
-/// not at all.
+/// nothing. After an error the tree is as it was: an edit is done in the place of the
+/// tree, which keeps what it changes and puts it back when a place cannot take the
+/// edit, so that it is done whole or not at all, and nothing of the tree is copied.
 pub fn set_in<F: Family>(
     family: &F,
     tree: &mut Value,
@@ -873,40 +1001,189 @@ fn edit<F: Family>(
 ) -> Result<(), Error> {
     let nothing = || Error::new(ErrorKind::NothingSelected, path, "the path selects nothing");
     // The places of the edit, as keys: nothing of the tree is borrowed after this.
-    let places: Vec<(Vec<Key>, Removal)> = {
+    let places: Vec<(Vec<Key>, Removal, F::Shape)> = {
         let places = walk(family, tree, path, Some(operation))?;
         let edited = places.iter().filter(|place| match operation {
-            Edit::Set => true,
+            Edit::Set | Edit::Open => true,
             // What is not there is not taken out, and nothing is inserted before it.
             Edit::Remove | Edit::Insert => {
                 place.value.is_some_and(|value| !value.is_null())
                     || matches!(place.at.as_deref(), Some(Link { key: Key::End, .. }))
             }
         });
-        let places = edited.map(|place| (keys(&place.at), family.removal(&place.shape)));
+        let places = edited.map(|place| {
+            let removal = family.removal(&place.shape);
+            (keys(&place.at), removal, place.shape.clone())
+        });
         places.collect()
     };
     if places.is_empty() {
         return Err(nothing());
     }
-    if places.iter().any(|(keys, _)| keys.is_empty()) {
+    if places.iter().any(|(keys, ..)| keys.is_empty()) {
         let reason = "an edit takes a path into the tree, and this is the path of the tree itself";
         return Err(Error::new(ErrorKind::Path, path, reason));
     }
-    let mut edited = tree.clone();
     // The last place first: an entry that goes, or comes, moves those after it alone.
-    for (keys, removal) in places.iter().rev() {
-        apply(&mut edited, keys, operation, value.as_ref(), *removal, path)?;
+    let mut undo = Vec::new();
+    for (keys, removal, _) in places.iter().rev() {
+        let done = apply(
+            tree,
+            keys,
+            operation,
+            value.as_ref(),
+            *removal,
+            path,
+            &mut undo,
+        );
+        if let Err(error) = done {
+            take_back(tree, undo);
+            return Err(error);
+        }
     }
-    for (keys, _) in &places {
-        let done = family.edited(&mut edited, keys, operation);
-        done.map_err(|error| error.located(path))?;
+    for (keys, _, shape) in &places {
+        family.edited(tree, keys, shape, operation);
     }
-    *tree = edited;
     Ok(())
 }
 
-/// Do `operation` at `keys` in `tree`.
+/// Show the values on the way of `path` in a tree of the family `family` as the family
+/// opens them: octets that carry a value of a type, say, which the tree then shows as
+/// that value. Where the [`step`](Family::step) of the family opens a value
+/// ([`Next::open`]) for an edit [`Edit::Open`], the value that it gives takes the place
+/// of the one there, and the path is taken again from the tree. Nothing else changes,
+/// and a path that selects nothing is no error.
+///
+/// ```
+/// use oxirush_utils::tree::{self, Edit, Family, Next, Place, Step};
+/// use serde_json::json;
+///
+/// /// Text that holds a number, which is opened as the number.
+/// struct Numbers;
+///
+/// impl Family for Numbers {
+///     type Shape = ();
+///
+///     fn step<'v>(
+///         &self,
+///         place: &Place<'v, ()>,
+///         segment: &str,
+///         next: &mut Next<'v, ()>,
+///     ) -> Result<Step<()>, tree::Error> {
+///         match (place.value().and_then(|value| value.as_str()), segment, next.edit()) {
+///             (Some(text), "number", Some(Edit::Open)) => match text.parse::<u64>() {
+///                 Ok(number) => {
+///                     next.open(place, json!({"number": number}));
+///                     Ok(Step::Taken)
+///                 }
+///                 Err(_) => Ok(Step::Plain),
+///             },
+///             _ => Ok(Step::Plain),
+///         }
+///     }
+/// }
+///
+/// let mut tree = json!({"timers": ["60", "3600"]});
+/// tree::open_in(&Numbers, &mut tree, "/timers/*/number")?;
+/// assert_eq!(tree, json!({"timers": [{"number": 60}, {"number": 3600}]}));
+/// assert_eq!(tree::select_in(&Numbers, &tree, "/timers/1/number")?, [&json!(3600)]);
+/// # Ok::<(), tree::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// Those of [`select_in`]: the tree is then as it was, with nothing opened.
+pub fn open_in<F: Family>(family: &F, tree: &mut Value, path: &str) -> Result<(), Error> {
+    let mut undo = Vec::new();
+    // A value is opened once, and a path selects 4096 values at most: each turn opens
+    // one, and the next takes the path again from the tree.
+    for _ in 0..=MAX_SELECTED {
+        let walked = walk_to_open(family, tree, path, Some(Edit::Open));
+        let (at, value) = match walked {
+            Ok(Walked::Places(_)) => return Ok(()),
+            Ok(Walked::Open(at, value)) => (at, value),
+            Err(error) => {
+                take_back(tree, undo);
+                return Err(error);
+            }
+        };
+        let Some(place) = at_mut(tree, &at) else {
+            take_back(tree, undo);
+            let reason = "the family opens a value at a place that the tree does not have";
+            return Err(Error::new(ErrorKind::Refused, path, reason));
+        };
+        undo.push(Undo::Was(at, core::mem::replace(place, value)));
+    }
+    take_back(tree, undo);
+    let reason = format!("a path opens {MAX_SELECTED} values at most");
+    Err(Error::new(ErrorKind::Limit, path, reason))
+}
+
+/// What an edit changed in a tree, to put it back when a later place cannot take it.
+#[derive(Debug)]
+enum Undo {
+    /// The value at these keys was this one.
+    Was(Vec<Key>, Value),
+    /// The member at these keys was added.
+    Added(Vec<Key>),
+    /// The object at these keys had this member at this position.
+    Taken(Vec<Key>, usize, String, Value),
+    /// The list at these keys had this entry at this position.
+    Removed(Vec<Key>, usize, Value),
+    /// The list at these keys took an entry at this position.
+    Inserted(Vec<Key>, usize),
+}
+
+/// The value at `keys` in `tree`.
+fn at_mut<'t>(tree: &'t mut Value, keys: &[Key]) -> Option<&'t mut Value> {
+    let mut holder = tree;
+    for key in keys {
+        holder = match (key, holder) {
+            (Key::Name(name), Value::Object(members)) => members.get_mut(name.as_str())?,
+            (Key::Position(position), Value::Array(entries)) => entries.get_mut(*position)?,
+            _ => return None,
+        };
+    }
+    Some(holder)
+}
+
+/// Put back what `undo` says an edit changed, from the last change: each one finds the
+/// tree as the change left it.
+fn take_back(tree: &mut Value, undo: Vec<Undo>) {
+    for done in undo.into_iter().rev() {
+        match done {
+            Undo::Was(keys, was) => {
+                if let Some(value) = at_mut(tree, &keys) {
+                    *value = was;
+                }
+            }
+            Undo::Added(keys) => {
+                if let Some((Key::Name(name), holder)) = keys.split_last()
+                    && let Some(Value::Object(members)) = at_mut(tree, holder)
+                {
+                    members.shift_remove(name.as_str());
+                }
+            }
+            Undo::Taken(keys, position, name, was) => {
+                if let Some(Value::Object(members)) = at_mut(tree, &keys) {
+                    members.shift_insert(position, name, was);
+                }
+            }
+            Undo::Removed(keys, position, was) => {
+                if let Some(Value::Array(entries)) = at_mut(tree, &keys) {
+                    entries.insert(position, was);
+                }
+            }
+            Undo::Inserted(keys, position) => {
+                if let Some(Value::Array(entries)) = at_mut(tree, &keys) {
+                    entries.remove(position);
+                }
+            }
+        }
+    }
+}
+
+/// Do `operation` at `keys` in `tree`, and keep in `undo` what it changes.
 fn apply(
     tree: &mut Value,
     keys: &[Key],
@@ -914,20 +1191,25 @@ fn apply(
     value: Option<&Value>,
     removal: Removal,
     path: &str,
+    undo: &mut Vec<Undo>,
 ) -> Result<(), Error> {
     let gone = || Error::new(ErrorKind::NothingSelected, path, "the path selects nothing");
     let Some((last, before)) = keys.split_last() else {
         return Err(gone());
     };
     let mut holder = tree;
-    for key in before {
+    for (depth, key) in before.iter().enumerate() {
         // A member that is added goes into an object, which a place that is null
         // becomes.
         if holder.is_null() && matches!(key, Key::Name(_)) {
+            undo.push(Undo::Was(before[..depth].to_vec(), Value::Null));
             *holder = Value::Object(Map::new());
         }
         holder = match (key, holder) {
             (Key::Name(name), Value::Object(members)) => {
+                if !members.contains_key(name.as_str()) {
+                    undo.push(Undo::Added(before[..=depth].to_vec()));
+                }
                 members.entry(name.as_str()).or_insert(Value::Null)
             }
             (Key::Position(position), Value::Array(entries)) => {
@@ -937,34 +1219,54 @@ fn apply(
         };
     }
     if holder.is_null() && matches!(last, Key::Name(_)) && operation == Edit::Set {
+        undo.push(Undo::Was(before.to_vec(), Value::Null));
         *holder = Value::Object(Map::new());
     }
     let not_a_list = || {
         let reason = "insert adds to a list, and the path ends at a member";
         Error::new(ErrorKind::NotAList, path, reason)
     };
+    let written = || value.cloned().unwrap_or_default();
     match (last, holder, operation) {
         (Key::Name(name), Value::Object(members), Edit::Set) => {
-            members.insert(name.clone(), value.cloned().unwrap_or_default());
+            match members.insert(name.clone(), written()) {
+                Some(was) => undo.push(Undo::Was(keys.to_vec(), was)),
+                None => undo.push(Undo::Added(keys.to_vec())),
+            }
         }
         (Key::Name(name), Value::Object(members), Edit::Remove) => match removal {
             Removal::Take => {
-                members.shift_remove(name.as_str()).ok_or_else(gone)?;
+                let position = members.keys().position(|known| known == name);
+                let position = position.ok_or_else(gone)?;
+                let was = members.shift_remove(name.as_str()).ok_or_else(gone)?;
+                undo.push(Undo::Taken(before.to_vec(), position, name.clone(), was));
             }
-            Removal::Null => *members.get_mut(name.as_str()).ok_or_else(gone)? = Value::Null,
+            Removal::Null => {
+                let member = members.get_mut(name.as_str()).ok_or_else(gone)?;
+                undo.push(Undo::Was(keys.to_vec(), core::mem::take(member)));
+            }
         },
         (Key::Name(_), _, Edit::Insert) => return Err(not_a_list()),
         (Key::Position(position), Value::Array(entries), _) if *position < entries.len() => {
             match operation {
-                Edit::Set => entries[*position] = value.cloned().unwrap_or_default(),
-                Edit::Remove => {
-                    entries.remove(*position);
+                Edit::Set => {
+                    let was = core::mem::replace(&mut entries[*position], written());
+                    undo.push(Undo::Was(keys.to_vec(), was));
                 }
-                Edit::Insert => entries.insert(*position, value.cloned().unwrap_or_default()),
+                Edit::Remove => {
+                    let was = entries.remove(*position);
+                    undo.push(Undo::Removed(before.to_vec(), *position, was));
+                }
+                Edit::Insert => {
+                    entries.insert(*position, written());
+                    undo.push(Undo::Inserted(before.to_vec(), *position));
+                }
+                Edit::Open => return Err(gone()),
             }
         }
         (Key::End, Value::Array(entries), Edit::Insert) => {
-            entries.push(value.cloned().unwrap_or_default());
+            undo.push(Undo::Inserted(before.to_vec(), entries.len()));
+            entries.push(written());
         }
         _ => return Err(gone()),
     }

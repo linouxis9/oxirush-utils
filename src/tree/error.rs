@@ -65,6 +65,7 @@ pub struct Error {
     kind: ErrorKind,
     at: String,
     reason: String,
+    code: Option<u16>,
 }
 
 impl Error {
@@ -75,7 +76,20 @@ impl Error {
             kind,
             at: at.into(),
             reason: reason.into(),
+            code: None,
         }
+    }
+
+    /// The same error with a code of the family's own, which says more than the kind:
+    /// the kind of the family's own error, which the engine carries as it is.
+    pub fn with_code(mut self, code: u16) -> Self {
+        self.code = Some(code);
+        self
+    }
+
+    /// The code that the family gave the error, when it gave one.
+    pub fn code(&self) -> Option<u16> {
+        self.code
     }
 
     /// The kind of error.

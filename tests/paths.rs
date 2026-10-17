@@ -614,7 +614,7 @@ impl Family for Ap {
         }
     }
 
-    fn edited(&self, view: &mut Value, at: &[tree::Key], _edit: Edit) -> Result<(), Error> {
+    fn edited(&self, view: &mut Value, at: &[tree::Key], _shape: &InAp, _edit: Edit) {
         // What a view keeps of what was received is no longer what it says.
         if let [
             tree::Key::Name(message),
@@ -626,7 +626,6 @@ impl Family for Ap {
         {
             entry.shift_remove("_raw_value");
         }
-        Ok(())
     }
 }
 
@@ -935,6 +934,292 @@ fn an_edit_is_done_whole_or_not_at_all() {
         assert_eq!(edit.unwrap_err().kind(), kind);
         assert_eq!(tree, before);
     }
+}
+
+/// A family that refuses an edit of an entry whose `locked` is true, in its step,
+/// before anything of the tree changes.
+struct Locked;
+
+impl Family for Locked {
+    type Shape = ();
+
+    fn step<'v>(
+        &self,
+        place: &Place<'v, ()>,
+        _segment: &str,
+        next: &mut Next<'v, ()>,
+    ) -> Result<Step<()>, Error> {
+        let locked = place.value().and_then(|value| value.get("locked"));
+        match (locked, next.edit()) {
+            (Some(Value::Bool(true)), Some(_)) => {
+                Err(Error::new(ErrorKind::Refused, "", "this entry is locked").with_code(7))
+            }
+            _ => Ok(Step::Plain),
+        }
+    }
+}
+
+/// A family with a fault: `*` on a list also selects a member that a list cannot have,
+/// before its entries, which the edit takes last and cannot do once the entries took it.
+struct Faulty;
+
+impl Family for Faulty {
+    type Shape = ();
+
+    fn step<'v>(
+        &self,
+        place: &Place<'v, ()>,
+        segment: &str,
+        next: &mut Next<'v, ()>,
+    ) -> Result<Step<()>, Error> {
+        let Some(entries) = place.value().and_then(Value::as_array) else {
+            return Ok(Step::Plain);
+        };
+        if segment != "*" {
+            return Ok(Step::Plain);
+        }
+        next.absent("extra", ());
+        for (position, entry) in entries.iter().enumerate() {
+            next.entry(position, entry, ());
+        }
+        Ok(Step::Taken)
+    }
+}
+
+#[test]
+fn an_edit_in_the_place_of_the_tree_is_put_back_whole() {
+    let before = json!({"list": [
+        {"a": 1, "b": 1},
+        {"a": 2, "b": 2},
+        {"a": 3, "b": 3, "locked": false},
+    ], "last": {"x": 0, "y": 0}});
+    // Each place of an edit, the last first, and a removal that keeps the order.
+    for (edit, after) in [
+        (
+            "remove /list/*/a",
+            json!([{"b": 1}, {"b": 2}, {"b": 3, "locked": false}]),
+        ),
+        (
+            "set /list/*/c",
+            json!([{"a": 1, "b": 1, "c": 0}, {"a": 2, "b": 2, "c": 0}, {"a": 3, "b": 3, "locked": false, "c": 0}]),
+        ),
+        (
+            "insert /list/*",
+            json!([0, {"a": 1, "b": 1}, 0, {"a": 2, "b": 2}, 0, {"a": 3, "b": 3, "locked": false}]),
+        ),
+    ] {
+        let mut tree = before.clone();
+        let (operation, path) = edit.split_once(' ').unwrap();
+        match operation {
+            "remove" => tree::remove_in(&Locked, &mut tree, path).unwrap(),
+            "set" => tree::set_in(&Locked, &mut tree, path, json!(0)).unwrap(),
+            _ => tree::insert_in(&Locked, &mut tree, path, json!(0)).unwrap(),
+        }
+        assert_eq!(tree["list"], after, "{edit}");
+    }
+    let mut tree = before.clone();
+    tree::remove(&mut tree, "/last/x").unwrap();
+    tree::set(&mut tree, "/last/x", json!(1)).unwrap();
+    assert_eq!(tree["last"].to_string(), r#"{"y":0,"x":1}"#);
+
+    // An entry that the family refuses: nothing changes, and the code that the family
+    // gave its error is carried as it is.
+    let mut locked = before.clone();
+    locked["list"][1]["locked"] = json!(true);
+    for edit in ["remove /list/*/a", "set /list/*/a"] {
+        let mut tree = locked.clone();
+        let (operation, path) = edit.split_once(' ').unwrap();
+        let error = match operation {
+            "remove" => tree::remove_in(&Locked, &mut tree, path),
+            _ => tree::set_in(&Locked, &mut tree, path, json!(9)),
+        }
+        .unwrap_err();
+        assert_eq!(
+            (error.kind(), error.code()),
+            (ErrorKind::Refused, Some(7)),
+            "{edit}"
+        );
+        assert_eq!(tree.to_string(), locked.to_string(), "{edit}");
+    }
+
+    // A place that cannot take the edit once the places after it took it: what they
+    // changed is put back, the members in their order and the entries in their places.
+    // The entries took the value, the last first, before the member that a list cannot
+    // have; a removal and an insertion leave out a place without a value.
+    let mut tree = before.clone();
+    let error = tree::set_in(&Faulty, &mut tree, "/list/*", json!(9)).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::NothingSelected);
+    assert_eq!(tree.to_string(), before.to_string());
+}
+
+/// A family that takes a segment that names no member of an entry in the `value` of
+/// the entry, with its own rule there, and words what the value refuses as its own
+/// error; and that selects by its types where a list has no entry.
+struct InValue;
+
+impl Family for InValue {
+    type Shape = u8;
+
+    fn step<'v>(
+        &self,
+        place: &Place<'v, u8>,
+        segment: &str,
+        next: &mut Next<'v, u8>,
+    ) -> Result<Step<u8>, Error> {
+        match place.value() {
+            Some(Value::Object(entry))
+                if entry.contains_key("value") && tree::member(entry, segment).is_none() =>
+            {
+                next.through(place, "value", 1, |inside, next| {
+                    match inside.value().and_then(|value| value.get(segment)) {
+                        Some(value) => {
+                            next.member(segment, value, 2);
+                            Ok(Step::Taken)
+                        }
+                        None => {
+                            let reason = format!(
+                                "{segment:?} is a member of neither the entry nor its value"
+                            );
+                            Err(Error::new(ErrorKind::NoSuchMember, "", reason))
+                        }
+                    }
+                })
+            }
+            Some(Value::Array(_)) if segment == "?" => {
+                // Two types, each once whatever names it.
+                next.absent_once("a", 9);
+                next.absent_once("b", 9);
+                next.absent_once("c", 8);
+                Ok(Step::Taken)
+            }
+            _ => Ok(Step::Plain),
+        }
+    }
+}
+
+#[test]
+fn a_family_takes_a_segment_in_a_member_with_its_own_rule() {
+    let mut tree = json!({"ie": {"id": 5, "value": {"cause": 3}}, "list": []});
+    assert_eq!(
+        tree::select_in(&InValue, &tree, "/ie/cause"),
+        Ok(vec![&json!(3)])
+    );
+    assert_eq!(
+        tree::select_in(&InValue, &tree, "/ie/id"),
+        Ok(vec![&json!(5)])
+    );
+    let error = tree::select_in(&InValue, &tree, "/ie/timer").unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "\"timer\" is a member of neither the entry nor its value, at /ie/timer"
+    );
+    // An edit there is under the member.
+    tree::set_in(&InValue, &mut tree, "/ie/cause", json!(4)).unwrap();
+    assert_eq!(tree["ie"], json!({"id": 5, "value": {"cause": 4}}));
+    let places = tree::places_in(&InValue, &tree, "/list/?").unwrap();
+    let shapes: Vec<u8> = places.iter().map(|place| *place.shape()).collect();
+    assert_eq!(shapes, [9, 8]);
+}
+
+/// A family whose texts hold numbers, which it opens: `open_in` shows each as an object
+/// with the number, on the way of the path, and puts every one back after an error.
+struct Numbers;
+
+impl Family for Numbers {
+    type Shape = ();
+
+    fn step<'v>(
+        &self,
+        place: &Place<'v, ()>,
+        segment: &str,
+        next: &mut Next<'v, ()>,
+    ) -> Result<Step<()>, Error> {
+        let text = place.value().and_then(Value::as_str);
+        match (text, segment, next.edit()) {
+            (Some(text), "number", Some(Edit::Open)) => match text.parse::<u64>() {
+                Ok(number) => {
+                    next.open(place, json!({"number": number}));
+                    Ok(Step::Taken)
+                }
+                Err(_) => Err(Error::new(ErrorKind::Refused, "", "these are no digits")),
+            },
+            (Some(_), "number", _) => {
+                Err(Error::new(ErrorKind::Refused, "", "the text is not opened"))
+            }
+            _ => Ok(Step::Plain),
+        }
+    }
+}
+
+#[test]
+fn a_family_opens_the_values_on_the_way_of_a_path() {
+    let before = json!({"timers": ["60", "3600", {"number": 1}], "name": "t3512"});
+    let mut tree = before.clone();
+    tree::open_in(&Numbers, &mut tree, "/timers/*/number").unwrap();
+    assert_eq!(
+        tree,
+        json!({"timers": [{"number": 60}, {"number": 3600}, {"number": 1}], "name": "t3512"})
+    );
+    assert_eq!(
+        tree::select_in(&Numbers, &tree, "/timers/*/number").unwrap(),
+        [&json!(60), &json!(3600), &json!(1)]
+    );
+    // A path into a value that was not opened says so, and opening it again changes
+    // nothing.
+    let error = tree::select_in(&Numbers, &before, "/timers/0/number").unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Refused);
+    let opened = tree.clone();
+    tree::open_in(&Numbers, &mut tree, "/timers/*/number").unwrap();
+    assert_eq!(tree, opened);
+    // A path that selects nothing opens nothing, and is no error.
+    let mut tree = before.clone();
+    tree::open_in(&Numbers, &mut tree, "/timers/7/number").unwrap();
+    assert_eq!(tree, before);
+    // What cannot be opened leaves every value as it was, those opened before it too.
+    let mut tree = json!({"timers": ["60", "x"]});
+    let error = tree::open_in(&Numbers, &mut tree, "/timers/*/number").unwrap_err();
+    assert_eq!(error.reason(), "these are no digits");
+    assert_eq!(tree, json!({"timers": ["60", "x"]}));
+    // A family that opens a value where the edit is no opening has a fault.
+    let mut tree = before.clone();
+    struct Opens;
+    impl Family for Opens {
+        type Shape = ();
+        fn step<'v>(
+            &self,
+            place: &Place<'v, ()>,
+            _: &str,
+            next: &mut Next<'v, ()>,
+        ) -> Result<Step<()>, Error> {
+            next.open(place, json!(0));
+            Ok(Step::Taken)
+        }
+    }
+    let error = tree::set_in(&Opens, &mut tree, "/name", json!(1)).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Refused);
+    assert_eq!(tree, before);
+}
+
+/// The places of a path, with what the family knows of each: a family that reads its
+/// own tables there takes those where a value could be and is not.
+#[test]
+fn the_places_of_a_path_have_what_the_family_knows_of_them() {
+    let mut view = registration_request();
+    view.as_object_mut()
+        .unwrap()
+        .shift_remove("mico-indication");
+    // An IE that the message can have and the view has not: a place without a value.
+    let places = tree::places_in(&Nas, &view, "/nas/mico-indication").unwrap();
+    assert_eq!(places.len(), 1);
+    assert!(places[0].value().is_none());
+    assert!(matches!(places[0].shape(), InNas::Ie));
+    assert_eq!(
+        tree::select_in(&Nas, &view, "/nas/mico-indication"),
+        Ok(vec![])
+    );
+    let places = tree::places_in(&Nas, &view, "/nas/ngksi").unwrap();
+    assert!(matches!(places[0].shape(), InNas::Ie));
+    assert_eq!(places[0].value(), Some(&view["ngksi"]));
 }
 
 // ── The order of the members ────────────────────────────────────────────────

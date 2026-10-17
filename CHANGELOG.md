@@ -46,11 +46,17 @@ once.
   turns on `serde_json/preserve_order`, for the whole build.
 - Paths on a tree: `select`, `paths`, `set`, `remove` and `insert`, with
   4096 octets, 64 segments and 4096 selected values at most, one error type
-  with a kind, and edits that are done whole or not at all. `Family` is what
-  a family of messages adds where its trees are more than objects and lists;
-  the functions that end with `_in` take one. `written_as` brings a value
-  that someone wrote to the form that a tree shows at a place, for a
-  comparison.
+  with a kind, and edits that are done whole or not at all, in the place of
+  the tree: what an edit changes is kept and put back when a later place
+  cannot take it, and nothing of the tree is copied. `Family` is what a
+  family of messages adds where its trees are more than objects and lists;
+  the functions that end with `_in` take one, `places_in` gives the places of
+  a path with what the family knows of each, and `open_in` shows the values
+  on the way of a path as the family opens them. A family refuses an edit in
+  its step, before anything changes, takes a segment in a member with its own
+  rule there (`Next::through`), and gives its errors a code of its own.
+  `written_as` brings a value that someone wrote to the form that a tree
+  shows at a place, for a comparison.
 - `tree::serde`, with the feature `serde`: `Serialize` and `Deserialize` for
   a type through its tree, by `impl_serde!` or the two functions that it
   calls.
