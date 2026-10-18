@@ -465,22 +465,23 @@ Timer { seconds: 3600 }
 ## Performance
 
 The tree of the crate against a `serde_json::Value` of the default features,
-on the same JSON, and the identities: the fastest of three runs on one core of
-an x86-64 Linux machine that ran other work, a load of 6.8 on its 16 threads
-(2026-10-17).
+on the same JSON, and the identities, on one core of an AMD Ryzen 7 5700G (16
+threads, Linux 7.0, Rust 1.98.1), measured on a quiet machine on 2026-10-18.
+A time is the fastest of three runs of the call, and the median of three runs
+of the program.
 
 | Operation | this crate | serde_json 1 | serde_json takes |
 |---|---|---|---|
-| Read a tree of 925 octets | 2,823 ns, 93 allocations of 6,618 octets | 2,867 ns, 72 allocations of 14,594 octets | 1.0x |
-| Write it | 817 ns, 5 allocations of 2,845 octets | 2,281 ns, 8 allocations of 2,040 octets | 2.8x |
-| Select a value of it | 240 ns, 10 allocations of 385 octets | 256 ns, 8 allocations of 64 octets | 1.1x |
-| Put 100,000 members into an object | 47.0 ms, 215,477 allocations of 21,752,076 octets | 20.4 ms, 115,460 allocations of 10,564,762 octets | 0.4x |
-| Read an object of 100,000 members, 1,088,891 octets | 48.4 ms, 215,478 allocations of 23,352,076 octets | 23.8 ms, 115,460 allocations of 10,564,762 octets | 0.5x |
+| Read a tree of 925 octets | 2,659 ns, 93 allocations of 6,618 octets | 2,677 ns, 72 allocations of 14,594 octets | 1.0x |
+| Write it | 773 ns, 5 allocations of 2,845 octets | 2,143 ns, 8 allocations of 2,040 octets | 2.8x |
+| Select a value of it | 229 ns, 10 allocations of 385 octets | 247 ns, 8 allocations of 64 octets | 1.1x |
+| Put 100,000 members into an object | 42.8 ms, 215,477 allocations of 21,752,076 octets | 18.5 ms, 115,460 allocations of 10,564,762 octets | 0.4x |
+| Read an object of 100,000 members, 1,088,891 octets | 45.5 ms, 215,478 allocations of 23,352,076 octets | 21.5 ms, 115,460 allocations of 10,564,762 octets | 0.5x |
 | Read a PLMN from text | 13 ns, 0 allocations of 0 octets | | |
 | Read an IMSI from text | 9 ns, 0 allocations of 0 octets | | |
-| Read a 5G-GUTI from a 5GS mobile identity | 15 ns, 0 allocations of 0 octets | | |
-| Read the SUCI of an IMSI from a 5GS mobile identity | 88 ns, 2 allocations of 20 octets | | |
-| Write a PLMN in the order of NGAP | 8 ns, 0 allocations of 0 octets | | |
+| Read a 5G-GUTI from a 5GS mobile identity | 14 ns, 0 allocations of 0 octets | | |
+| Read the SUCI of an IMSI from a 5GS mobile identity | 83 ns, 2 allocations of 20 octets | | |
+| Write a PLMN in the order of NGAP | 7 ns, 0 allocations of 0 octets | | |
 
 A tree is read and written with serde_json, and keeps its members in their
 order where a `serde_json::Value` sorts them. An object of more than 32 members
