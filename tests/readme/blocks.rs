@@ -1,12 +1,12 @@
-// The Rust blocks of README.md, each as a function. `tests/readme.rs` writes
-// this file and says how: do not edit it.
+// The Rust blocks of the README and of the documentation, each as a function.
+// `tests/readme.rs` writes this file and says how: do not edit it.
 #![allow(unused)]
 
 use std::cell::RefCell;
 
 thread_local!(static PRINTED: RefCell<String> = const { RefCell::new(String::new()) });
 
-// What a block prints is kept, to be compared with what the README shows.
+// What a block prints is kept, to be compared with what its page shows.
 macro_rules! print {
     ($($argument:tt)*) => {{
         let text = format!($($argument)*);
@@ -41,9 +41,6 @@ pub const BLOCKS: &[fn()] = &[
     block_7,
     block_8,
     block_9,
-    block_10,
-    block_11,
-    block_12,
 ];
 
 /// The Rust block 1 of README.md.
@@ -67,17 +64,33 @@ fn block_1() {
 
 /// The Rust block 2 of README.md.
 fn block_2() {
-    use oxirush_utils::identity::Plmn;
+    use oxirush_utils::identity::{Guti5g, Imsi, ImsiSuci, Plmn, RoutingIndicator, Supi};
 
     fn main() -> Result<(), oxirush_utils::identity::Error> {
-        let plmn = Plmn::new("310", "410")?;
+        // An IMSI whose MNC has three digits: its PLMN and its MSIN
+        let imsi = Imsi::new("310410123456789")?;
+        let (plmn, msin) = (imsi.plmn(3)?, imsi.msin(3)?);
+        println!("IMSI {imsi}: PLMN {plmn}, MSIN {msin}");
 
-        // TS 24.008 clause 10.5.1.3 for NAS, TS 38.413 clause 9.3.3.5 for NGAP and S1AP
-        println!("{:02x?} {:02x?}", plmn.to_nas_octets(), plmn.to_ap_octets());
-        println!("{}", Plmn::from_ap_octets([0x02, 0xf8, 0x39])?);
+        // The PLMN in a NAS message (TS 24.008 clause 10.5.1.3), and in an NGAP
+        // or S1AP message (TS 38.413 clause 9.3.3.5)
+        println!("{:02x?} in NAS, {:02x?} in NGAP", plmn.to_nas_octets(), plmn.to_ap_octets());
+
+        // Its SUCI under the null scheme, as text and as a 5GS mobile identity,
+        // and the SUPI that the SUCI gives
+        let suci = ImsiSuci::null(plmn, RoutingIndicator::default(), msin)?;
+        println!("{suci}: {:02x?}", suci.to_nas_octets());
+        println!("{}", Supi::from(suci.imsi().unwrap()));
+
+        // The 5G-GUTI that an AMF assigns: AMF region, set and pointer, and the
+        // 5G-TMSI. Its octets in a 5GS mobile identity, read back, and its 5G-S-TMSI
+        let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
+        let octets = guti.to_nas_octets();
+        println!("{guti}: {octets:02x?}");
+        println!("{}", Guti5g::from_nas_octets(&octets)?.s_tmsi());
 
         // What is no PLMN says which member is at fault, and why
-        println!("{}", Plmn::new("310", "4").unwrap_err());
+        println!("{}", Plmn::new("208", "9").unwrap_err());
         Ok(())
     }
 
@@ -86,19 +99,22 @@ fn block_2() {
 
 /// The Rust block 3 of README.md.
 fn block_3() {
-    use oxirush_utils::identity::{Imei, Imeisv, Imsi};
+    use oxirush_utils::identity::{GutiEps, Imei, Imeisv, Imsi, Plmn, Tai5gs, TaiEps};
 
     fn main() -> Result<(), oxirush_utils::identity::Error> {
+        // The identity digits of an IMSI in a mobile identity, after its type of identity
         let imsi = Imsi::new("208930000000001")?;
-        println!("{} {}", imsi.plmn(2)?, imsi.msin(2)?);
-
-        // The identity digits of a mobile identity, with the type of identity of an IMSI
         println!("{:02x?}", imsi.to_nas_octets(1)?);
 
-        // An IMEI as a mobile sends it, and with its check digit
+        // An IMEI as a mobile sends it, and with its check digit; the SVN of an IMEISV
         println!("{}", Imei::with_spare_digit("49015420323751")?);
         println!("{}", Imei::with_check_digit("49015420323751")?);
         println!("{}", Imeisv::new("4901542032375101")?.svn());
+
+        // The GUTI of EPS: its MME group, MME code and M-TMSI; a tracking area of each system
+        let plmn = Plmn::new("208", "93")?;
+        println!("{}", GutiEps::new(plmn, 0x0002, 0x01, 0xc000_04f4));
+        println!("{} {}", Tai5gs::new(plmn, 1)?, TaiEps::new(plmn, 1));
         Ok(())
     }
 
@@ -107,49 +123,6 @@ fn block_3() {
 
 /// The Rust block 4 of README.md.
 fn block_4() {
-    use oxirush_utils::identity::{Guti5g, GutiEps, Plmn, Tai5gs};
-
-    fn main() -> Result<(), oxirush_utils::identity::Error> {
-        // What Open5GS sent in a REGISTRATION ACCEPT
-        let octets = [0xf2, 0x02, 0xf8, 0x39, 0x02, 0x00, 0x40, 0xc0, 0x00, 0x06, 0xcf];
-        let guti = Guti5g::from_nas_octets(&octets)?;
-        println!("{guti} {}", guti.s_tmsi());
-        println!("{} {} {:#x}", guti.amf_region_id(), guti.amf_set_id(), guti.tmsi());
-
-        let plmn = Plmn::new("208", "93")?;
-        let eps = GutiEps::new(plmn, 0x0002, 0x01, 0xc000_04f4);
-        println!("{eps} {}", Tai5gs::new(plmn, 1)?);
-        Ok(())
-    }
-
-    main().unwrap();
-}
-
-/// The Rust block 5 of README.md.
-fn block_5() {
-    use oxirush_utils::identity::{ImsiSuci, Plmn, RoutingIndicator, Supi, SupiType};
-
-    fn main() -> Result<(), oxirush_utils::identity::Error> {
-        // The example of TS 23.003 clause 2.2B
-        let plmn = Plmn::new("234", "15")?;
-        let suci = ImsiSuci::null(plmn, RoutingIndicator::new("678")?, "0999999999")?;
-        println!("{suci}: {:02x?}", suci.to_nas_octets());
-
-        // What PacketRusher sent in a REGISTRATION REQUEST: under the null scheme, the SUPI is in it
-        let sent = [0x01, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10];
-        let suci = ImsiSuci::from_nas_octets(&sent)?;
-        println!("{suci} {}", Supi::from(suci.imsi().unwrap()));
-
-        // A GCI is 3 in TS 23.003 clause 2.2B and 2 in TS 24.501 table 9.11.3.4.1
-        println!("{} {}", SupiType::Gci.type_number(), SupiType::Gci.nas_format());
-        Ok(())
-    }
-
-    main().unwrap();
-}
-
-/// The Rust block 6 of README.md.
-fn block_6() {
     use oxirush_utils::identity::{NaiSuci, nai};
 
     fn main() -> Result<(), oxirush_utils::identity::Error> {
@@ -168,8 +141,8 @@ fn block_6() {
     main().unwrap();
 }
 
-/// The Rust block 7 of README.md.
-fn block_7() {
+/// The Rust block 5 of README.md.
+fn block_5() {
     use oxirush_utils::identity::Imeisv;
 
     fn main() -> Result<(), oxirush_utils::identity::Error> {
@@ -185,8 +158,8 @@ fn block_7() {
     main().unwrap();
 }
 
-/// The Rust block 8 of README.md.
-fn block_8() {
+/// The Rust block 6 of README.md.
+fn block_6() {
     use oxirush_utils::{tree, tree::{Members, Reading, Refused, Tree, Value}};
 
     #[derive(Debug)]
@@ -229,8 +202,8 @@ fn block_8() {
     main().unwrap();
 }
 
-/// The Rust block 9 of README.md.
-fn block_9() {
+/// The Rust block 7 of README.md.
+fn block_7() {
     use oxirush_utils::tree;
 
     fn main() -> Result<(), oxirush_utils::tree::Error> {
@@ -263,62 +236,8 @@ fn block_9() {
     main().unwrap();
 }
 
-/// The Rust block 10 of README.md.
-fn block_10() {
-    use oxirush_utils::{tree, tree::{Family, Next, Place, Root, Step, Value}};
-
-    /// A list of `{"id", "value"}` whose entries are selected by their `id`.
-    struct ById;
-
-    impl Family for ById {
-        type Shape = ();
-
-        fn root(&self) -> Root<'_> {
-            Root::new("ies", &[], true)
-        }
-
-        fn step<'v>(
-            &self,
-            place: &Place<'v, ()>,
-            segment: &str,
-            next: &mut Next<'v, ()>,
-        ) -> Result<Step<()>, tree::Error> {
-            let Some(entries) = place.value().and_then(Value::as_array) else {
-                return Ok(Step::Plain);
-            };
-            let named = |entry: &Value| entry["id"].as_str() == Some(segment);
-            if !entries.iter().any(named) {
-                return Ok(Step::Plain);
-            }
-            for (position, entry) in entries.iter().enumerate().filter(|(_, entry)| named(entry)) {
-                next.entry(position, entry, ());
-            }
-            Ok(Step::Taken)
-        }
-    }
-
-    fn main() -> Result<(), tree::Error> {
-        let mut ies = tree!([{"id": "cause", "value": 3}, {"id": "timer", "value": 60}]);
-        println!("{:?}", tree::select_in(&ById, &ies, "/ies/timer/value")?);
-        tree::set_in(&ById, &mut ies, "/ies/cause/value", tree!(7))?;
-        println!("{ies}");
-        Ok(())
-    }
-
-    main().unwrap();
-}
-
-/// The Rust block 11 of README.md.
-fn block_11() {
-    use oxirush_utils::{tree, tree::{Form, written_as}};
-
-    // At a place of octets C0 is the octets c0, and at a place of text it stays C0
-    println!("{}", written_as(Form::Octets, &tree!("C0")));
-    println!("{}", written_as(Form::Plain, &tree!("C0")));
-}
-
-/// The Rust block 12 of README.md.
-fn block_12() {
+/// The Rust block 8 of README.md.
+fn block_8() {
     use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
 
     #[derive(Debug, PartialEq)]
@@ -350,6 +269,25 @@ fn block_12() {
         println!("{}", serde_json::to_string(&timer)?);
         print!("{}", serde_yaml::to_string(&timer)?);
         println!("{:?}", serde_yaml::from_str::<Timer>("Seconds: 3600")?);
+        Ok(())
+    }
+
+    main().unwrap();
+}
+
+/// The Rust block 1 of src/lib.rs.
+fn block_9() {
+    use oxirush_utils::identity::{Guti5g, Plmn};
+
+    fn main() -> Result<(), oxirush_utils::identity::Error> {
+        let plmn: Plmn = "310-410".parse()?;
+        let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
+
+        // The three octets of a PLMN in a NAS message, and in an NGAP or S1AP message
+        println!("{plmn}: {:02x?} in NAS, {:02x?} in NGAP", plmn.to_nas_octets(), plmn.to_ap_octets());
+
+        // A 5G-GUTI as text, and as a 5GS mobile identity
+        println!("{guti}: {:02x?}", guti.to_nas_octets());
         Ok(())
     }
 

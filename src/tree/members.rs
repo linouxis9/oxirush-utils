@@ -85,11 +85,56 @@ pub trait Tree: Sized {
 pub struct Refused;
 
 /// The tree of `value`.
+///
+/// ```
+/// # use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
+/// # #[derive(Debug, PartialEq)]
+/// # struct Timer { seconds: u32 }
+/// # impl Tree for Timer {
+/// #     const NAME: &'static str = "GPRS timer";
+/// #     fn to_tree(&self) -> Value {
+/// #         let mut members = Members::new();
+/// #         members.put("seconds", tree::unsigned(self.seconds.into()));
+/// #         members.finish()
+/// #     }
+/// #     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+/// #         let members = reading.members(value, &["seconds"])?;
+/// #         let seconds = reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 11160))?;
+/// #         Ok(Self { seconds: seconds as u32 })
+/// #     }
+/// # }
+/// // A type of the tree, as the example of `Tree` writes one
+/// let tree = tree::to_value(&Timer { seconds: 3600 });
+/// assert_eq!(tree.to_string(), r#"{"seconds":3600}"#);
+/// ```
 pub fn to_value<T: Tree>(value: &T) -> Value {
     value.to_tree()
 }
 
 /// The value of the type `T` that `value` writes.
+///
+/// ```
+/// # use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
+/// # #[derive(Debug, PartialEq)]
+/// # struct Timer { seconds: u32 }
+/// # impl Tree for Timer {
+/// #     const NAME: &'static str = "GPRS timer";
+/// #     fn to_tree(&self) -> Value {
+/// #         let mut members = Members::new();
+/// #         members.put("seconds", tree::unsigned(self.seconds.into()));
+/// #         members.finish()
+/// #     }
+/// #     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+/// #         let members = reading.members(value, &["seconds"])?;
+/// #         let seconds = reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 11160))?;
+/// #         Ok(Self { seconds: seconds as u32 })
+/// #     }
+/// # }
+/// // A type of the tree, as the example of `Tree` writes one
+/// let timer: Timer = tree::from_value(&oxirush_utils::tree!({"Seconds": 60}))?;
+/// assert_eq!(timer, Timer { seconds: 60 });
+/// # Ok::<(), tree::Error>(())
+/// ```
 ///
 /// # Errors
 ///
@@ -137,6 +182,16 @@ fn some_of(names: &[&str], name: &str) -> String {
 /// The tree of a value that has members, to which each member that is there is added by
 /// its name. The members keep the order in which they are put, which is that of the
 /// specification.
+///
+/// ```
+/// use oxirush_utils::tree::{self, Members};
+///
+/// // A slice: its SST, and its SD when it has one
+/// let mut members = Members::new();
+/// members.put("sst", tree::unsigned(1));
+/// members.put_optional("sd", None);
+/// assert_eq!(members.finish().to_string(), r#"{"sst":1}"#);
+/// ```
 #[derive(Debug, Default)]
 pub struct Members(Map);
 

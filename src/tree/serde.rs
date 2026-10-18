@@ -99,6 +99,32 @@ pub fn deserialize<'de, T: Tree, D: Deserializer<'de>>(deserializer: D) -> Resul
 /// A type is named by its name, with its lifetime after it, as `Name<'a>`, when it has
 /// one: the value that is deserialized is one of any lifetime. A type with generic
 /// parameters writes the two implementations itself, in three lines each.
+///
+/// ```
+/// # use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
+/// # #[derive(Debug, PartialEq)]
+/// # struct Timer { seconds: u32 }
+/// # impl Tree for Timer {
+/// #     const NAME: &'static str = "GPRS timer";
+/// #     fn to_tree(&self) -> Value {
+/// #         let mut members = Members::new();
+/// #         members.put("seconds", tree::unsigned(self.seconds.into()));
+/// #         members.finish()
+/// #     }
+/// #     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+/// #         let members = reading.members(value, &["seconds"])?;
+/// #         let seconds = reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 11160))?;
+/// #         Ok(Self { seconds: seconds as u32 })
+/// #     }
+/// # }
+/// // A type of the tree, as the example of `Tree` writes one, in any format of serde
+/// oxirush_utils::impl_serde!(Timer);
+///
+/// let text = serde_json::to_string(&Timer { seconds: 3600 })?;
+/// assert_eq!(text, r#"{"seconds":3600}"#);
+/// assert_eq!(serde_json::from_str::<Timer>(&text)?, Timer { seconds: 3600 });
+/// # Ok::<(), serde_json::Error>(())
+/// ```
 #[macro_export]
 macro_rules! impl_serde {
     ($($name:ident $(<$life:lifetime>)?),+ $(,)?) => {$(

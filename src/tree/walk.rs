@@ -1015,6 +1015,17 @@ pub fn set(tree: &mut Value, path: &str, value: impl Into<Value>) -> Result<(), 
 
 /// [`remove_in`] for [`Plain`].
 ///
+/// ```
+/// use oxirush_utils::tree;
+///
+/// // A member by its name, an entry by its position
+/// let mut tree = tree!({"sst": 1, "sd": "0000ff", "slices": [1, 2]});
+/// tree::remove(&mut tree, "/sd")?;
+/// tree::remove(&mut tree, "/slices/0")?;
+/// assert_eq!(tree.to_string(), r#"{"sst":1,"slices":[2]}"#);
+/// # Ok::<(), tree::Error>(())
+/// ```
+///
 /// # Errors
 ///
 /// Those of [`remove_in`].
@@ -1023,6 +1034,20 @@ pub fn remove(tree: &mut Value, path: &str) -> Result<(), Error> {
 }
 
 /// [`insert_in`] for [`Plain`].
+///
+/// ```
+/// use oxirush_utils::tree;
+///
+/// // Before an entry, and at the end of a list (`-`)
+/// let mut tree = tree!({"slices": [{"sst": 2}]});
+/// tree::insert(&mut tree, "/slices/0", tree!({"sst": 1}))?;
+/// tree::insert(&mut tree, "/slices/-", tree!({"sst": 3}))?;
+/// assert_eq!(tree.to_string(), r#"{"slices":[{"sst":1},{"sst":2},{"sst":3}]}"#);
+///
+/// // A member is set, and not inserted
+/// assert!(tree::insert(&mut tree, "/default", tree!(1)).is_err());
+/// # Ok::<(), tree::Error>(())
+/// ```
 ///
 /// # Errors
 ///

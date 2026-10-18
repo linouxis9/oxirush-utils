@@ -41,6 +41,15 @@ pub struct Error {
 }
 
 /// What is wrong with a member of an identity.
+///
+/// ```
+/// use oxirush_utils::identity::{Fault, Plmn};
+///
+/// let error = Plmn::new("310", "4").unwrap_err();
+/// assert_eq!(error.member, "mnc");
+/// assert_eq!(error.fault, Fault::Length { given: 1, min: 2, max: 3, unit: "digits" });
+/// assert_eq!(error.to_string(), "`mnc` has 1 digit, and has 2 or 3");
+/// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fault {

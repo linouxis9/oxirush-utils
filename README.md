@@ -29,6 +29,8 @@ fn main() -> Result<(), oxirush_utils::identity::Error> {
 5g-guti-310410caff81deadbeef: [f2, 13, 00, 14, ca, ff, 81, de, ad, be, ef]
 ```
 
+The text under a block is what the block prints.
+
 This page describes 0.1.0, which is not on crates.io yet.
 
 ## Installation
@@ -62,116 +64,130 @@ oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", features =
 
 The minimum supported Rust version is 1.88.
 
-## A PLMN in both orders
+## An identity through its forms
 
-A value of `identity` is checked when it is made, and prints whole. An MNC has
-two or three digits, and how many is part of the value: `208-93` is not
-`208-093`.
+A value of `identity` is checked when it is made, and prints whole, in the
+text that the service based interfaces write. An MNC has two or three
+digits, and how many is part of the value: `208-93` is not `208-093`.
 
 ```rust
-use oxirush_utils::identity::Plmn;
+use oxirush_utils::identity::{Guti5g, Imsi, ImsiSuci, Plmn, RoutingIndicator, Supi};
 
 fn main() -> Result<(), oxirush_utils::identity::Error> {
-    let plmn = Plmn::new("310", "410")?;
+    // An IMSI whose MNC has three digits: its PLMN and its MSIN
+    let imsi = Imsi::new("310410123456789")?;
+    let (plmn, msin) = (imsi.plmn(3)?, imsi.msin(3)?);
+    println!("IMSI {imsi}: PLMN {plmn}, MSIN {msin}");
 
-    // TS 24.008 clause 10.5.1.3 for NAS, TS 38.413 clause 9.3.3.5 for NGAP and S1AP
-    println!("{:02x?} {:02x?}", plmn.to_nas_octets(), plmn.to_ap_octets());
-    println!("{}", Plmn::from_ap_octets([0x02, 0xf8, 0x39])?);
+    // The PLMN in a NAS message (TS 24.008 clause 10.5.1.3), and in an NGAP
+    // or S1AP message (TS 38.413 clause 9.3.3.5)
+    println!("{:02x?} in NAS, {:02x?} in NGAP", plmn.to_nas_octets(), plmn.to_ap_octets());
+
+    // Its SUCI under the null scheme, as text and as a 5GS mobile identity,
+    // and the SUPI that the SUCI gives
+    let suci = ImsiSuci::null(plmn, RoutingIndicator::default(), msin)?;
+    println!("{suci}: {:02x?}", suci.to_nas_octets());
+    println!("{}", Supi::from(suci.imsi().unwrap()));
+
+    // The 5G-GUTI that an AMF assigns: AMF region, set and pointer, and the
+    // 5G-TMSI. Its octets in a 5GS mobile identity, read back, and its 5G-S-TMSI
+    let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
+    let octets = guti.to_nas_octets();
+    println!("{guti}: {octets:02x?}");
+    println!("{}", Guti5g::from_nas_octets(&octets)?.s_tmsi());
 
     // What is no PLMN says which member is at fault, and why
-    println!("{}", Plmn::new("310", "4").unwrap_err());
+    println!("{}", Plmn::new("208", "9").unwrap_err());
     Ok(())
 }
 ```
 
 ```text
-[13, 00, 14] [13, 40, 01]
-208-93
+IMSI 310410123456789: PLMN 310-410, MSIN 123456789
+[13, 00, 14] in NAS, [13, 40, 01] in NGAP
+suci-0-310-410-0-0-0-123456789: [01, 13, 00, 14, f0, ff, 00, 00, 21, 43, 65, 87, f9]
+imsi-310410123456789
+5g-guti-310410caff81deadbeef: [f2, 13, 00, 14, ca, ff, 81, de, ad, be, ef]
+5g-s-tmsi-ff81deadbeef
 `mnc` has 1 digit, and has 2 or 3
 ```
 
-## IMSI, IMEI and IMEISV
+## Where each form goes
 
-```rust
-use oxirush_utils::identity::{Imei, Imeisv, Imsi};
+The NAS octets of an identity are the value of an IE of
+[oxirush-nas](https://github.com/linouxis9/oxirush-nas), and the AP octets
+of a PLMN those of the NGAP and S1AP identities of
+[oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
+[oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap). Their messages
+are trees of this crate, read by the same paths.
 
-fn main() -> Result<(), oxirush_utils::identity::Error> {
-    let imsi = Imsi::new("208930000000001")?;
-    println!("{} {}", imsi.plmn(2)?, imsi.msin(2)?);
+```rust,ignore
+use oxirush_nas::nas_5gs::{
+    Nas5gsMessage, NasFGsMobileIdentity, NasFGsRegistrationResult, NasRegistrationAccept,
+    RegistrationResult,
+};
+use oxirush_ngap::{helpers, ngap::PLMNIdentity};
+use oxirush_utils::identity::{Guti5g, Plmn};
+use oxirush_utils::tree;
 
-    // The identity digits of a mobile identity, with the type of identity of an IMSI
-    println!("{:02x?}", imsi.to_nas_octets(1)?);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let plmn: Plmn = "310-410".parse()?;
+    let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
 
-    // An IMEI as a mobile sends it, and with its check digit
-    println!("{}", Imei::with_spare_digit("49015420323751")?);
-    println!("{}", Imei::with_check_digit("49015420323751")?);
-    println!("{}", Imeisv::new("4901542032375101")?.svn());
+    // The 5G-GUTI of a REGISTRATION ACCEPT of oxirush-nas is this value
+    let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
+    let identity = NasFGsMobileIdentity::from_guti(guti);
+    let accept = NasRegistrationAccept::new(result).with_fg_guti(identity);
+    let accept = Nas5gsMessage::new_5gmm(accept);
+    println!("{}", hex::encode(accept.encode()?));
+
+    // The PLMN identity of a GUAMI of oxirush-ngap has its AP octets
+    let guami = helpers::guami(PLMNIdentity(plmn.to_ap_octets()), 0xca, 0x3fe, 0x01)?;
+    println!("{:?}: {:02x?}", guami.plmn_identity, guami.plmn_identity.0);
+
+    // The tree of the NAS message is a tree of this crate
+    let tree = accept.to_tree();
+    println!("{:?}", tree::select(&tree, "/5g-guti/guti/tmsi")?);
     Ok(())
 }
 ```
 
 ```text
-208-93 0000000001
+7e0042010177000bf2130014caff81deadbeef
+PLMNIdentity(310-410): [13, 40, 01]
+[Number(3735928559)]
+```
+
+## IMEI, IMEISV, and the identities of EPS
+
+```rust
+use oxirush_utils::identity::{GutiEps, Imei, Imeisv, Imsi, Plmn, Tai5gs, TaiEps};
+
+fn main() -> Result<(), oxirush_utils::identity::Error> {
+    // The identity digits of an IMSI in a mobile identity, after its type of identity
+    let imsi = Imsi::new("208930000000001")?;
+    println!("{:02x?}", imsi.to_nas_octets(1)?);
+
+    // An IMEI as a mobile sends it, and with its check digit; the SVN of an IMEISV
+    println!("{}", Imei::with_spare_digit("49015420323751")?);
+    println!("{}", Imei::with_check_digit("49015420323751")?);
+    println!("{}", Imeisv::new("4901542032375101")?.svn());
+
+    // The GUTI of EPS: its MME group, MME code and M-TMSI; a tracking area of each system
+    let plmn = Plmn::new("208", "93")?;
+    println!("{}", GutiEps::new(plmn, 0x0002, 0x01, 0xc000_04f4));
+    println!("{} {}", Tai5gs::new(plmn, 1)?, TaiEps::new(plmn, 1));
+    Ok(())
+}
+```
+
+```text
 [29, 80, 39, 00, 00, 00, 00, 10]
 490154203237510
 490154203237518
 01
-```
-
-## GUTI, S-TMSI and TAI of both systems
-
-```rust
-use oxirush_utils::identity::{Guti5g, GutiEps, Plmn, Tai5gs};
-
-fn main() -> Result<(), oxirush_utils::identity::Error> {
-    // What Open5GS sent in a REGISTRATION ACCEPT
-    let octets = [0xf2, 0x02, 0xf8, 0x39, 0x02, 0x00, 0x40, 0xc0, 0x00, 0x06, 0xcf];
-    let guti = Guti5g::from_nas_octets(&octets)?;
-    println!("{guti} {}", guti.s_tmsi());
-    println!("{} {} {:#x}", guti.amf_region_id(), guti.amf_set_id(), guti.tmsi());
-
-    let plmn = Plmn::new("208", "93")?;
-    let eps = GutiEps::new(plmn, 0x0002, 0x01, 0xc000_04f4);
-    println!("{eps} {}", Tai5gs::new(plmn, 1)?);
-    Ok(())
-}
-```
-
-```text
-5g-guti-20893020040c00006cf 5g-s-tmsi-0040c00006cf
-2 1 0xc00006cf
-4g-guti-20893000201c00004f4 208-93-000001
-```
-
-## SUPI, and the SUCI of an IMSI
-
-A SUCI is the value of its parts, in its two forms. Concealing an IMSI and
-reading a concealed one need keys, and are no part of this crate.
-
-```rust
-use oxirush_utils::identity::{ImsiSuci, Plmn, RoutingIndicator, Supi, SupiType};
-
-fn main() -> Result<(), oxirush_utils::identity::Error> {
-    // The example of TS 23.003 clause 2.2B
-    let plmn = Plmn::new("234", "15")?;
-    let suci = ImsiSuci::null(plmn, RoutingIndicator::new("678")?, "0999999999")?;
-    println!("{suci}: {:02x?}", suci.to_nas_octets());
-
-    // What PacketRusher sent in a REGISTRATION REQUEST: under the null scheme, the SUPI is in it
-    let sent = [0x01, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10];
-    let suci = ImsiSuci::from_nas_octets(&sent)?;
-    println!("{suci} {}", Supi::from(suci.imsi().unwrap()));
-
-    // A GCI is 3 in TS 23.003 clause 2.2B and 2 in TS 24.501 table 9.11.3.4.1
-    println!("{} {}", SupiType::Gci.type_number(), SupiType::Gci.nas_format());
-    Ok(())
-}
-```
-
-```text
-suci-0-234-15-678-0-0-0999999999: [01, 32, f4, 51, 76, f8, 00, 00, 90, 99, 99, 99, 99]
-suci-0-208-93-0000-0-0-0000000001 imsi-208930000000001
-3 2
+4g-guti-20893000201c00004f4
+208-93-000001 208-93-0001
 ```
 
 ## The SUCI in the form of a NAI
@@ -331,79 +347,6 @@ fn main() -> Result<(), oxirush_utils::tree::Error> {
 [{"sst":1,"sd":"000001"},{"sst":3}]
 ```
 
-## The rules of a family
-
-A family of messages whose trees are more than objects and lists implements
-`Family`: its root, an entry of a list that a name selects, a member that is
-absent and could be there. The functions that end with `_in` take one.
-
-```rust
-use oxirush_utils::{tree, tree::{Family, Next, Place, Root, Step, Value}};
-
-/// A list of `{"id", "value"}` whose entries are selected by their `id`.
-struct ById;
-
-impl Family for ById {
-    type Shape = ();
-
-    fn root(&self) -> Root<'_> {
-        Root::new("ies", &[], true)
-    }
-
-    fn step<'v>(
-        &self,
-        place: &Place<'v, ()>,
-        segment: &str,
-        next: &mut Next<'v, ()>,
-    ) -> Result<Step<()>, tree::Error> {
-        let Some(entries) = place.value().and_then(Value::as_array) else {
-            return Ok(Step::Plain);
-        };
-        let named = |entry: &Value| entry["id"].as_str() == Some(segment);
-        if !entries.iter().any(named) {
-            return Ok(Step::Plain);
-        }
-        for (position, entry) in entries.iter().enumerate().filter(|(_, entry)| named(entry)) {
-            next.entry(position, entry, ());
-        }
-        Ok(Step::Taken)
-    }
-}
-
-fn main() -> Result<(), tree::Error> {
-    let mut ies = tree!([{"id": "cause", "value": 3}, {"id": "timer", "value": 60}]);
-    println!("{:?}", tree::select_in(&ById, &ies, "/ies/timer/value")?);
-    tree::set_in(&ById, &mut ies, "/ies/cause/value", tree!(7))?;
-    println!("{ies}");
-    Ok(())
-}
-```
-
-```text
-[Number(60)]
-[{"id":"cause","value":7},{"id":"timer","value":60}]
-```
-
-## Compare with a value that someone wrote
-
-A tree shows octets in lower case and reads them in either. `written_as`
-brings a written value to the form that the tree shows at a place, so that a
-comparison does not depend on how its writer spelled it. `select_forms_in`
-gives each selected value with the form that its family says it has.
-
-```rust
-use oxirush_utils::{tree, tree::{Form, written_as}};
-
-// At a place of octets C0 is the octets c0, and at a place of text it stays C0
-println!("{}", written_as(Form::Octets, &tree!("C0")));
-println!("{}", written_as(Form::Plain, &tree!("C0")));
-```
-
-```text
-"c0"
-"C0"
-```
-
 ## Any format of serde
 
 With the feature `serde`, a type is serialized and deserialized through its
@@ -514,10 +457,13 @@ cargo +nightly fuzz run paths -- -max_total_time=60 -max_len=512
 ```
 
 A pull request comes with a test for what it changes; the Rust blocks of
-this page are checked with what they print ([`tests/readme.rs`](tests/readme.rs)
-says how). Sign off your commits (`git commit -s`): by contributing you agree
-to the [Developer Certificate of Origin](https://developercertificate.org/).
-[SECURITY.md](SECURITY.md) says how to report a vulnerability.
+this page are checked with what they print
+([`tests/readme.rs`](tests/readme.rs) says how). The blocks that use other
+crates of the family run in the package of [`family/`](family/), which takes
+those crates at the revisions that its manifest names. Sign off your commits
+(`git commit -s`): by contributing you agree to the [Developer Certificate
+of Origin](https://developercertificate.org/). [SECURITY.md](SECURITY.md)
+says how to report a vulnerability.
 
 ## The OxiRush family
 
