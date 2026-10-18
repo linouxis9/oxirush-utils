@@ -1,6 +1,6 @@
-# The figures of the README: the tree of the crate against a `serde_json::Value`, and the
-# identities. A package of its own, so that the crate keeps no dependency: nothing here is
-# published.
+# The benchmarks and the profiler of oxirush-utils: the tree of the crate against a
+# `serde_json::Value`, and the identities. A package of its own, so that the crate keeps
+# no dependency: nothing here is published.
 [package]
 name = "oxirush-utils-benches"
 version = "0.0.0"
@@ -12,6 +12,22 @@ license = "Apache-2.0"
 oxirush-utils = { path = "..", features = ["serde"] }
 # The `Value` of serde_json, with its default features: its objects sorted by their names.
 serde_json = "1.0.154"
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+pprof = { version = "0.15", features = ["criterion", "protobuf-codec", "flamegraph"] }
+
+[[bench]]
+name = "tree"
+harness = false
+
+[[bench]]
+name = "allocations"
+harness = false
+
+# Symbols for the profiles.
+[profile.bench]
+debug = true
 
 # Not a member of a workspace that the crate may be in.
 [workspace]
