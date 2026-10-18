@@ -144,8 +144,8 @@ fn an_object_of_many_members_keeps_them_where_they_are() {
 
 #[test]
 fn an_object_does_what_a_list_of_its_members_does_on_both_sides_of_its_index() {
-    // Each call on an object that grows past the 32 members above which it keeps an index
-    // of its names and shrinks back, against a list of the members.
+    // Each call on an object that grows past the 256 members above which it keeps an index
+    // of its names and shrinks back, again and again, against a list of the members.
     let mut map = Map::new();
     let mut list: Vec<(String, Value)> = Vec::new();
     let mut seed = 0x2545_f491_4f6c_dd1d_u64;
@@ -153,11 +153,13 @@ fn an_object_does_what_a_list_of_its_members_does_on_both_sides_of_its_index() {
         seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
         (seed >> 33) % below
     };
-    for step in 0..20_000 {
-        let name = format!("m{}", next(80));
+    // The steps at which the object has an index, and those at which it went back below.
+    let (mut indexed, mut crossed, mut was) = (0, 0, false);
+    for step in 0..12_000 {
+        let name = format!("m{}", next(480));
         let value = tree!(step);
         let at = list.iter().position(|(known, _)| *known == name);
-        match next(if list.len() < 40 { 4 } else { 7 }) {
+        match next(if list.len() < 320 { 4 } else { 7 }) {
             0 | 1 => {
                 let was = at.map(|at| core::mem::replace(&mut list[at].1, value.clone()));
                 if at.is_none() {
@@ -188,9 +190,11 @@ fn an_object_does_what_a_list_of_its_members_does_on_both_sides_of_its_index() {
                 assert_eq!(map.shift_remove(&name), was);
             }
             _ => {
-                let parity = next(2).to_string();
-                list.retain(|(known, _)| !known.ends_with(&parity));
-                map.retain(|known, _| !known.ends_with(&parity));
+                // A third of the members, which takes a large object back below the index.
+                let third = next(3);
+                let kept = |name: &str| name[1..].parse::<u64>().unwrap() % 3 != third;
+                list.retain(|(known, _)| kept(known));
+                map.retain(|known, _| kept(known));
             }
         }
         let names: Vec<&String> = list.iter().map(|(name, _)| name).collect();
@@ -198,8 +202,13 @@ fn an_object_does_what_a_list_of_its_members_does_on_both_sides_of_its_index() {
         for (name, value) in &list {
             assert_eq!(map.get(name), Some(value), "{step} {name}");
         }
-        assert_eq!(map.get("m80"), None);
+        assert_eq!(map.get("m480"), None);
+        let is = list.len() > 256;
+        indexed += usize::from(is);
+        crossed += usize::from(was && !is);
+        was = is;
     }
+    assert!(indexed > 4_000 && crossed > 20, "{indexed} {crossed}");
 }
 
 #[test]

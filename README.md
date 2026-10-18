@@ -472,23 +472,25 @@ of the program.
 
 | Operation | this crate | serde_json 1 | serde_json takes |
 |---|---|---|---|
-| Read a tree of 925 octets | 2,659 ns, 93 allocations of 6,618 octets | 2,677 ns, 72 allocations of 14,594 octets | 1.0x |
-| Write it | 773 ns, 5 allocations of 2,845 octets | 2,143 ns, 8 allocations of 2,040 octets | 2.8x |
-| Select a value of it | 229 ns, 10 allocations of 385 octets | 247 ns, 8 allocations of 64 octets | 1.1x |
-| Put 100,000 members into an object | 42.8 ms, 215,477 allocations of 21,752,076 octets | 18.5 ms, 115,460 allocations of 10,564,762 octets | 0.4x |
-| Read an object of 100,000 members, 1,088,891 octets | 45.5 ms, 215,478 allocations of 23,352,076 octets | 21.5 ms, 115,460 allocations of 10,564,762 octets | 0.5x |
+| Read a tree of 925 octets | 2,635 ns, 93 allocations of 6,618 octets | 2,709 ns, 72 allocations of 14,594 octets | 1.0x |
+| Write it | 761 ns, 5 allocations of 2,845 octets | 2,185 ns, 8 allocations of 2,040 octets | 2.9x |
+| Select a value of it | 219 ns, 10 allocations of 385 octets | 248 ns, 8 allocations of 64 octets | 1.1x |
+| Put 100,000 members into an object | 20.8 ms, 113,368 allocations of 17,990,994 octets | 19.6 ms, 115,460 allocations of 10,564,762 octets | 0.9x |
+| Read an object of 100,000 members, 1,088,891 octets | 14.0 ms, 109,113 allocations of 21,887,474 octets | 21.0 ms, 115,460 allocations of 10,564,762 octets | 1.5x |
 | Read a PLMN from text | 13 ns, 0 allocations of 0 octets | | |
 | Read an IMSI from text | 9 ns, 0 allocations of 0 octets | | |
 | Read a 5G-GUTI from a 5GS mobile identity | 14 ns, 0 allocations of 0 octets | | |
-| Read the SUCI of an IMSI from a 5GS mobile identity | 83 ns, 2 allocations of 20 octets | | |
+| Read the SUCI of an IMSI from a 5GS mobile identity | 82 ns, 2 allocations of 20 octets | | |
 | Write a PLMN in the order of NGAP | 7 ns, 0 allocations of 0 octets | | |
 
 A tree is read and written with serde_json, and keeps its members in their
-order where a `serde_json::Value` sorts them. An object of more than 32 members
-keeps an index of its names, a copy of each, so that an object of n members is
-read in a time that grows as n log n: twice the time and the allocations of
-serde_json for 100,000 members. The identities allocate nothing but the SUCI,
-which holds its scheme output.
+order where a `serde_json::Value` sorts them. An object of more than 256
+members keeps an index of the hashes of its names with their positions, which
+copies no name, so that an object of n members is read in a time that grows as
+n log n: about the time of serde_json for 100,000 members put one by one, and
+less to read them, with as many allocations. A smaller object, as every value
+of a protocol, is a list that is searched. The identities allocate nothing but
+the SUCI, which holds its scheme output.
 
 ```sh
 cargo run --release --manifest-path benches/Cargo.toml

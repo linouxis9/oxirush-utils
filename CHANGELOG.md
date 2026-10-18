@@ -52,8 +52,10 @@ once.
   `serde_json`, the crate turns on `float_roundtrip` alone: the JSON of a
   program that depends on it keeps the order that the program chose, and a
   number with a fraction that a tree prints is read back as it was. An
-  object of more than 32 members keeps an index of its names, so that one is
-  found in a time that grows as log n. A name written twice in an object of JSON is
+  object of more than 256 members keeps an index of the hashes of its names
+  with their positions, which copies no name, so that one is found in a time
+  that grows as log n; a smaller one, as every value of a protocol, is a list
+  that is searched. A name written twice in an object of JSON is
   refused. `Tree`, `Members` and `Reading` write a type as a tree and read it
   from one, with refusals that say the member and why, and nothing of what
   is written in `Reading::secret`, where a key is read. `Reading::named`
