@@ -279,7 +279,7 @@ fn block_8() {
 fn block_9() {
     use oxirush_utils::identity::{Guti5g, Plmn};
 
-    fn main() -> Result<(), oxirush_utils::identity::Error> {
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
         let plmn: Plmn = "310-410".parse()?;
         let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
 

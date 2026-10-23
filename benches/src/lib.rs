@@ -25,7 +25,7 @@
 //! A tree of the crate is measured beside a `serde_json::Value` of the default
 //! features on the same JSON, and the identities alone. In this directory:
 //!
-//! ```bash
+//! ```sh
 //! cargo bench --bench tree                      # the time, with criterion
 //! cargo bench --bench tree -- read-tree         # those whose name has it
 //! cargo bench --bench allocations               # the allocations of a call

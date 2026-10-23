@@ -19,7 +19,7 @@
 //! After a change of the code of a Rust block of a page, write the file
 //! again and run the tests once more:
 //!
-//! ```bash
+//! ```sh
 //! README_BLOCKS=write cargo test --all-features --test readme
 //! cargo test --all-features --test readme
 //! ```

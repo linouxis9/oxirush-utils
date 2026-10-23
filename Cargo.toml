@@ -2,7 +2,7 @@
 name = "oxirush-utils"
 version = "0.1.0"
 edition = "2024"
-description = "What the OxiRush crates share: the identities of 3GPP networks as values, and one JSON tree with paths for the messages of every family"
+description = "3GPP identities as Rust values (PLMN, IMSI, IMEI, SUPI, SUCI, 5G-GUTI, GUTI, TAI) in their NAS, AP and text forms, and the JSON tree and paths that the OxiRush crates share. no_std."
 license = "Apache-2.0"
 repository = "https://github.com/linouxis9/oxirush-utils"
 authors = ["Valentin D'Emmanuele"]
