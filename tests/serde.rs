@@ -131,14 +131,14 @@ fn json_carries_the_tree() {
 /// octets as the same text, and the refusals of the tree.
 #[test]
 fn yaml_carries_the_same_tree() {
-    let text = serde_yaml::to_string(&request()).unwrap();
+    let text = serde_norway::to_string(&request()).unwrap();
     assert_eq!(
         text,
         "slices:\n- sst: 1\n- sst: 2\n  sd: 0000ff\ncause: congestion\n"
     );
-    assert_eq!(serde_yaml::from_str::<Request>(&text).unwrap(), request());
+    assert_eq!(serde_norway::from_str::<Request>(&text).unwrap(), request());
     // A number may be written in hexadecimal in YAML, which reads it as a number.
-    let read: Slice = serde_yaml::from_str("{SST: 0x10, sd: '0000FF'}").unwrap();
+    let read: Slice = serde_norway::from_str("{SST: 0x10, sd: '0000FF'}").unwrap();
     assert_eq!(
         read,
         Slice {
@@ -146,13 +146,13 @@ fn yaml_carries_the_same_tree() {
             sd: Some([0, 0, 0xff])
         }
     );
-    let error = serde_yaml::from_str::<Request>("{slices: [{sst: 256}], cause: x}").unwrap_err();
+    let error = serde_norway::from_str::<Request>("{slices: [{sst: 256}], cause: x}").unwrap_err();
     assert_eq!(
         error.to_string(),
         "this is not a value of Request: a number from 0 to 255 is expected, and 256 is written, \
          at slices/0/sst"
     );
-    let error = serde_yaml::from_str::<Slice>("{sst: 1, sd: 255}").unwrap_err();
+    let error = serde_norway::from_str::<Slice>("{sst: 1, sd: 255}").unwrap_err();
     assert!(
         error.to_string().contains("octets in hexadecimal"),
         "{error}"
@@ -191,18 +191,18 @@ oxirush_utils::impl_serde!(Indication);
 #[test]
 fn a_boolean_is_the_name_true_or_false_where_the_type_has_it() {
     assert_eq!(
-        serde_yaml::from_str::<Indication>("true").unwrap(),
+        serde_norway::from_str::<Indication>("true").unwrap(),
         Indication(0)
     );
     assert_eq!(
-        serde_yaml::from_str::<Indication>("false").unwrap(),
+        serde_norway::from_str::<Indication>("false").unwrap(),
         Indication(1)
     );
     assert_eq!(
         serde_json::from_str::<Indication>("\"true\"").unwrap(),
         Indication(0)
     );
-    assert_eq!(serde_yaml::to_string(&Indication(0)).unwrap(), "'true'\n");
+    assert_eq!(serde_norway::to_string(&Indication(0)).unwrap(), "'true'\n");
     // Where the type has no such name, a boolean is no name.
     struct Only;
     impl Tree for Only {

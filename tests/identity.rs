@@ -138,23 +138,23 @@ fn a_plmn_is_refused_with_its_member_and_the_reason() {
     let error = |result: Result<Plmn, Error>| result.unwrap_err().to_string();
     assert_eq!(
         error(Plmn::new("20", "93")),
-        "`mcc` has 2 digits, and has 3"
+        "`mcc` has 2 digits, and must have 3"
     );
     assert_eq!(
         error(Plmn::new("208", "9")),
-        "`mnc` has 1 digit, and has 2 or 3"
+        "`mnc` has 1 digit, and must have 2 or 3"
     );
     assert_eq!(
         error(Plmn::new("208", "9345")),
-        "`mnc` has 4 digits, and has 2 or 3"
+        "`mnc` has 4 digits, and must have 2 or 3"
     );
     assert_eq!(
         error(Plmn::new("2o8", "93")),
-        "`mcc` has the character `o`, and has decimal digits"
+        "`mcc` has the character `o`, and must have decimal digits"
     );
     assert_eq!(
         error(Plmn::new("208", "9-3")),
-        "`mnc` has the character `-`, and has decimal digits"
+        "`mnc` has the character `-`, and must have decimal digits"
     );
     // The digits alone are no PLMN: the review of the release candidate found the trees of
     // the protocol crates reading "310410" as octets, where the text of a PLMN has a hyphen.
@@ -224,7 +224,7 @@ fn a_tbcd_string_has_two_characters_in_an_octet_and_a_filler_at_its_end_alone() 
     let error = tbcd::encode("12d").unwrap_err().to_string();
     assert_eq!(
         error,
-        "`tbcd` has the character `d`, and has digits, *, #, a, b and c"
+        "`tbcd` has the character `d`, and must have digits, *, #, a, b and c"
     );
 }
 
@@ -257,7 +257,7 @@ fn identity_digits_are_coded_as_the_mobile_identity_of_ts_24_008_has_them() {
     let error = |octets: &[u8]| digits::decode(octets).unwrap_err().to_string();
     assert_eq!(
         error(&[]),
-        "`identity-digits` has 0 octets, and has 1 at least"
+        "`identity-digits` has 0 octets, and must have 1 at least"
     );
     assert!(error(&[0xa9]).contains("half octet 0xa where a digit is"));
     // An even number of digits has its end mark, and an odd number has a digit there.
@@ -320,10 +320,10 @@ fn an_imsi_has_its_plmn_and_its_msin_by_the_length_of_the_mnc() {
     // TS 23.003 clause 2.3: 15 digits at most, and an MCC, an MNC and one digit at least.
     assert_eq!(Imsi::new("208931").unwrap().msin(2).unwrap(), "1");
     let error = |digits: &str| Imsi::new(digits).unwrap_err().to_string();
-    assert_eq!(error("20893"), "`imsi` has 5 digits, and has 6 to 15");
+    assert_eq!(error("20893"), "`imsi` has 5 digits, and must have 6 to 15");
     assert_eq!(
         error("2089300000000012"),
-        "`imsi` has 16 digits, and has 6 to 15"
+        "`imsi` has 16 digits, and must have 6 to 15"
     );
     assert!(error("20893000000000x").contains("the character `x`"));
     assert!(error("208-93-0000000001").contains("the character `-`"));
@@ -337,7 +337,7 @@ fn an_imsi_has_its_plmn_and_its_msin_by_the_length_of_the_mnc() {
     let other = Imsi::from_nas_octets(3, &octets).unwrap_err();
     assert_eq!(
         other.to_string(),
-        "`imsi` has the octet 0x29, and has 0x2b there"
+        "`imsi` has the octet 0x29, and must have 0x2b there"
     );
 }
 
@@ -377,11 +377,11 @@ fn an_imei_has_a_spare_digit_or_its_check_digit() {
     // A character that is no digit is refused as such, and not counted as a digit.
     assert_eq!(
         "90420156-025763-0".parse::<Imei>().unwrap_err().to_string(),
-        "`imei` has the character `-`, and has decimal digits"
+        "`imei` has the character `-`, and must have decimal digits"
     );
     assert_eq!(
         Imeisv::new("4901542032375101x").unwrap_err().to_string(),
-        "`imeisv` has the character `x`, and has decimal digits"
+        "`imeisv` has the character `x`, and must have decimal digits"
     );
 }
 
@@ -535,12 +535,15 @@ fn a_guti_and_an_s_tmsi_have_the_octets_and_the_text_of_their_parts() {
     let new = |set, pointer| Guti5g::new(plmn("208-93"), 0, set, pointer, 0);
     assert_eq!(
         error(new(1024, 0)),
-        "`amf-set-id` is 1024, and is 1023 at most"
+        "`amf-set-id` is 1024, and must be 1023 at most"
     );
-    assert_eq!(error(new(0, 64)), "`amf-pointer` is 64, and is 63 at most");
+    assert_eq!(
+        error(new(0, 64)),
+        "`amf-pointer` is 64, and must be 63 at most"
+    );
     assert_eq!(
         error(Guti5g::from_nas_octets(&octets[..10])),
-        "`5g-guti` has 10 octets, and has 11"
+        "`5g-guti` has 10 octets, and must have 11"
     );
     assert!(STmsi5g::from_u64(1 << 48).is_err());
     for text in [
@@ -611,7 +614,7 @@ fn a_spare_bit_is_read_with_its_fault_and_is_not_canonical() {
     let error = GutiEps::from_nas_octets(&eps).unwrap_err();
     assert_eq!(
         error.to_string(),
-        "`guti` has the octet 0xfe, and has 0xf6 there"
+        "`guti` has the octet 0xfe, and must have 0xf6 there"
     );
 }
 
@@ -655,7 +658,7 @@ fn a_tracking_area_identity_is_a_plmn_and_a_code() {
     let error = Tai5gs::new(plmn("208-93"), 1 << 24)
         .unwrap_err()
         .to_string();
-    assert_eq!(error, "`tac` is 16777216, and is 16777215 at most");
+    assert_eq!(error, "`tac` is 16777216, and must be 16777215 at most");
     // TS 24.501 clause 9.11.3.8: an MCC or an MNC that is no digits is a deleted
     // identity, which is no value here.
     assert!(Tai5gs::from_nas_octets([0xff, 0xff, 0xff, 0, 0, 1]).is_err());
@@ -706,7 +709,7 @@ fn a_type_of_identity_has_the_number_of_its_clause() {
     let error = Eps::try_from(2).unwrap_err().to_string();
     assert_eq!(
         error,
-        "`type-of-identity` is 2, and is a type of identity of the EPS mobile identity"
+        "`type-of-identity` is 2, and must be a type of identity of the EPS mobile identity"
     );
     assert!(IdentityType::try_from(6).is_err() && Fgs::try_from(8).is_err());
     // The IMEI is 3 in a mobile identity of 5GS and of EPS, and 2 in TS 24.008.
@@ -791,11 +794,11 @@ fn a_supi_is_written_with_its_type() {
     let long = format!("{}@example.com", "u".repeat(500));
     assert_eq!(
         error(Supi::network_specific(&long)),
-        "`nai` has 512 octets, and has 3 to 507"
+        "`nai` has 512 octets, and must have 3 to 507"
     );
     assert_eq!(
         error(Supi::imsi("20893")),
-        "`imsi` has 5 digits, and has 6 to 15"
+        "`imsi` has 5 digits, and must have 6 to 15"
     );
     assert_eq!(
         error(Supi::parse("208930000000001")),
@@ -854,11 +857,11 @@ fn a_routing_indicator_is_one_to_four_digits_which_all_count() {
     let error = |result: Result<RoutingIndicator, Error>| result.unwrap_err().to_string();
     assert_eq!(
         error(RoutingIndicator::new("")),
-        "`routing-indicator` has 0 digits, and has 1 to 4"
+        "`routing-indicator` has 0 digits, and must have 1 to 4"
     );
     assert_eq!(
         error(RoutingIndicator::new("12345")),
-        "`routing-indicator` has 5 digits, and has 1 to 4"
+        "`routing-indicator` has 5 digits, and must have 1 to 4"
     );
     assert!(error(RoutingIndicator::new("1a")).contains("the character `a`"));
     assert!(error(RoutingIndicator::new("1-2-3")).contains("the character `-`"));
@@ -897,10 +900,13 @@ fn a_protection_scheme_is_its_identifier_and_no_reserved_one() {
         "ProtectionScheme(2: profile B) ProtectionScheme(12: of the operator)"
     );
     let error = |identifier| ProtectionScheme::new(identifier).unwrap_err().to_string();
-    assert_eq!(error(16), "`protection-scheme` is 16, and is 15 at most");
+    assert_eq!(
+        error(16),
+        "`protection-scheme` is 16, and must be 15 at most"
+    );
     assert_eq!(
         error(3),
-        "`protection-scheme` is 3, and is 0, 1, 2 or 12 to 15: 3 to 11 are reserved"
+        "`protection-scheme` is 3, and must be 0, 1, 2 or 12 to 15: 3 to 11 are reserved"
     );
 }
 
@@ -994,11 +1000,11 @@ fn a_suci_is_refused_with_its_member_and_the_reason() {
     // The MSIN: digits, one at least, and no more than an IMSI of 15 digits has.
     assert_eq!(
         error(ImsiSuci::null(plmn("208-93"), routing, "00000000012")),
-        "`msin` has 11 digits, and has 1 to 10"
+        "`msin` has 11 digits, and must have 1 to 10"
     );
     assert_eq!(
         error(ImsiSuci::null(plmn("208-093"), routing, "")),
-        "`msin` has 0 digits, and has 1 to 9"
+        "`msin` has 0 digits, and must have 1 to 9"
     );
     assert!(error(ImsiSuci::null(plmn("208-93"), routing, "12a")).contains("the character `a`"));
     assert!(
@@ -1011,7 +1017,7 @@ fn a_suci_is_refused_with_its_member_and_the_reason() {
         |scheme, key_id| ImsiSuci::concealed(plmn("208-93"), routing, scheme, key_id, vec![1]);
     assert_eq!(
         error(concealed(ProtectionScheme::PROFILE_A, 0)),
-        "`home-network-public-key-identifier` is 0, and is 1 to 254 for a scheme that conceals"
+        "`home-network-public-key-identifier` is 0, and must be 1 to 254 for a scheme that conceals"
     );
     assert!(error(concealed(ProtectionScheme::PROFILE_B, 255)).contains("is 255"));
     assert!(error(concealed(ProtectionScheme::NULL, 1)).contains("`protection-scheme` is 0"));
@@ -1025,29 +1031,29 @@ fn a_suci_is_refused_with_its_member_and_the_reason() {
     );
     assert_eq!(
         error(empty),
-        "`scheme-output` has 0 octets, and has 41 to 45"
+        "`scheme-output` has 0 octets, and must have 41 to 45"
     );
     for (octets, reason) in [
         (
             "0102f839f0ff0000",
-            "`suci` has 8 octets, and has 9 at least",
+            "`suci` has 8 octets, and must have 9 at least",
         ),
         (
             "0102f839f0ff000110",
-            "`home-network-public-key-identifier` is 1, and is 0 for the null scheme",
+            "`home-network-public-key-identifier` is 1, and must be 0 for the null scheme",
         ),
         (
             "0102f839f0ff01001a",
-            "`home-network-public-key-identifier` is 0, and is 1 to 254",
+            "`home-network-public-key-identifier` is 0, and must be 1 to 254",
         ),
         // A reserved scheme, and one with its spare bits set too.
         (
             "0102f839f0ff0301aa",
-            "`protection-scheme` is 3, and is 0, 1, 2 or 12 to 15",
+            "`protection-scheme` is 3, and must be 0, 1, 2 or 12 to 15",
         ),
         (
             "0102f839f0fffb01aa",
-            "`protection-scheme` is 11, and is 0, 1, 2 or 12 to 15",
+            "`protection-scheme` is 11, and must be 0, 1, 2 or 12 to 15",
         ),
         ("010af839f0ff000010", "`mcc` has the half octet 0xa"),
         (
@@ -1061,12 +1067,12 @@ fn a_suci_is_refused_with_its_member_and_the_reason() {
         ),
         (
             "0202f839f0ff000010",
-            "`suci` has the octet 0x02, and has 0x01 there",
+            "`suci` has the octet 0x02, and must have 0x01 there",
         ),
         // The SUPI format of a NAI: no SUCI of an IMSI.
         (
             "1102f839f0ff000010",
-            "`suci` has the octet 0x11, and has 0x01 there",
+            "`suci` has the octet 0x11, and must have 0x01 there",
         ),
     ] {
         let refused = error(ImsiSuci::from_nas_octets(&hex::decode(octets).unwrap()));
@@ -1932,7 +1938,7 @@ fn the_output_of_a_profile_of_ecies_has_the_lengths_of_its_parts() {
     // Profile A: 32 + 1..=5 + 8 octets.
     assert_eq!(
         concealed(1, 1).unwrap_err().to_string(),
-        "`scheme-output` has 1 octet, and has 41 to 45"
+        "`scheme-output` has 1 octet, and must have 41 to 45"
     );
     assert!(concealed(1, 41).is_ok() && concealed(1, 45).is_ok());
     assert!(concealed(1, 40).is_err() && concealed(1, 46).is_err());
@@ -1943,7 +1949,7 @@ fn the_output_of_a_profile_of_ecies_has_the_lengths_of_its_parts() {
     assert!(concealed(12, 1).is_ok() && concealed(12, 3005).is_ok());
     assert_eq!(
         concealed(15, 3006).unwrap_err().to_string(),
-        "`scheme-output` has 3006 octets, and has 1 to 3005"
+        "`scheme-output` has 3006 octets, and must have 1 to 3005"
     );
     // The octets of a NAS message and the text are read with the same lengths.
     let suci = concealed(1, 41).unwrap();
@@ -1958,10 +1964,13 @@ fn the_output_of_a_profile_of_ecies_has_the_lengths_of_its_parts() {
     let mut uncompressed = concealed(2, 46).unwrap().to_nas_octets();
     uncompressed.extend([0x5a; 32]);
     for (octets, said) in [
-        (&octets, "`scheme-output` has 40 octets, and has 41 to 45"),
+        (
+            &octets,
+            "`scheme-output` has 40 octets, and must have 41 to 45",
+        ),
         (
             &uncompressed,
-            "`scheme-output` has 78 octets, and has 42 to 46",
+            "`scheme-output` has 78 octets, and must have 42 to 46",
         ),
     ] {
         let (read, faults) = ImsiSuci::from_nas_octets_tolerant(octets).unwrap();

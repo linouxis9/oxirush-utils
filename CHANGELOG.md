@@ -14,9 +14,9 @@ once.
   `Guti5g` and `STmsi5g`, `GutiEps` and `STmsiEps`; `Tai5gs` and `TaiEps`; the
   types of identity of TS 24.501, TS 24.301 and TS 24.008. A value is checked
   when it is made, prints whole, and is `Eq`, `Ord` and `Hash`, and `Copy`
-  where it holds no text. An error names the member at fault and says why: a
-  character that is no digit is refused as that character, before the digits
-  are counted.
+  where it holds no text. An error names the member at fault and says why, as
+  "`mcc` has 2 digits, and must have 3": a character that is no digit is
+  refused as that character, before the digits are counted.
 - `Supi` with its `SupiType`, whose number in TS 23.003 clause 2.2B and whose
   SUPI format in TS 24.501 table 9.11.3.4.1 differ for a GLI and a GCI.
   `ImsiSuci`, the SUCI of an IMSI as the value of its parts, with

@@ -59,7 +59,7 @@ unicode-normalization = { version = "0.1.13", optional = true, default-features 
 
 [dev-dependencies]
 # Another self-describing format than JSON, for the tests of `serde`.
-serde_yaml = "0.9"
+serde_norway = "0.9"
 hex = "0.4"
 
 [[test]]

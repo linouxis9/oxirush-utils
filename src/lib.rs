@@ -43,7 +43,8 @@
 //! # Tasks
 //!
 //! The [README](https://github.com/linouxis9/oxirush-utils#readme) has an example of
-//! each, with what it prints.
+//! each, with what it prints, except the rules of a family of messages: the
+//! documentation of [`tree::Family`] has theirs.
 //!
 //! | Task | Items |
 //! |------|-------|

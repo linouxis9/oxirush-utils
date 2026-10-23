@@ -267,8 +267,8 @@ fn block_8() {
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         let timer = Timer { seconds: 3600 };
         println!("{}", serde_json::to_string(&timer)?);
-        print!("{}", serde_yaml::to_string(&timer)?);
-        println!("{:?}", serde_yaml::from_str::<Timer>("Seconds: 3600")?);
+        print!("{}", serde_norway::to_string(&timer)?);
+        println!("{:?}", serde_norway::from_str::<Timer>("Seconds: 3600")?);
         Ok(())
     }
 

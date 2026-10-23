@@ -31,7 +31,7 @@ fn main() -> Result<(), oxirush_utils::identity::Error> {
 
 The text under a block is what the block prints.
 
-This page describes 0.1.0, which is not on crates.io yet.
+This page describes oxirush-utils 0.1.0, which is not on crates.io yet.
 
 ## Installation
 
@@ -51,9 +51,9 @@ oxirush-utils = { version = "0.1", features = ["alloc"] }
 | `serde` | `Serialize` and `Deserialize` for a type through its tree | `serde_core` |
 | `idna` | The realm and the username of a NAI checked as internationalized names too: Unicode normalization form C, and a realm that IDNA takes as it is written | `idna`, `unicode-normalization` |
 
-No feature is on by default. Of the features of `serde_json`, `tree` turns on
-`float_roundtrip` alone: the JSON of a program keeps the order that the
-program chose, and a number with a fraction is read as the nearest f64.
+No feature is on by default. `tree` turns on one feature of `serde_json`,
+`float_roundtrip`: a number with a fraction is read as the nearest f64. A tree
+keeps the members of an object in the order that the program wrote them.
 
 Until 0.1.0 is on crates.io, a program takes the crate from its repository:
 
@@ -109,7 +109,7 @@ suci-0-310-410-0-0-0-123456789: [01, 13, 00, 14, f0, ff, 00, 00, 21, 43, 65, 87,
 imsi-310410123456789
 5g-guti-310410caff81deadbeef: [f2, 13, 00, 14, ca, ff, 81, de, ad, be, ef]
 5g-s-tmsi-ff81deadbeef
-`mnc` has 1 digit, and has 2 or 3
+`mnc` has 1 digit, and must have 2 or 3
 ```
 
 ## Where each form goes
@@ -382,8 +382,8 @@ oxirush_utils::impl_serde!(Timer);
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timer = Timer { seconds: 3600 };
     println!("{}", serde_json::to_string(&timer)?);
-    print!("{}", serde_yaml::to_string(&timer)?);
-    println!("{:?}", serde_yaml::from_str::<Timer>("Seconds: 3600")?);
+    print!("{}", serde_norway::to_string(&timer)?);
+    println!("{:?}", serde_norway::from_str::<Timer>("Seconds: 3600")?);
     Ok(())
 }
 ```
@@ -399,26 +399,26 @@ Timer { seconds: 3600 }
 - It knows no codec and no message: the crates of each family do.
 - It conceals no SUCI and derives no key:
   [oxirush-security](https://github.com/linouxis9/oxirush-security) does.
-- `Supi` checks of a NAI that it has a realm and its length, not its
-  grammar, which `nai::check_realm` and `nai::check_username` check.
+- `Supi` checks that a NAI has a realm, and its length, but not its grammar:
+  `nai::check_realm` and `nai::check_username` check that.
 - A value of `identity` holds what the clauses allow. Octets that are no such
   identity stay octets in the crate that read them.
-- A tree is no faster a JSON reader than `serde_json`, on which it is built.
+- A tree is read by serde_json's parser.
 
 ## Performance
 
 The tree of the crate against a `serde_json::Value` of the default features,
-on the same JSON, and the identities, on core 2 of an AMD Ryzen 7 5700G (16
-threads, Linux 7.0, Rust 1.98.1), on a machine that ran nothing else, on
-2026-10-18. A time is the lowest of five runs of the benchmark, and the
-allocations are those of one call.
+on the same JSON, and the identities, at 8865ad4, on core 2 of an AMD Ryzen 7
+5700G (16 threads, Linux 7.0, Rust 1.98.1), on a machine that ran nothing
+else, on 2026-10-18. A time is the lowest of five runs of the benchmark, and
+the allocations are those of one call.
 
-| Operation | this crate | serde_json 1 | serde_json takes |
+| Operation | this crate | serde_json 1 | serde_json / this crate |
 |---|---|---|---|
-| Read a tree of 925 octets | 2,645 ns, 93 allocations of 6,618 octets | 2,880 ns, 72 allocations of 14,594 octets | 1.1x |
-| Write it | 923 ns, 5 allocations of 2,845 octets | 2,140 ns, 8 allocations of 2,040 octets | 2.3x |
-| Select a value of it | 219 ns, 10 allocations of 385 octets | 238 ns, 8 allocations of 64 octets | 1.1x |
-| Put 100,000 members into an object | 21.0 ms, 113,368 allocations of 17,990,994 octets | 18.6 ms, 115,460 allocations of 10,564,762 octets | 0.9x |
+| Read a tree of 925 octets | 2,645 ns, 93 allocations of 6,618 octets | 2,880 ns, 72 allocations of 14,594 octets | about the same |
+| Write it | 923 ns ±15% between builds, 5 allocations of 2,845 octets | 2,140 ns, 8 allocations of 2,040 octets | 2.3x |
+| Select a value of it | 219 ns, 10 allocations of 385 octets | 238 ns, 8 allocations of 64 octets | about the same |
+| Put 100,000 members into an object | 21.0 ms, 113,368 allocations of 17,990,994 octets | 18.6 ms, 115,460 allocations of 10,564,762 octets | 0.89x |
 | Read an object of 100,000 members, 1,088,891 octets | 14.6 ms, 109,113 allocations of 21,887,474 octets | 20.7 ms, 115,460 allocations of 10,564,762 octets | 1.4x |
 | Read a PLMN from text | 14 ns, 0 allocations of 0 octets | | |
 | Read an IMSI from text | 9 ns, 0 allocations of 0 octets | | |
@@ -426,14 +426,15 @@ allocations are those of one call.
 | Read the SUCI of an IMSI from a 5GS mobile identity | 80 ns, 2 allocations of 20 octets | | |
 | Write a PLMN in the order of NGAP | 7 ns, 0 allocations of 0 octets | | |
 
-A tree is read and written with serde_json, and keeps its members in their
-order where a `serde_json::Value` sorts them. An object of more than 256
-members keeps an index of the hashes of its names with their positions, which
-copies no name, so that an object of n members is read in a time that grows as
-n log n: about the time of serde_json for 100,000 members put one by one, and
-less to read them, with as many allocations. A smaller object, as every value
-of a protocol, is a list that is searched. The identities allocate nothing but
-the SUCI, which holds its scheme output.
+The layout of the code moves a time by up to 15% from one build of the same
+code to another: a ratio within 10%, or within the spread of the runs, is
+about the same. A tree is read and written with serde_json, and keeps the
+members of an object in their order, where a `serde_json::Value` sorts them.
+An object of more than 256 members keeps an index of the hashes of its names,
+without a copy of a name: reading n members takes a time that grows as
+n log n. A smaller object, as every value of a protocol, is a list that is
+searched. The identities allocate nothing but the SUCI, which holds its scheme
+output.
 
 ```sh
 cd benches
@@ -449,9 +450,9 @@ says how to profile one of them.
 The identities are tested against their clauses, against what Open5GS,
 free5GC and PacketRusher sent in lab runs, and against themselves: every
 value is read from the octets that it writes, and any octets are a value that
-writes them back or none. The paths hold the tests of the crates of messages
-on trees that are written out, and trees of 65,536 entries within a time
-bound. `fuzz/` has two [cargo-fuzz](https://crates.io/crates/cargo-fuzz)
+writes them back or none. The tests of oxirush-nas and oxirush-ngap on paths
+run here on trees that are written out, without a codec, and so do trees of
+65,536 entries, within a time bound. `fuzz/` has two [cargo-fuzz](https://crates.io/crates/cargo-fuzz)
 targets: `identity` reads octets and text as each identity, and `paths` takes
 any path and any edit on any tree.
 
@@ -461,11 +462,12 @@ cargo +nightly fuzz run identity -- -max_total_time=60 -max_len=64
 cargo +nightly fuzz run paths -- -max_total_time=60 -max_len=512
 ```
 
-A pull request comes with a test for what it changes; the Rust blocks of
-this page are checked with what they print
+The Rust blocks of this page are checked with what they print
 ([`tests/readme.rs`](tests/readme.rs) says how). The blocks that use other
 crates of the family run in the package of [`family/`](family/), which takes
-those crates at the revisions that its manifest names. Sign off your commits
+those crates at the revisions that its manifest names.
+
+A pull request comes with a test for what it changes. Sign off your commits
 (`git commit -s`): by contributing you agree to the [Developer Certificate
 of Origin](https://developercertificate.org/). [SECURITY.md](SECURITY.md)
 says how to report a vulnerability.

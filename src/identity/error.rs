@@ -28,7 +28,7 @@ use core::fmt;
 /// let error = Plmn::new("208", "9").unwrap_err();
 /// assert_eq!(error.member, "mnc");
 /// assert!(matches!(error.fault, Fault::Length { given: 1, min: 2, max: 3, .. }));
-/// assert_eq!(error.to_string(), "`mnc` has 1 digit, and has 2 or 3");
+/// assert_eq!(error.to_string(), "`mnc` has 1 digit, and must have 2 or 3");
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,7 +48,7 @@ pub struct Error {
 /// let error = Plmn::new("310", "4").unwrap_err();
 /// assert_eq!(error.member, "mnc");
 /// assert_eq!(error.fault, Fault::Length { given: 1, min: 2, max: 3, unit: "digits" });
-/// assert_eq!(error.to_string(), "`mnc` has 1 digit, and has 2 or 3");
+/// assert_eq!(error.to_string(), "`mnc` has 1 digit, and must have 2 or 3");
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,7 +157,7 @@ impl fmt::Display for Error {
                 // `digits` for any count but one.
                 let one = unit.strip_suffix('s').unwrap_or(unit);
                 let counted = if given == 1 { one } else { unit };
-                write!(f, "`{member}` has {given} {counted}, and has ")?;
+                write!(f, "`{member}` has {given} {counted}, and must have ")?;
                 match (min, max) {
                     (min, usize::MAX) => write!(f, "{min} at least"),
                     (min, max) if min == max => write!(f, "{min}"),
@@ -166,15 +166,15 @@ impl fmt::Display for Error {
                 }
             }
             Fault::Range { given, max } => {
-                write!(f, "`{member}` is {given}, and is {max} at most")
+                write!(f, "`{member}` is {given}, and must be {max} at most")
             }
             Fault::Value { given, expected } => {
-                write!(f, "`{member}` is {given}, and is {expected}")
+                write!(f, "`{member}` is {given}, and must be {expected}")
             }
             Fault::Character { given, expected } => {
                 write!(
                     f,
-                    "`{member}` has the character `{given}`, and has {expected}"
+                    "`{member}` has the character `{given}`, and must have {expected}"
                 )
             }
             Fault::Digit { given } => {
@@ -192,7 +192,7 @@ impl fmt::Display for Error {
             Fault::Octet { given, expected } => {
                 write!(
                     f,
-                    "`{member}` has the octet {given:#04x}, and has {expected:#04x} there"
+                    "`{member}` has the octet {given:#04x}, and must have {expected:#04x} there"
                 )
             }
             Fault::Spare { given } => {
