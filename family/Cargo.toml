@@ -11,8 +11,8 @@ license = "Apache-2.0"
 
 [dev-dependencies]
 oxirush-utils = { path = "..", features = ["serde"] }
-oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", rev = "3a0d08d445c7f2a98e901f1a517e3e11b3b40f6e", features = ["serde"] }
-oxirush-ngap = { git = "https://github.com/linouxis9/oxirush-ngap", rev = "caea608952f49dec77223bf0c9e34d1bb19071c1" }
+oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", rev = "bec263fa6ff1649f6a9b8c8be757e295be531957", features = ["serde"] }
+oxirush-ngap = { git = "https://github.com/linouxis9/oxirush-ngap", rev = "efadb90db5d4765ff546d64596c4c79a27c95a3d" }
 hex = "0.4"
 
 # Not a member of a workspace that the crate may be in.
@@ -21,5 +21,5 @@ hex = "0.4"
 # Until they are on crates.io, the crates come from their repositories.
 [patch.crates-io]
 oxirush-utils = { path = ".." }
-oxirush-aper = { git = "https://github.com/linouxis9/oxirush-aper", rev = "6252c750dde9ba669bcc3501dbf08ffec0638758" }
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "e78fc5f1436b37bbbaf02d86a4e3a3f7e33a64c1" }
+oxirush-aper = { git = "https://github.com/linouxis9/oxirush-aper", rev = "48d0bb4607f1ac11ada9966db59297a96d5ca154" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "be29c2d3f34da8f15410338dca8d6d25cf5d617b" }
