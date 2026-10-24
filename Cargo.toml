@@ -2,12 +2,12 @@
 name = "oxirush-utils"
 version = "0.1.0"
 edition = "2024"
-description = "3GPP identities as Rust values (PLMN, IMSI, IMEI, SUPI, SUCI, 5G-GUTI, GUTI, TAI) in their NAS, AP and text forms, and the JSON tree and paths that the OxiRush crates share. no_std."
+description = "3GPP identities for 5GS and EPS as Rust values (PLMN, IMSI, IMEI, SUPI, SUCI, 5G-GUTI, GUTI, TAI) in their NAS, AP and text forms, and the JSON tree and paths that the OxiRush crates share. no_std."
 license = "Apache-2.0"
 repository = "https://github.com/linouxis9/oxirush-utils"
 authors = ["Valentin D'Emmanuele"]
 rust-version = "1.88"
-keywords = ["3gpp", "5g", "lte", "imsi", "telecom"]
+keywords = ["3gpp", "5g", "lte", "imsi", "supi"]
 categories = ["network-programming", "encoding", "no-std"]
 readme = "README.md"
 # `benches/` is a package of its own, whose files are no benchmark of the crate.

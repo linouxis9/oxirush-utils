@@ -2,6 +2,10 @@
 
 All notable changes to `oxirush-utils` are recorded here.
 
+## Unreleased
+
+- The keywords take `supi` in the place of `telecom`, and the description says 5GS and EPS, as those who look for the crate search.
+
 ## 0.1.0 - 2026-10-24
 
 The first version: what the OxiRush crates share, so that each rule exists
