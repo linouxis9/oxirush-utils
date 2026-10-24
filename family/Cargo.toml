@@ -1,5 +1,5 @@
 # The blocks of the README that use other crates of the family: oxirush-utils with them,
-# at the revisions that this manifest names. A package of its own, so that the crate
+# at the versions that this manifest names. A package of its own, so that the crate
 # depends on none of them: nothing here is published. `cargo test` here runs the
 # blocks and compares what they print with the README.
 [package]
@@ -11,15 +11,13 @@ license = "Apache-2.0"
 
 [dev-dependencies]
 oxirush-utils = { path = "..", features = ["serde"] }
-oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", rev = "ddb5a07407a9176ab37cef999e812fb7c857ed81", features = ["serde"] }
-oxirush-ngap = { git = "https://github.com/linouxis9/oxirush-ngap", rev = "eeddd94e6a8671945b9df23f46ad90adb421ba22" }
+oxirush-nas = { version = "0.5", features = ["serde"] }
+oxirush-ngap = "0.5"
 hex = "0.4"
 
 # Not a member of a workspace that the crate may be in.
 [workspace]
 
-# Until they are on crates.io, the crates come from their repositories.
+# The crates of the family take this one from "..".
 [patch.crates-io]
 oxirush-utils = { path = ".." }
-oxirush-aper = { git = "https://github.com/linouxis9/oxirush-aper", rev = "48d0bb4607f1ac11ada9966db59297a96d5ca154" }
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "463c8ac61bab9a07bd3a58d2a8ef3a97c47940d4" }

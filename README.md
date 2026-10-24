@@ -435,7 +435,7 @@ cargo +nightly fuzz run paths -- -max_total_time=60 -max_len=512
 Each Rust block of this page is checked with what it prints
 ([`tests/readme.rs`](tests/readme.rs) says how). The block that uses other
 crates of the family runs in the package of [`family/`](family/), which takes
-those crates at the revisions that its manifest names.
+those crates at the versions that its manifest names.
 
 A pull request comes with a test for what it changes. Sign off your commits
 (`git commit -s`): by contributing you agree to the [Developer Certificate
