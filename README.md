@@ -396,7 +396,7 @@ Timer { seconds: 3600 }
   `nai::check_realm` and `nai::check_username` check that.
 - A value of `identity` holds what the clauses allow. Octets that are no such
   identity stay octets in the crate that reads them.
-- serde_json's parser reads a tree.
+- It has no JSON parser of its own: serde_json's reads a tree.
 
 ## Performance
 
