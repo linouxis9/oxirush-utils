@@ -47,7 +47,7 @@ pub const BLOCKS: &[fn()] = &[
 fn block_1() {
     use oxirush_utils::identity::{Guti5g, Plmn};
 
-    fn main() -> Result<(), oxirush_utils::identity::Error> {
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
         let plmn: Plmn = "310-410".parse()?;
         let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
 
@@ -66,30 +66,24 @@ fn block_1() {
 fn block_2() {
     use oxirush_utils::identity::{Guti5g, Imsi, ImsiSuci, Plmn, RoutingIndicator, Supi};
 
-    fn main() -> Result<(), oxirush_utils::identity::Error> {
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
         // An IMSI whose MNC has three digits: its PLMN and its MSIN
         let imsi = Imsi::new("310410123456789")?;
         let (plmn, msin) = (imsi.plmn(3)?, imsi.msin(3)?);
         println!("IMSI {imsi}: PLMN {plmn}, MSIN {msin}");
 
-        // The PLMN in a NAS message (TS 24.008 clause 10.5.1.3), and in an NGAP
-        // or S1AP message (TS 38.413 clause 9.3.3.5)
-        println!("{:02x?} in NAS, {:02x?} in NGAP", plmn.to_nas_octets(), plmn.to_ap_octets());
-
         // Its SUCI under the null scheme, as text and as a 5GS mobile identity,
         // and the SUPI that the SUCI gives
         let suci = ImsiSuci::null(plmn, RoutingIndicator::default(), msin)?;
         println!("{suci}: {:02x?}", suci.to_nas_octets());
-        println!("{}", Supi::from(suci.imsi().unwrap()));
+        println!("{}", Supi::from(suci.imsi().ok_or("a concealed MSIN")?));
 
         // The 5G-GUTI that an AMF assigns: AMF region, set and pointer, and the
-        // 5G-TMSI. Its octets in a 5GS mobile identity, read back, and its 5G-S-TMSI
+        // 5G-TMSI. It is read back from its octets, and has a 5G-S-TMSI
         let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
-        let octets = guti.to_nas_octets();
-        println!("{guti}: {octets:02x?}");
-        println!("{}", Guti5g::from_nas_octets(&octets)?.s_tmsi());
+        println!("{}", Guti5g::from_nas_octets(&guti.to_nas_octets())?.s_tmsi());
 
-        // What is no PLMN says which member is at fault, and why
+        // A PLMN that is not one says which member is wrong, and why
         println!("{}", Plmn::new("208", "9").unwrap_err());
         Ok(())
     }
@@ -101,7 +95,7 @@ fn block_2() {
 fn block_3() {
     use oxirush_utils::identity::{GutiEps, Imei, Imeisv, Imsi, Plmn, Tai5gs, TaiEps};
 
-    fn main() -> Result<(), oxirush_utils::identity::Error> {
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The identity digits of an IMSI in a mobile identity, after its type of identity
         let imsi = Imsi::new("208930000000001")?;
         println!("{:02x?}", imsi.to_nas_octets(1)?);
@@ -125,7 +119,7 @@ fn block_3() {
 fn block_4() {
     use oxirush_utils::identity::{NaiSuci, nai};
 
-    fn main() -> Result<(), oxirush_utils::identity::Error> {
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The example of TS 23.003 clause 28.7.3: a network specific identifier in clear
         let suci: NaiSuci = "type1.rid678.schid0.useriduser17@example.com".parse()?;
         println!("{:?} {:?} {}", suci.supi_type(), suci.clear(), suci.realm());
@@ -145,7 +139,7 @@ fn block_4() {
 fn block_5() {
     use oxirush_utils::identity::Imeisv;
 
-    fn main() -> Result<(), oxirush_utils::identity::Error> {
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
         // PacketRusher sends an IMEISV with 0000 where its end mark 1111 belongs
         let sent = [0x15, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         println!("{}", Imeisv::from_nas_octets(5, &sent).unwrap_err());
@@ -187,7 +181,7 @@ fn block_6() {
         }
     }
 
-    fn main() -> Result<(), oxirush_utils::tree::Error> {
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", tree::to_value(&Slice { sst: 1, sd: Some([0, 0, 0xff]) }));
 
         // A name is read however it is written, and octets in either case
@@ -206,7 +200,7 @@ fn block_6() {
 fn block_7() {
     use oxirush_utils::tree;
 
-    fn main() -> Result<(), oxirush_utils::tree::Error> {
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut message = tree!({
             "message-type": "registration-request",
             "requested-nssai": [{"sst": 1}, {"sst": 2, "sd": "0000ff"}],

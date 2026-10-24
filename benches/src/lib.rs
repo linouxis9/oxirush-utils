@@ -16,7 +16,7 @@
 */
 
 //! What the benchmarks of oxirush-utils measure: the operations of the table
-//! of the README, each a call on its input. The two programs of `benches/`
+//! of benches/README.md, each a call on its input. The two programs of `benches/`
 //! share them:
 //!
 //! - `tree` times each call with criterion, and profiles it with pprof;
@@ -41,7 +41,7 @@ use oxirush_utils::identity::{Guti5g, Imsi, ImsiSuci, Plmn};
 use oxirush_utils::tree::{self, Map, Value};
 use std::hint::black_box;
 
-/// One operation of one implementation: the row of the README is its
+/// One operation of one implementation: the row of benches/README.md is its
 /// `group`, and `implementation` is `oxirush-utils` or `serde_json`.
 pub struct Operation {
     pub group: &'static str,
@@ -67,7 +67,7 @@ pub const SUCI: [u8; 13] = [
     0x01, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
 ];
 
-/// The operations, in the order of the table of the README.
+/// The operations, in the order of the table of benches/README.md.
 pub fn operations() -> Vec<Operation> {
     let mut operations = Vec::new();
     let mut add = |group, implementation, long, call: Box<dyn FnMut()>| {
