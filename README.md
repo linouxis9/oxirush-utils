@@ -31,8 +31,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Each example is followed by its output.
 
-This page describes oxirush-utils 0.1.0, which is not on crates.io yet.
-
 ## Installation
 
 ```toml
@@ -54,13 +52,6 @@ oxirush-utils = { version = "0.1", features = ["alloc"] }
 No feature is on by default. `tree` turns on the `float_roundtrip` feature of
 `serde_json`, so a number with a fraction is read as the nearest f64. A tree
 keeps the members of an object in the order the program wrote them.
-
-Until 0.1.0 is on crates.io, a program takes the crate from its repository:
-
-```toml
-[dependencies]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", features = ["tree"] }
-```
 
 The minimum supported Rust version is 1.88.
 

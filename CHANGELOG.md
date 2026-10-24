@@ -2,7 +2,7 @@
 
 All notable changes to `oxirush-utils` are recorded here.
 
-## Unreleased (0.1.0)
+## 0.1.0 - 2026-10-24
 
 The first version: what the OxiRush crates share, so that each rule exists
 once.
