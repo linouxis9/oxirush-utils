@@ -379,3 +379,46 @@ fn an_object_shows_its_members_in_their_order() {
     map["b"] = tree!(2);
     assert_eq!(map.get("b"), Some(&tree!(2)));
 }
+
+#[test]
+fn a_value_is_made_from_what_it_holds_and_compares_with_it() {
+    let number = serde_json::Number::from(5);
+    let from = [
+        (Value::from(&1.5), tree!(1.5)),
+        (Value::from(&true), tree!(true)),
+        (Value::from(&"text"), tree!("text")),
+        (Value::from(&"text".to_string()), tree!("text")),
+        (Value::from(number), tree!(5)),
+        (Value::from(&tree!([1])), tree!([1])),
+        (Value::from(&[1, 2][..]), tree!([1, 2])),
+        (Value::from([3, 4]), tree!([3, 4])),
+        (Value::from(()), Value::Null),
+    ];
+    for (made, expected) in from {
+        assert_eq!(made, expected);
+    }
+    let mut members = Map::new();
+    members.insert("a".to_string(), tree!(1));
+    assert_eq!(Value::from(members.clone()), tree!({"a": 1}));
+    // A member of an object goes by its name as a `String` too
+    let mut object = tree!({"a": 1});
+    let name = "a".to_string();
+    assert_eq!(object.get(name.clone()), Some(&tree!(1)));
+    *object.get_mut(name).unwrap() = tree!(2);
+    assert_eq!(object.get("b".to_string()), None);
+    assert_eq!(object.get_mut("b".to_string()), None);
+    assert_eq!(object, tree!({"a": 2}));
+    // Through a mutable object, each member changes
+    for (_, value) in &mut members {
+        *value = tree!(9);
+    }
+    assert_eq!(members["a"], tree!(9));
+    // A string compares with a text of any of its types, on either side
+    let text = tree!("text");
+    let (same, other, one) = ("text".to_string(), "other".to_string(), "1".to_string());
+    assert!(text == same && same == text);
+    assert!(*"text" == text && "text" == text);
+    assert!(text != other && other != text);
+    assert!(*"other" != text && "other" != text);
+    assert!(tree!(1) != one);
+}
