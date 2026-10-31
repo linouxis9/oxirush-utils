@@ -1801,13 +1801,18 @@ fn an_imsi_in_the_form_of_a_nai_has_the_home_network_domain() {
 #[test]
 fn a_gli_is_base64_as_it_is_written() {
     let gli = |username: &str| format!("type2.rid0.schid0.userid{username}@operator.com");
-    for valid in ["QUJDRA==", "QUJD", "QUI=", "+/+/"] {
+    // "ABCD", "ABC", "AB" and "abc123", and the last character of each padded one
+    // a lowercase letter or a digit whose bits that no octet has are 0
+    for valid in [
+        "QUJDRA==", "QUJD", "QUI=", "+/+/", "YWJjMTIz", "QUc=", "QU0=", "QWg=",
+    ] {
         assert!(gli(valid).parse::<NaiSuci>().is_ok(), "{valid}");
     }
     let longest = "QUJD".repeat(50);
     assert!(gli(&longest).parse::<NaiSuci>().is_ok());
     for invalid in [
-        "QUJDRA=", "QUJDRB==", "QUJ=", "Q===", "QU=D", "QUJD====", "QU JD", "",
+        "QUJDRA=", "QUJDRB==", "QUJ=", "Q===", "QU=D", "QUJD====", "QU JD", "", "QUe=", "QU1=",
+        "QWh=", "QU-D",
     ] {
         assert_eq!(refused_member(&gli(invalid)), "username", "{invalid}");
     }
@@ -1989,4 +1994,82 @@ fn the_output_of_a_profile_of_ecies_has_the_lengths_of_its_parts() {
         members,
         ["supi-format", "suci", "protection-scheme", "scheme-output"]
     );
+}
+
+/// The parts of an S-TMSI and of a TAI are those that it is made of.
+#[test]
+fn an_s_tmsi_and_a_tai_give_their_parts() {
+    let s_tmsi = STmsi5g::new(0x3fe, 0x2a, 0xdead_beef).unwrap();
+    assert_eq!(
+        (s_tmsi.amf_set_id(), s_tmsi.amf_pointer(), s_tmsi.tmsi()),
+        (0x3fe, 0x2a, 0xdead_beef)
+    );
+    let s_tmsi = STmsiEps::new(0x5a, 0xcafe_f00d);
+    assert_eq!((s_tmsi.mme_code(), s_tmsi.m_tmsi()), (0x5a, 0xcafe_f00d));
+    let plmn = Plmn::new("310", "410").unwrap();
+    let tai = TaiEps::new(plmn, 0x1234);
+    assert_eq!((tai.plmn(), tai.tac()), (plmn, 0x1234));
+}
+
+/// A protection scheme shows its identifier and its name.
+#[test]
+fn a_protection_scheme_shows_its_name() {
+    let names = [
+        (ProtectionScheme::NULL, "ProtectionScheme(0: null)"),
+        (
+            ProtectionScheme::PROFILE_A,
+            "ProtectionScheme(1: profile A)",
+        ),
+        (
+            ProtectionScheme::PROFILE_B,
+            "ProtectionScheme(2: profile B)",
+        ),
+        (
+            ProtectionScheme::new(12).unwrap(),
+            "ProtectionScheme(12: of the operator)",
+        ),
+    ];
+    for (scheme, name) in names {
+        assert_eq!(format!("{scheme:?}"), name);
+    }
+}
+
+/// The faults of a tolerant reading show as their list, and two readings of the same
+/// faults are equal.
+#[test]
+fn the_faults_of_a_reading_show_and_compare_as_their_list() {
+    let spare = [
+        0xfa, 0x02, 0xf8, 0x39, 0xca, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x01,
+    ];
+    let (_, faults) = Guti5g::from_nas_octets_tolerant(&spare).unwrap();
+    let (_, again) = Guti5g::from_nas_octets_tolerant(&spare).unwrap();
+    let canonical = [
+        0xf2, 0x02, 0xf8, 0x39, 0xca, 0xfe, 0x00, 0x00, 0x00, 0x00, 0x01,
+    ];
+    let (_, none) = Guti5g::from_nas_octets_tolerant(&canonical).unwrap();
+    assert_eq!(faults, again);
+    assert_ne!(faults, none);
+    assert_eq!(format!("{faults:?}"), format!("{:?}", &faults[..]));
+    assert_eq!(format!("{none:?}"), "[]");
+}
+
+/// SUPIs are ordered and hashed by their text.
+#[test]
+fn supis_are_ordered_and_hashed_by_their_text() {
+    let first = Supi::parse("imsi-208930000000001").unwrap();
+    let second = Supi::parse("imsi-208930000000002").unwrap();
+    let nai = Supi::parse("nai-user@example.com").unwrap();
+    let set: BTreeSet<_> = [nai.clone(), second.clone(), first.clone()]
+        .into_iter()
+        .collect();
+    assert_eq!(
+        set.into_iter().collect::<Vec<_>>(),
+        [first.clone(), second.clone(), nai]
+    );
+    assert!(first < second);
+    let mut map = HashMap::new();
+    map.insert(first.clone(), 1);
+    map.insert(Supi::parse("imsi-208930000000001").unwrap(), 2);
+    map.insert(second.clone(), 3);
+    assert_eq!((map.len(), map[&first], map[&second]), (2, 2, 3));
 }
