@@ -1,0 +1,26 @@
+# What cargo-mutants 27.1.0 (https://mutants.rs) changes in the crate, and what it
+# leaves alone. .github/workflows/mutants.yml runs every mutant; here, a file or a
+# function at a time:
+#
+#     cargo mutants -f src/identity/plmn.rs
+#     cargo mutants -f src/tree/walk.rs -F 'Path::'
+#
+# The CI of the crate is the same build without debug information
+# (CARGO_PROFILE_DEV_DEBUG=0), which builds and links each mutant faster.
+
+# Every feature, so that the code of `tree`, `serde` and `idna` is in the build that
+# the tests run on: without its feature, a mutant of that code would build without
+# it and pass.
+all_features = true
+
+# Mutants with no observable difference, each with why.
+exclude_re = [
+    # The value of a digit of base64 is its code + 4 ('0' is 52): with `- b'0'`
+    # turned into `+ b'0'` it is its code + 100, which differs from it by 96, a multiple
+    # of 16. The check reads a value by its Some, and by its two or four low bits for
+    # the padding: none of them tells the two apart, and no digit overflows. It is named
+    # by its line, for the arms of the letters have mutants of the same name.
+    "src/identity/nai\\.rs:281:39: replace - with \\+ in is_gli",
+    # The value of `()` is null, which the default value is too.
+    "src/tree/value\\.rs:.*: replace <impl From<\\(\\)> for Value>::from -> Self with Default::default\\(\\)",
+]
