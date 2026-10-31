@@ -304,3 +304,78 @@ fn a_number_with_a_fraction_is_read_back_from_what_it_prints() {
         assert_eq!(read.to_string().parse::<Value>().unwrap(), read, "{text}");
     }
 }
+
+#[test]
+fn a_value_says_what_it_is_and_gives_what_it_holds() {
+    let mut values = [
+        tree!(null),
+        tree!(true),
+        tree!(7),
+        tree!(-7),
+        tree!(1.5),
+        tree!("text"),
+        tree!([1]),
+        tree!({"a": 1}),
+    ];
+    // What each one is, in the order of `values`: null, boolean, number, u64, i64,
+    // f64, string, list, object
+    let kinds = [
+        [1, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 1, 1, 0, 0, 0, 0],
+        [0, 0, 1, 0, 1, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0, 1, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 1],
+    ];
+    for (value, kind) in values.iter().zip(kinds) {
+        let is = [
+            value.is_null(),
+            value.is_boolean(),
+            value.is_number(),
+            value.is_u64(),
+            value.is_i64(),
+            value.is_f64(),
+            value.is_string(),
+            value.is_array(),
+            value.is_object(),
+        ];
+        assert_eq!(is, kind.map(|bit| bit == 1), "{value}");
+        assert_eq!(value.as_null().is_some(), kind[0] == 1, "{value}");
+        assert_eq!(value.as_number().is_some(), kind[2] == 1, "{value}");
+        assert_eq!(value.as_array().is_some(), kind[7] == 1, "{value}");
+    }
+    assert_eq!(values[1].as_bool(), Some(true));
+    assert_eq!(
+        (values[2].as_u64(), values[3].as_i64()),
+        (Some(7), Some(-7))
+    );
+    assert_eq!(values[4].as_f64(), Some(1.5));
+    assert_eq!(values[5].as_str(), Some("text"));
+    // A list and an object change through what they give
+    values[6].as_array_mut().unwrap().push(tree!(2));
+    assert_eq!(values[6], tree!([1, 2]));
+    assert_eq!(values[5].as_array_mut(), None);
+    *values[7].get_mut("a").unwrap() = tree!(2);
+    assert_eq!(values[7], tree!({"a": 2}));
+    assert_eq!(values[7].get_mut("b"), None);
+    *values[6].get_mut(0).unwrap() = tree!(0);
+    assert_eq!(values[6], tree!([0, 2]));
+    // A string compares with a text, and with nothing else
+    assert!(values[5] == *"text" && values[5] != *"other");
+    assert!(values[2] != *"7");
+}
+
+#[test]
+fn an_object_shows_its_members_in_their_order() {
+    let mut map = Map::new();
+    map.insert("b".to_string(), tree!(1));
+    map.insert("a".to_string(), tree!([true]));
+    assert_eq!(
+        format!("{map:?}"),
+        r#"{"b": Number(1), "a": Array [Bool(true)]}"#
+    );
+    map["b"] = tree!(2);
+    assert_eq!(map.get("b"), Some(&tree!(2)));
+}
