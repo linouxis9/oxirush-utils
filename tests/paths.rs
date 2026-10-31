@@ -1573,3 +1573,39 @@ fn a_written_value_is_compared_as_the_tree_shows_it_at_its_place() {
     let plain = tree::select_forms_in(&Plain, &pdu, "/message/protocolIEs/0/value").unwrap();
     assert_eq!(plain, [(&tree!("c0"), Form::Plain)]);
 }
+
+/// A member that is listed in the place of the value that holds it lists what it holds
+/// there, and nothing when it is an object or a list with nothing in it: its own value
+/// is not one at that place.
+#[test]
+fn a_member_listed_through_its_holder_lists_what_it_holds_there() {
+    struct Through;
+    impl tree::Family for Through {
+        type Shape = ();
+        fn listed(&self, _: &(), name: &str) -> tree::Listed {
+            match name {
+                "value" => tree::Listed::Through,
+                _ => tree::Listed::Member,
+            }
+        }
+    }
+    let tree = tree!({
+        "a": {"value": {"b": 1, "c": {"d": 2}}},
+        "e": {"value": {}},
+        "f": {"value": []},
+        "g": {"value": 3},
+        "h": {"value": [{"i": 4}]},
+    });
+    let paths: Vec<(String, Value)> = tree::paths_in(&Through, &tree);
+    let expected = [
+        ("/a/b", tree!(1)),
+        ("/a/c/d", tree!(2)),
+        ("/g", tree!(3)),
+        ("/h/0/i", tree!(4)),
+    ];
+    let expected: Vec<(String, Value)> = expected
+        .into_iter()
+        .map(|(path, value)| (path.to_string(), value))
+        .collect();
+    assert_eq!(paths, expected);
+}

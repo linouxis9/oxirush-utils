@@ -441,3 +441,25 @@ fn a_name_that_a_type_has_not_is_refused_with_the_nearest_of_many() {
     );
     assert_eq!(nearest(&NAMES, "partial handover", 3), ["partial-handover"]);
 }
+
+/// A value that is `null`, as the NULL of ASN.1 is written, is read from `null` alone.
+#[test]
+fn a_null_is_read_from_null_alone() {
+    #[derive(Debug, PartialEq)]
+    struct Nothing;
+    impl Tree for Nothing {
+        const NAME: &'static str = "Nothing";
+        fn to_tree(&self) -> Value {
+            Value::Null
+        }
+        fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+            reading.null(value).map(|()| Nothing)
+        }
+    }
+    assert_eq!(tree::from_value::<Nothing>(&Value::Null).unwrap(), Nothing);
+    for written in [tree!(0), tree!(false), tree!({}), tree!("null")] {
+        let error = tree::from_value::<Nothing>(&written).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Value, "{written}");
+        assert!(error.reason().contains("null is expected"), "{error}");
+    }
+}
