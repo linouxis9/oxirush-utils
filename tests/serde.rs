@@ -269,3 +269,54 @@ fn a_refusal_of_a_secret_shows_nothing_of_what_is_written() {
         [0x5a; 32]
     );
 }
+
+/// A format that writes a value as `deserialize_any` gives it: whole numbers of 128
+/// bits, which a tree holds when 64 bits do, and an option as such, as RON writes one.
+#[test]
+fn a_tree_reads_the_numbers_of_128_bits_and_the_options_of_a_format() {
+    use serde_core::Deserialize;
+    use serde_core::de::value::{BytesDeserializer, Error};
+    use serde_core::de::{IntoDeserializer, Visitor};
+
+    let read = |number: i128| Value::deserialize(number.into_deserializer());
+    assert_eq!(read(-5).unwrap(), oxirush_utils::tree!(-5));
+    assert_eq!(
+        read(u64::MAX.into()).unwrap(),
+        oxirush_utils::tree!(u64::MAX)
+    );
+    for wide in [i128::from(u64::MAX) + 1, i128::from(i64::MIN) - 1] {
+        let error: Error = read(wide).unwrap_err();
+        assert_eq!(error.to_string(), "a number that 64 bits do not hold");
+    }
+    let read = |number: u128| Value::deserialize(number.into_deserializer());
+    assert_eq!(read(7).unwrap(), oxirush_utils::tree!(7));
+    let error: Error = read(u128::from(u64::MAX) + 1).unwrap_err();
+    assert_eq!(error.to_string(), "a number that 64 bits do not hold");
+
+    struct Optional(Option<i64>);
+    impl<'de> serde_core::Deserializer<'de> for Optional {
+        type Error = Error;
+        fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
+            match self.0 {
+                None => visitor.visit_none(),
+                Some(number) => visitor.visit_some(number.into_deserializer()),
+            }
+        }
+        serde_core::forward_to_deserialize_any! {
+            bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string bytes
+            byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct map
+            struct enum identifier ignored_any
+        }
+    }
+    assert_eq!(Value::deserialize(Optional(None)).unwrap(), Value::Null);
+    assert_eq!(
+        Value::deserialize(Optional(Some(3))).unwrap(),
+        oxirush_utils::tree!(3)
+    );
+    // What no tree holds is refused, with what a tree is
+    let error: Error = Value::deserialize(BytesDeserializer::new(b"ab")).unwrap_err();
+    assert!(
+        error.to_string().ends_with("expected a JSON value"),
+        "{error}"
+    );
+}
