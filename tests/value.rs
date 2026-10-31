@@ -45,6 +45,16 @@ fn two_trees_are_equal_whatever_the_order_of_their_members() {
         serde_json::json!({"a": [true], "b": 1})
     );
     assert_eq!(serde_json::json!({"a": null}), tree!({"a": null}));
+    // Lists and objects of one length and other contents, and of other lengths
+    for (tree, json) in [
+        (tree!([1, 2]), serde_json::json!([1, 3])),
+        (tree!([1]), serde_json::json!([1, 1])),
+        (tree!({"a": 1}), serde_json::json!({"a": 2})),
+        (tree!({"a": 1}), serde_json::json!({"a": 1, "b": 1})),
+    ] {
+        assert_ne!(tree, json);
+        assert_ne!(json, tree);
+    }
     assert_eq!(tree!(7), 7);
     assert_eq!(tree!(-7), -7i64);
     assert_eq!(tree!("x"), "x");
@@ -255,6 +265,10 @@ fn a_tree_is_indexed_as_a_value_of_serde_json_is() {
     assert_eq!(tree["ies"][0]["id"], 10);
     assert_eq!(tree["ies"][7]["id"], Value::Null);
     assert_eq!(tree["none"], Value::Null);
+    let Value::Object(members) = &tree else {
+        unreachable!()
+    };
+    assert!(members.contains_key("ies") && !members.contains_key("none"));
     assert_eq!(
         tree.get("ies").and_then(|ies| ies.get(0)),
         Some(&tree!({"id": 10, "value": "x"}))

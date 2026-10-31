@@ -463,3 +463,11 @@ fn a_null_is_read_from_null_alone() {
         assert!(error.reason().contains("null is expected"), "{error}");
     }
 }
+
+/// A name is near another by the letters that are added, taken out or changed: three
+/// taken out of a name of six are too many.
+#[test]
+fn letters_taken_out_at_the_start_count_as_edits() {
+    assert_eq!(tree::nearest(&["abc"], "xxabc", 1), ["abc"]);
+    assert!(tree::nearest(&["abc"], "xxxabc", 1).is_empty());
+}

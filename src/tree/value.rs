@@ -1229,3 +1229,34 @@ impl<'de> serde_core::de::Visitor<'de> for Visitor {
         Ok(Value::Object(Map::from_members(members)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An object of the members "0" to `count - 1`, each null.
+    fn object(count: usize) -> Map {
+        let mut map = Map::new();
+        for name in 0..count {
+            map.insert(name.to_string(), Value::Null);
+        }
+        map
+    }
+
+    #[test]
+    fn an_object_has_an_index_while_it_has_more_than_indexed_members() {
+        assert!(object(INDEXED).index.is_none());
+        assert!(object(INDEXED + 1).index.is_some());
+        let mut map = object(INDEXED + 2);
+        assert!(map.index.is_some());
+        // A member taken out leaves INDEXED + 1, and the index, which still finds each
+        assert_eq!(map.shift_remove("0"), Some(Value::Null));
+        assert!(map.index.is_some());
+        assert_eq!(map.position("1"), Some(0));
+        assert_eq!(map.position(&(INDEXED + 1).to_string()), Some(INDEXED));
+        // Another leaves INDEXED, and no index
+        assert_eq!(map.shift_remove("1"), Some(Value::Null));
+        assert!(map.index.is_none());
+        assert_eq!(map.position("2"), Some(0));
+    }
+}

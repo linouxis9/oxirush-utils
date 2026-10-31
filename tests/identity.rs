@@ -2073,3 +2073,165 @@ fn supis_are_ordered_and_hashed_by_their_text() {
     map.insert(second.clone(), 3);
     assert_eq!((map.len(), map[&first], map[&second]), (2, 2, 3));
 }
+
+/// The realm is refused by the grammar of RFC 7542 itself, which says why, before any
+/// other rule: its length, then each label.
+#[test]
+fn a_realm_says_whether_its_length_or_a_label_is_at_fault() {
+    let long = format!("{0}.{0}.{0}.{1}.com", "a".repeat(63), "a".repeat(58));
+    assert_eq!(long.len(), 254);
+    for (realm, given) in [(long.as_str(), 254), ("", 0)] {
+        let error = nai::check_realm(realm).unwrap_err();
+        let fault = Fault::Length {
+            given,
+            min: 1,
+            max: 253,
+            unit: "octets",
+        };
+        assert_eq!(error.fault, fault, "{realm:?}");
+    }
+    for realm in [format!("{}.com", "a".repeat(64)), "-bad.example".into()] {
+        let error = nai::check_realm(&realm).unwrap_err();
+        assert!(
+            matches!(error.fault, Fault::Form { expected } if expected.starts_with("a domain name of two")),
+            "{realm}: {error:?}"
+        );
+    }
+}
+
+/// Each field of a SUCI in the form of a NAI that is missing says how it is written, and
+/// a ciphertext of another length how long it is.
+#[test]
+fn a_missing_field_of_a_nai_says_how_it_is_written() {
+    let key = "42".repeat(32);
+    for (text, error) in [
+        (
+            "type1@example.com".to_string(),
+            "`rid` is written as rid and the routing indicator, as rid678",
+        ),
+        (
+            "type1.rid678.schid1@example.com".into(),
+            "`hnkey` is written as hnkey and the key identifier in decimal, as hnkey27",
+        ),
+        (
+            format!("type1.rid678.schid1.hnkey27.ecckey{key}.cipaabb@example.com"),
+            "`mac` is written as mac and the 8 octets of the MAC tag in hexadecimal digits",
+        ),
+        (
+            format!(
+                "type1.rid678.schid1.hnkey27.ecckey{key}.cipaab.mac0011223344556677@example.com"
+            ),
+            "`cip` is written as 1 to 253 octets",
+        ),
+    ] {
+        assert_eq!(
+            text.parse::<NaiSuci>().unwrap_err().to_string(),
+            error,
+            "{text}"
+        );
+    }
+}
+
+/// The longest NAI is refused for what it says, and one octet more for its length, as
+/// text and as a mobile identity.
+#[test]
+fn a_nai_of_the_longest_length_is_read_and_one_longer_is_not() {
+    // 29 octets before the scheme output, then the output, @ and 12 octets of realm:
+    // 6824 octets, of which the output, of 3391 octets, is too long
+    let text = |digits: usize| {
+        format!(
+            "type1.rid0.schid12.hnkey1.out{}@examples.com",
+            "a".repeat(digits)
+        )
+    };
+    assert_eq!(text(6782).len(), 6824);
+    assert_eq!(refused_member(&text(6782)), "out");
+    assert_eq!(refused_member(&text(6784)), "nai");
+    let octets = nas(1, &text(6782));
+    assert_eq!(
+        NaiSuci::from_nas_octets_tolerant(&octets)
+            .unwrap_err()
+            .member,
+        "out"
+    );
+    // A mobile identity that is one, with no fault
+    let suci = nai_suci("type1.rid678.schid0.useriduser17@example.com");
+    let tolerated = NaiSuci::from_nas_octets_tolerant(&suci.to_nas_octets().unwrap()).unwrap();
+    assert_eq!(tolerated.0, suci);
+    assert_eq!(format!("{:?}", tolerated.1), "[]");
+    // One of another type of identity says the octet of type 001
+    let error = NaiSuci::from_nas_octets_tolerant(&[0x12, b'a']).unwrap_err();
+    assert_eq!(
+        error.fault,
+        Fault::Octet {
+            given: 0x12,
+            expected: 0x11
+        }
+    );
+}
+
+/// The realm of the SUCI of an IMSI is a home network domain, with the NID of an SNPN of
+/// 11 hexadecimal digits, the first 0 to 2, or without one (TS 23.003 clauses 12.7 and
+/// 28.7.3).
+#[test]
+fn the_nid_of_a_home_network_domain_has_eleven_digits() {
+    let suci = |realm: &str| format!("type0.rid678.schid0.userid0000000001@{realm}");
+    let domain = |nid: &str| format!("5gc.{nid}mnc093.mcc208.3gppnetwork.org");
+    for nid in ["", "nid000007ed9d5."] {
+        assert!(suci(&domain(nid)).parse::<NaiSuci>().is_ok(), "{nid}");
+    }
+    for nid in ["nid1234.", "nid300007ed9d5.", "nid000007ed9dz."] {
+        assert_eq!(refused_member(&suci(&domain(nid))), "realm", "{nid}");
+    }
+}
+
+/// The scheme output of a profile of ECIES is its ephemeral public key, 1 to 253 octets of
+/// ciphertext and the MAC tag of 8 (TS 33.501 annex C.3).
+#[test]
+fn a_scheme_output_of_a_profile_has_a_ciphertext_of_1_to_253_octets() {
+    let concealed = |length: usize| {
+        NaiSuci::concealed(
+            SupiType::NetworkSpecific,
+            RoutingIndicator::new("678").unwrap(),
+            ProtectionScheme::PROFILE_A,
+            27,
+            vec![0x42; length],
+            "example.com",
+        )
+    };
+    // The key of profile A has 32 octets
+    for length in [32 + 1 + 8, 32 + 253 + 8] {
+        assert!(concealed(length).is_ok(), "{length}");
+    }
+    for length in [32 + 8, 32 + 254 + 8] {
+        assert_eq!(
+            concealed(length).unwrap_err().member,
+            "scheme-output",
+            "{length}"
+        );
+    }
+}
+
+/// The MME code of a GUTI of EPS, a routing indicator read from its text, and SUPIs of
+/// one type and other identities, which hash apart.
+#[test]
+fn the_parts_of_an_eps_guti_and_of_a_supi() {
+    let guti = GutiEps::new(Plmn::new("310", "410").unwrap(), 0x8001, 0x02, 7);
+    assert_eq!(
+        (guti.mme_group_id(), guti.mme_code(), guti.m_tmsi()),
+        (0x8001, 0x02, 7)
+    );
+    assert_eq!(
+        "678".parse::<RoutingIndicator>(),
+        RoutingIndicator::new("678")
+    );
+    let hash = |supi: &Supi| {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        supi.hash(&mut hasher);
+        hasher.finish()
+    };
+    let first = Supi::parse("imsi-208930000000001").unwrap();
+    let second = Supi::parse("imsi-208930000000002").unwrap();
+    assert_ne!(hash(&first), hash(&second));
+}

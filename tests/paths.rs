@@ -1609,3 +1609,58 @@ fn a_member_listed_through_its_holder_lists_what_it_holds_there() {
         .collect();
     assert_eq!(paths, expected);
 }
+
+/// A family is told which segment is the last of its path, and steps into a null that is
+/// a value as into any other value without members.
+#[test]
+fn a_family_knows_the_last_segment_and_a_null_value_has_no_member() {
+    struct Lasts(std::cell::RefCell<Vec<bool>>);
+    impl Family for Lasts {
+        type Shape = ();
+        fn step<'v>(
+            &self,
+            _: &Place<'v, ()>,
+            _: &str,
+            next: &mut Next<'v, ()>,
+        ) -> Result<Step<()>, Error> {
+            self.0.borrow_mut().push(next.is_last());
+            Ok(Step::Plain)
+        }
+    }
+    let lasts = Lasts(Default::default());
+    let tree = tree!({"a": {"b": 1}});
+    assert_eq!(tree::select_in(&lasts, &tree, "/a/b"), Ok(vec![&tree!(1)]));
+    assert_eq!(lasts.0.into_inner(), [false, true]);
+
+    // A NULL of ASN.1 has no member, as a number has none; a null elsewhere is absent
+    let tree = tree!({"areaScope": {"pLMNWide": null}, "t3512": null});
+    let error = tree::select_in(&Typed, &tree, "/areaScope/pLMNWide/x").unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Scalar);
+    assert_eq!(tree::select_in(&Typed, &tree, "/t3512/x"), Ok(vec![]));
+}
+
+/// An edit of a place that the edit of another place took out first is refused, and the
+/// tree is as it was.
+#[test]
+fn an_edit_of_a_place_that_is_gone_is_refused_and_undone() {
+    struct Twice;
+    impl Family for Twice {
+        type Shape = ();
+        fn step<'v>(
+            &self,
+            place: &Place<'v, ()>,
+            _: &str,
+            next: &mut Next<'v, ()>,
+        ) -> Result<Step<()>, Error> {
+            let entry = &place.value().and_then(Value::as_array).unwrap()[1];
+            next.entry(1, entry, ());
+            next.entry(1, entry, ());
+            Ok(Step::Taken)
+        }
+    }
+    let before = tree!(["a", "b"]);
+    let mut tree = before.clone();
+    let error = tree::remove_in(&Twice, &mut tree, "/1").unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::NothingSelected);
+    assert_eq!(tree, before);
+}
