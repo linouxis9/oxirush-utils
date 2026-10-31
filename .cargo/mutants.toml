@@ -23,4 +23,29 @@ exclude_re = [
     "src/identity/nai\\.rs:281:39: replace - with \\+ in is_gli",
     # The value of `()` is null, which the default value is too.
     "src/tree/value\\.rs:.*: replace <impl From<\\(\\)> for Value>::from -> Self with Default::default\\(\\)",
+    # And so is what `visit_none` gives.
+    "src/tree/value\\.rs:.*: replace <impl serde_core::de::Visitor<'de> for Visitor>::visit_none -> Result<Value, E> with Ok\\(Default::default\\(\\)\\)",
+    # Fields of distinct bits of an octet or of a number, each kept to its own by a
+    # check before: `^` joins them as `|` does. The first digit, the odd/even indication
+    # and a type of identity of 7 at most; the digits of a PLMN, each of 4 bits; the AMF
+    # region ID above the 48 bits of a 5G-S-TMSI; the SUPI format above the type of
+    # identity 001; two hexadecimal digits.
+    "src/identity/digits\\.rs:.*: replace \\| with \\^ in (encode|read)$",
+    "src/identity/plmn\\.rs:.*: replace \\| with \\^ in Plmn::to_ap_octets$",
+    "src/identity/guti\\.rs:.*: replace \\| with \\^ in <impl fmt::Display for Guti5g>::fmt$",
+    "src/identity/nai\\.rs:.*: replace \\| with \\^ in (NaiSuci::to_nas_octets|octets)$",
+    # The derived PartialOrd of `Supi`, which derives Ord too, is `Some(Ord::cmp)`: the
+    # `partial_cmp` of `Text`, which is private, is called by nothing.
+    "src/identity/supi\\.rs:.*: replace <impl PartialOrd for Text<'_>>::partial_cmp -> Option<core::cmp::Ordering> with None",
+    # An object of INDEXED members that gets one more by `push_indexed` is reindexed with
+    # `>=` as it is not with `>`: `reindex` makes no index for INDEXED members.
+    "src/tree/value\\.rs:.*: replace > with >= in Map::push_indexed$",
+    # And `push` that takes `push_indexed` for fewer than INDEXED members, with `>` for
+    # `<`, does what it does: the member is added, and no index is made for so few.
+    "src/tree/value\\.rs:.*: replace < with > in Map::push$",
+    # The defaults of the methods of `Family` are what their mutants give: the default
+    # shape, no names, nothing done.
+    "src/tree/walk\\.rs:.*: replace Family::(start|entry) -> Self::Shape with Default::default\\(\\)$",
+    "src/tree/walk\\.rs:.*: replace Family::entry_names -> Option<Vec<Option<String>>> with None$",
+    "src/tree/walk\\.rs:.*: replace Family::edited with \\(\\)$",
 ]
