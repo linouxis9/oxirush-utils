@@ -92,6 +92,8 @@ fn a_name_is_its_letters_and_its_digits() {
         assert_eq!(tree::named(&names, written), Some(position), "{written}");
     }
     assert_eq!(tree::named(&names, "nssai"), None);
+    assert_eq!(tree::named(&["ab"], "abc"), None);
+    assert_eq!(tree::named(&["a-b"], "axb"), None);
     assert_eq!(tree::named::<&str>(&[], "x"), None);
     let object = tree!({"5gmm-cause": 1, "5GMM Cause": 2});
     let members = object.as_object().unwrap();
@@ -323,6 +325,11 @@ fn a_refusal_says_the_member_and_why() {
         refused(&|tree| tree["kind"] = tree!(1)),
         value("kind", "a name is expected, and 1 is written")
     );
+    // `false` is a name only where the type has it
+    assert_eq!(
+        refused(&|tree| tree["kind"] = tree!(false)),
+        value("kind", "a name is expected, and false is written")
+    );
     // A string of bits has the octets of its length, and zero bits after it.
     assert_eq!(
         refused(&|tree| tree["mask"] = tree!({"value": "c0", "length": 9})),
@@ -332,6 +339,14 @@ fn a_refusal_says_the_member_and_why() {
         refused(&|tree| tree["mask"] = tree!({"value": "c1", "length": 3})),
         value("mask", "the bits after the 3 of the string are not zero")
     );
+    // The four bits after 12, whichever of them is set
+    for last in ["fff8", "ffe2"] {
+        assert_eq!(
+            refused(&|tree| tree["mask"] = tree!({"value": last, "length": 12})),
+            value("mask", "the bits after the 12 of the string are not zero"),
+            "{last}"
+        );
+    }
     // Where in a list, and in an alternative.
     assert_eq!(
         refused(&|tree| tree["list"] = tree!([1, 256, 3])),

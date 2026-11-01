@@ -2051,6 +2051,9 @@ fn the_faults_of_a_reading_show_and_compare_as_their_list() {
     assert_ne!(faults, none);
     assert_eq!(format!("{faults:?}"), format!("{:?}", &faults[..]));
     assert_eq!(format!("{none:?}"), "[]");
+    // And as a list of errors of its length
+    let fault = faults[0];
+    assert!(faults == [fault] && none != [fault]);
 }
 
 /// SUPIs are ordered and hashed by their text.
@@ -2110,8 +2113,16 @@ fn a_missing_field_of_a_nai_says_how_it_is_written() {
             "`rid` is written as rid and the routing indicator, as rid678",
         ),
         (
+            "type1.rid678@example.com".into(),
+            "`schid` is written as schid and the protection scheme in decimal, as schid0",
+        ),
+        (
             "type1.rid678.schid1@example.com".into(),
             "`hnkey` is written as hnkey and the key identifier in decimal, as hnkey27",
+        ),
+        (
+            format!("type1.rid678.schid1.hnkey27.ecckey{key}.cipaabb.mac00112233@example.com"),
+            "`mac` is written as 8 octets",
         ),
         (
             format!("type1.rid678.schid1.hnkey27.ecckey{key}.cipaabb@example.com"),
@@ -2234,4 +2245,21 @@ fn the_parts_of_an_eps_guti_and_of_a_supi() {
     let first = Supi::parse("imsi-208930000000001").unwrap();
     let second = Supi::parse("imsi-208930000000002").unwrap();
     assert_ne!(hash(&first), hash(&second));
+}
+
+/// TS 23.003 annex B: the check digit of an IMEI doubles each second digit of the 14.
+#[test]
+fn the_check_digit_of_an_imei_doubles_each_second_digit() {
+    let imei = Imei::with_check_digit("35209900176148").unwrap();
+    assert_eq!(imei.as_str(), "352099001761481");
+    assert!(imei.has_check_digit());
+}
+
+/// The AMF pointer of a 5G-GUTI, and a username of 253 octets, the longest.
+#[test]
+fn a_guti_has_its_amf_pointer_and_a_username_253_octets() {
+    let guti = Guti5g::new(Plmn::new("208", "93").unwrap(), 0xca, 0x3f8, 0x25, 1).unwrap();
+    assert_eq!(guti.amf_pointer(), 0x25);
+    assert!(nai::check_username(&"a".repeat(253)).is_ok());
+    assert!(nai::check_username(&"a".repeat(254)).is_err());
 }

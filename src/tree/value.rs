@@ -1247,6 +1247,18 @@ mod tests {
     fn an_object_has_an_index_while_it_has_more_than_indexed_members() {
         assert!(object(INDEXED).index.is_none());
         assert!(object(INDEXED + 1).index.is_some());
+        // Made at once of its members, the same
+        let members = |count: usize| (0..count).map(|name| (name.to_string(), Value::Null));
+        assert!(
+            Map::from_members(members(INDEXED).collect())
+                .index
+                .is_none()
+        );
+        assert!(
+            Map::from_members(members(INDEXED + 1).collect())
+                .index
+                .is_some()
+        );
         let mut map = object(INDEXED + 2);
         assert!(map.index.is_some());
         // A member taken out leaves INDEXED + 1, and the index, which still finds each

@@ -1664,3 +1664,43 @@ fn an_edit_of_a_place_that_is_gone_is_refused_and_undone() {
     assert_eq!(error.kind(), ErrorKind::NothingSelected);
     assert_eq!(tree, before);
 }
+
+/// A name that an object does not have is refused with its names: twelve at most, and
+/// `…` for more.
+#[test]
+fn a_missing_name_is_refused_with_twelve_names_at_most() {
+    let object = |count: usize| {
+        let mut members = tree::Map::new();
+        for name in 0..count {
+            members.insert(format!("m{name}"), tree!(1));
+        }
+        Value::Object(members)
+    };
+    let reason = |count| {
+        tree::select(&object(count), "/x")
+            .unwrap_err()
+            .reason()
+            .to_string()
+    };
+    assert!(!reason(12).contains('…'), "{}", reason(12));
+    assert!(reason(13).contains('…'), "{}", reason(13));
+}
+
+/// A family that takes a segment through members without an end is refused.
+#[test]
+fn a_family_that_goes_through_members_without_an_end_is_refused() {
+    struct Endless;
+    impl Family for Endless {
+        type Shape = ();
+        fn step<'v>(
+            &self,
+            _: &Place<'v, ()>,
+            _: &str,
+            _: &mut Next<'v, ()>,
+        ) -> Result<Step<()>, Error> {
+            Ok(Step::Through("inner".into(), ()))
+        }
+    }
+    let error = tree::select_in(&Endless, &tree!({"a": 1}), "/a").unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Refused);
+}

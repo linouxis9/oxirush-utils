@@ -31,8 +31,14 @@ exclude_re = [
     # region ID above the 48 bits of a 5G-S-TMSI; the SUPI format above the type of
     # identity 001; two hexadecimal digits.
     "src/identity/digits\\.rs:.*: replace \\| with \\^ in (encode|read)$",
-    "src/identity/plmn\\.rs:.*: replace \\| with \\^ in Plmn::to_ap_octets$",
-    "src/identity/guti\\.rs:.*: replace \\| with \\^ in <impl fmt::Display for Guti5g>::fmt$",
+    "src/identity/plmn\\.rs:.*: replace \\| with \\^ in Plmn::to_(ap|nas)_octets$",
+    "src/identity/guti\\.rs:.*: replace \\| with \\^ in (<impl fmt::Display for Guti(5g|Eps)>::fmt|STmsi(5g|Eps)::to_u64)$",
+    "src/tree/forms\\.rs:74:28: replace \\| with \\^ in unhex$",
+    # A digit shifted into the high half of an octet: `+ b'0'` for `- b'0'` adds 96, a
+    # multiple of 16, which the shift takes out. And the Luhn sum of the check digit is
+    # read modulo 10, to which a doubled digit `% 10` and `+ 10` add the same.
+    "src/identity/digits\\.rs:(140:28|142:61): replace - with \\+ in encode$",
+    "src/identity/digits\\.rs:494:45: replace % with \\+ in check_digit$",
     "src/identity/nai\\.rs:.*: replace \\| with \\^ in (NaiSuci::to_nas_octets|octets)$",
     # The derived PartialOrd of `Supi`, which derives Ord too, is `Some(Ord::cmp)`: the
     # `partial_cmp` of `Text`, which is private, is called by nothing.
@@ -46,6 +52,11 @@ exclude_re = [
     # The defaults of the methods of `Family` are what their mutants give: the default
     # shape, no names, nothing done.
     "src/tree/walk\\.rs:.*: replace Family::(start|entry) -> Self::Shape with Default::default\\(\\)$",
-    "src/tree/walk\\.rs:.*: replace Family::entry_names -> Option<Vec<Option<String>>> with None$",
+    "src/tree/walk\\.rs:.*: replace Family::entry_names -> Option<Vec<Option<String>>> with (None|Some\\(vec!\\[\\]\\))$",
     "src/tree/walk\\.rs:.*: replace Family::edited with \\(\\)$",
+    # Room made for no member rather than for some: the members are the same.
+    "src/tree/value\\.rs:.*: replace Map::with_capacity -> Self with Default::default\\(\\)$",
+    # A family that opens a value where the edit is not to open one is refused by `walk`
+    # too, with the same kind and the same reason, before anything changes.
+    "src/tree/walk\\.rs:.*: replace match guard !next.opened.is_empty\\(\\) && next.edit != Some\\(Edit::Open\\) with false in advance$",
 ]
