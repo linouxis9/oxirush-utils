@@ -54,6 +54,18 @@ fn octets_are_hexadecimal_in_lower_case_and_are_read_in_either() {
         );
         assert_eq!(text, hex::encode(&octets));
     }
+    // At a place of octets, what someone wrote is in lower case when it is octets, and
+    // as it was written when it is not.
+    assert_eq!(
+        tree::written_as(tree::Form::Octets, &tree!("02F8")),
+        tree!("02f8")
+    );
+    for text in ["XY", "02F", "0x02"] {
+        assert_eq!(
+            tree::written_as(tree::Form::Octets, &tree!(text)),
+            tree!(text)
+        );
+    }
 }
 
 /// oxirush-ngap `a_name_is_the_same_whatever_its_case_and_what_is_between_its_letters`,

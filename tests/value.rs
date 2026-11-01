@@ -407,6 +407,8 @@ fn a_value_is_made_from_what_it_holds_and_compares_with_it() {
         (Value::from(&[1, 2][..]), tree!([1, 2])),
         (Value::from([3, 4]), tree!([3, 4])),
         (Value::from(()), Value::Null),
+        (Value::from(Some(7)), tree!(7)),
+        (Value::from(None::<u8>), Value::Null),
     ];
     for (made, expected) in from {
         assert_eq!(made, expected);

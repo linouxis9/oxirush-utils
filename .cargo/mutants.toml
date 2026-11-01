@@ -23,17 +23,21 @@ exclude_re = [
     "src/identity/nai\\.rs:281:39: replace - with \\+ in is_gli",
     # The value of `()` is null, which the default value is too.
     "src/tree/value\\.rs:.*: replace <impl From<\\(\\)> for Value>::from -> Self with Default::default\\(\\)",
-    # And so is what `visit_none` gives.
-    "src/tree/value\\.rs:.*: replace <impl serde_core::de::Visitor<'de> for Visitor>::visit_none -> Result<Value, E> with Ok\\(Default::default\\(\\)\\)",
+    # And so is what `visit_none` and `visit_unit` give.
+    "src/tree/value\\.rs:.*: replace <impl serde_core::de::Visitor<'de> for Visitor>::visit_(none|unit) -> Result<Value, E> with Ok\\(Default::default\\(\\)\\)",
     # Fields of distinct bits of an octet or of a number, each kept to its own by a
     # check before: `^` joins them as `|` does. The first digit, the odd/even indication
     # and a type of identity of 7 at most; the digits of a PLMN, each of 4 bits; the AMF
     # region ID above the 48 bits of a 5G-S-TMSI; the SUPI format above the type of
-    # identity 001; two hexadecimal digits.
-    "src/identity/digits\\.rs:.*: replace \\| with \\^ in (encode|read)$",
+    # identity 001; two hexadecimal digits; a TBCD character of 4 bits above another; the
+    # digits of a routing indicator, each of 4 bits; the type of identity of a SUCI below
+    # the four high bits of the first octet.
+    "src/identity/digits\\.rs:.*: replace \\| with \\^ in ((tbcd::)?encode|read)$",
     "src/identity/plmn\\.rs:.*: replace \\| with \\^ in Plmn::to_(ap|nas)_octets$",
     "src/identity/guti\\.rs:.*: replace \\| with \\^ in (<impl fmt::Display for Guti(5g|Eps)>::fmt|STmsi(5g|Eps)::to_u64)$",
     "src/tree/forms\\.rs:74:28: replace \\| with \\^ in unhex$",
+    "src/identity/suci\\.rs:.*: replace \\| with \\^ in RoutingIndicator::to_nas_octets$",
+    "src/identity/nai\\.rs:674:40: replace \\| with \\^ in NaiSuci::from_nas_octets_tolerant$",
     # A digit shifted into the high half of an octet: `+ b'0'` for `- b'0'` adds 96, a
     # multiple of 16, which the shift takes out. And the Luhn sum of the check digit is
     # read modulo 10, to which a doubled digit `% 10` and `+ 10` add the same.
@@ -50,10 +54,13 @@ exclude_re = [
     # `<`, does what it does: the member is added, and no index is made for so few.
     "src/tree/value\\.rs:.*: replace < with > in Map::push$",
     # The defaults of the methods of `Family` are what their mutants give: the default
-    # shape, no names, nothing done.
-    "src/tree/walk\\.rs:.*: replace Family::(start|entry) -> Self::Shape with Default::default\\(\\)$",
-    "src/tree/walk\\.rs:.*: replace Family::entry_names -> Option<Vec<Option<String>>> with (None|Some\\(vec!\\[\\]\\))$",
+    # shape, no names, a null that is no value, nothing done.
+    "src/tree/walk\\.rs:.*: replace Family::(start|entry|member) -> Self::Shape with Default::default\\(\\)$",
+    "src/tree/walk\\.rs:.*: replace Family::null_is_value -> bool with false$",
     "src/tree/walk\\.rs:.*: replace Family::edited with \\(\\)$",
+    # And no names, a list of none or a list of one `None`: `paths` names an entry by
+    # its position where the list of names has no name at its position.
+    "src/tree/walk\\.rs:.*: replace Family::entry_names -> Option<Vec<Option<String>>> with (None|Some\\(vec!\\[(None)?\\]\\))$",
     # Room made for no member rather than for some: the members are the same.
     "src/tree/value\\.rs:.*: replace Map::with_capacity -> Self with Default::default\\(\\)$",
     # A family that opens a value where the edit is not to open one is refused by `walk`

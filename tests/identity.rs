@@ -554,6 +554,10 @@ fn a_guti_and_an_s_tmsi_have_the_octets_and_the_text_of_their_parts() {
     ] {
         assert!(text.parse::<Guti5g>().is_err(), "{text}");
     }
+    assert_eq!(
+        error("5g-guti-20893".parse()),
+        "`5g-guti` is written as 5g-guti-, the digits of the PLMN and 14 hexadecimal digits"
+    );
     let eps = GutiEps::new(plmn("310-410"), 0x8001, 0x02, 7);
     assert_eq!(
         eps.to_nas_octets(),
@@ -791,6 +795,12 @@ fn a_supi_is_written_with_its_type() {
         error(Supi::gci("no-realm")),
         error(Supi::network_specific("user@"))
     );
+    // The longest NAI: a username and a realm of 253 octets each, and @.
+    let longest = format!("{}@example.com", "u".repeat(507 - 12));
+    assert_eq!(
+        Supi::network_specific(&longest).unwrap().identity().len(),
+        507
+    );
     let long = format!("{}@example.com", "u".repeat(500));
     assert_eq!(
         error(Supi::network_specific(&long)),
@@ -966,6 +976,7 @@ fn the_suci_of_an_imsi_has_the_parts_and_the_octets_of_its_clauses() {
     );
     assert_eq!(concealed.to_string().parse(), Ok(concealed.clone()));
     assert_eq!((concealed.msin(), concealed.imsi()), (None, None));
+    assert_eq!(concealed.home_network_public_key_identifier(), 27);
     assert_eq!(
         concealed.concealed_output().map(hex::encode).as_deref(),
         Some(output)
@@ -2109,6 +2120,14 @@ fn a_missing_field_of_a_nai_says_how_it_is_written() {
     let key = "42".repeat(32);
     for (text, error) in [
         (
+            "typ1.rid678.schid0.useriduser17@example.com".to_string(),
+            "`type` is written as type and the SUPI type in decimal, as type1",
+        ),
+        (
+            "type1.rid678.schid0.user17@example.com".into(),
+            "`userid` is written as userid and the identity in clear, as useriduser17",
+        ),
+        (
             "type1@example.com".to_string(),
             "`rid` is written as rid and the routing indicator, as rid678",
         ),
@@ -2133,6 +2152,14 @@ fn a_missing_field_of_a_nai_says_how_it_is_written() {
                 "type1.rid678.schid1.hnkey27.ecckey{key}.cipaab.mac0011223344556677@example.com"
             ),
             "`cip` is written as 1 to 253 octets",
+        ),
+        (
+            format!("type1.rid678.schid1.hnkey27.ecckey{key}@example.com"),
+            "`cip` is written as cip and the ciphertext in hexadecimal digits",
+        ),
+        (
+            "type1.rid678.schid1.hnkey27.ecckey4242.cipaabb.mac0011223344556677@example.com".into(),
+            "`ecckey` is written as the octets of the ephemeral public key of its profile",
         ),
     ] {
         assert_eq!(
