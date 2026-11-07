@@ -265,7 +265,7 @@ fn a_view_is_edited_at_its_paths() {
         tree["requested-nssai"]["value"],
         tree!([{"sst": 1}, {"sst": 2}, {"sst": 3, "sd": "0000ff"}])
     );
-    assert_eq!(tree["ue-security-capability"]["octets"], "f0f0");
+    assert_eq!(tree["ue-security-capability"]["octets"], tree!("f0f0"));
     // An optional IE is added by its value or its octets, and one is taken out.
     let mut tree = request.clone();
     tree::set_in(
@@ -614,7 +614,7 @@ impl Family for Ap {
             tree::Key::Position(position),
             ..,
         ] = at
-            && let Some(entry) = view[message][ies][position].as_object_mut()
+            && let Some(entry) = view[message.as_str()][ies.as_str()][*position].as_object_mut()
         {
             entry.shift_remove("_raw_value");
         }
@@ -1388,7 +1388,7 @@ fn the_crate_leaves_the_order_of_the_json_of_the_program_alone() {
     let json = serde_json::Value::from(tree.clone());
     assert_eq!(json.to_string(), r#"{"a":2,"z":1}"#);
     assert_eq!(tree.to_string(), r#"{"z":1,"a":2}"#);
-    assert_eq!(json, tree);
+    assert_eq!(Value::from(json), tree);
     assert_eq!(serde_json::to_string(&tree).unwrap(), r#"{"z":1,"a":2}"#);
 }
 

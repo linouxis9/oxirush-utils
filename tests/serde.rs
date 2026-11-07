@@ -112,7 +112,7 @@ fn json_carries_the_tree() {
     );
     assert_eq!(serde_json::from_str::<Request>(&text).unwrap(), request());
     assert_eq!(
-        serde_json::to_value(request()).unwrap(),
+        Value::from(serde_json::to_value(request()).unwrap()),
         tree::to_value(&request())
     );
     let read: Request =

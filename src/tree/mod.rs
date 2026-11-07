@@ -105,7 +105,7 @@ pub use forms::{
 };
 pub use members::{Members, Read, Reading, Refused, Tree, from_value, member, to_value};
 pub use path::{MAX_OCTETS, MAX_SEGMENTS, MAX_SELECTED, escape, position, segments};
-pub use value::{Entry, Index, Map, Number, Value};
+pub use value::{Entry, Map, Number, Value};
 
 // The `vec!` of `alloc`, which `tree!` writes a list with in a crate without `std`.
 #[doc(hidden)]

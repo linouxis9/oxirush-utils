@@ -4,6 +4,12 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+- `Value` keeps the calls that a tree needs: `pointer` and `pointer_mut` (a
+  second syntax of paths beside `select`), `take`, `as_null`, `is_u64`,
+  `is_i64`, `is_f64`, the trait `Index`, and the comparisons with a
+  `serde_json::Value`, a number or a string are gone. `get` takes the name of a
+  member; `tree[name]` and `tree[position]` stay. `Map::remove` is
+  `shift_remove`, and `shift_insert` is gone.
 - An object of a tree is a list of its members without an index, and an
   object that is read has 4096 members at most.
 - The feature `serde` is part of `tree`, which brought its one dependency

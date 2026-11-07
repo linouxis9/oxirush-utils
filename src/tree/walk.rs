@@ -348,7 +348,7 @@ pub enum Removal {
 /// let mut list = tree!([{"id": "cause", "value": 3}, {"id": "timer", "value": 60}]);
 /// assert_eq!(tree::select_in(&ById, &list, "/list/timer/value")?, [&tree!(60)]);
 /// tree::set_in(&ById, &mut list, "/list/cause/value", 7)?;
-/// assert_eq!(list[0]["value"], 7);
+/// assert_eq!(list[0]["value"], tree!(7));
 /// # Ok::<(), tree::Error>(())
 /// ```
 pub trait Family {
@@ -1245,7 +1245,7 @@ fn take_back(tree: &mut Value, undo: Vec<Undo>) {
             }
             Undo::Taken(keys, position, name, was) => {
                 if let Some(Value::Object(members)) = at_mut(tree, &keys) {
-                    members.shift_insert(position, name, was);
+                    members.insert_at(position, name, was);
                 }
             }
             Undo::Removed(keys, position, was) => {

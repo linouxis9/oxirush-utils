@@ -39,27 +39,17 @@ fn two_trees_are_equal_whatever_the_order_of_their_members() {
     assert_ne!(tree!({"a": 1}), tree!({"a": 1, "b": 2}));
     assert_ne!(tree!([1, 2]), tree!([2, 1]));
     assert_ne!(tree!(1), tree!(1.0));
-    // With a value of serde_json, and with a plain value.
-    assert_eq!(
-        tree!({"b": 1, "a": [true]}),
-        serde_json::json!({"a": [true], "b": 1})
-    );
-    assert_eq!(serde_json::json!({"a": null}), tree!({"a": null}));
+    assert_ne!(tree!("7"), tree!(7));
     // Lists and objects of one length and other contents, and of other lengths
-    for (tree, json) in [
-        (tree!([1, 2]), serde_json::json!([1, 3])),
-        (tree!([1]), serde_json::json!([1, 1])),
-        (tree!({"a": 1}), serde_json::json!({"a": 2})),
-        (tree!({"a": 1}), serde_json::json!({"a": 1, "b": 1})),
+    for (a, b) in [
+        (tree!([1, 2]), tree!([1, 3])),
+        (tree!([1]), tree!([1, 1])),
+        (tree!({"a": 1}), tree!({"a": 2})),
+        (tree!({"a": 1}), tree!({"a": 1, "b": 1})),
     ] {
-        assert_ne!(tree, json);
-        assert_ne!(json, tree);
+        assert_ne!(a, b);
+        assert_ne!(b, a);
     }
-    assert_eq!(tree!(7), 7);
-    assert_eq!(tree!(-7), -7i64);
-    assert_eq!(tree!("x"), "x");
-    assert_eq!(tree!(true), true);
-    assert_ne!(tree!("7"), 7);
     // Wide objects in two orders, compared by the order of their names.
     let forward: Map = (0..4096)
         .map(|index| (format!("m{index}"), tree!(index)))
@@ -85,11 +75,10 @@ fn an_object_keeps_its_members_where_they_are() {
     }
     assert_eq!(map.insert("a".into(), tree!(1)), Some(tree!("a")));
     assert_eq!(map.keys().collect::<Vec<_>>(), ["z", "a", "m"]);
-    assert_eq!(map.shift_insert(0, "m".into(), tree!(2)), Some(tree!("m")));
-    assert_eq!(map.shift_insert(9, "n".into(), tree!(3)), None);
-    assert_eq!(map.keys().collect::<Vec<_>>(), ["m", "z", "a", "n"]);
-    assert_eq!(map.remove("z"), Some(tree!("z")));
-    assert_eq!(map.keys().collect::<Vec<_>>(), ["m", "a", "n"]);
+    assert_eq!(map.insert("n".into(), tree!(3)), None);
+    assert_eq!(map.keys().collect::<Vec<_>>(), ["z", "a", "m", "n"]);
+    assert_eq!(map.shift_remove("z"), Some(tree!("z")));
+    assert_eq!(map.keys().collect::<Vec<_>>(), ["a", "m", "n"]);
     *map.entry("b").or_insert(tree!(0)) = tree!(4);
     *map.entry("m").or_default() = tree!(5);
     map.retain(|name, _| name != "a");
@@ -114,15 +103,11 @@ fn an_object_of_many_members_keeps_them_where_they_are() {
     let names = |map: &Map| map.keys().cloned().collect::<Vec<_>>();
     let mut expected = names(&map);
     assert_eq!(map.insert("m7".into(), tree!("seven")), Some(tree!(7)));
-    assert_eq!(map["m7"], "seven");
-    assert_eq!(
-        map.shift_insert(0, "m50".into(), tree!(50)),
-        Some(tree!(50))
-    );
+    assert_eq!(map["m7"], tree!("seven"));
+    assert_eq!(map.shift_remove("m50"), Some(tree!(50)));
     expected.retain(|name| name != "m50");
-    expected.insert(0, "m50".into());
     assert_eq!(names(&map), expected);
-    assert_eq!(map.remove("m10"), Some(tree!(10)));
+    assert_eq!(map.shift_remove("m10"), Some(tree!(10)));
     expected.retain(|name| name != "m10");
     assert_eq!(names(&map), expected);
     *map.entry("new").or_insert(tree!(0)) = tree!(1);
@@ -162,7 +147,7 @@ fn an_object_that_is_read_has_4096_members_at_most() {
     };
     let read: Value = object(4096).parse().unwrap();
     assert_eq!(read.as_object().map(Map::len), Some(4096));
-    assert_eq!(read["m4095"], 4095);
+    assert_eq!(read["m4095"], tree!(4095));
     let error = object(4097).parse::<Value>().unwrap_err();
     assert!(
         error
@@ -183,26 +168,20 @@ fn an_object_that_is_read_has_4096_members_at_most() {
 #[test]
 fn a_tree_is_indexed_as_a_value_of_serde_json_is() {
     let mut tree = tree!({"ies": [{"id": 10, "value": "x"}], "a/b": {"~": 1}});
-    assert_eq!(tree["ies"][0]["id"], 10);
+    assert_eq!(tree["ies"][0]["id"], tree!(10));
     assert_eq!(tree["ies"][7]["id"], Value::Null);
     assert_eq!(tree["none"], Value::Null);
+    assert_eq!(tree["a/b"]["~"], tree!(1));
     let Value::Object(members) = &tree else {
         unreachable!()
     };
     assert!(members.contains_key("ies") && !members.contains_key("none"));
-    assert_eq!(
-        tree.get("ies").and_then(|ies| ies.get(0)),
-        Some(&tree!({"id": 10, "value": "x"}))
-    );
-    assert_eq!(tree.pointer("/ies/0/value"), Some(&tree!("x")));
-    assert_eq!(tree.pointer("/a~1b/~0"), Some(&tree!(1)));
-    assert_eq!(tree.pointer(""), Some(&tree.clone()));
-    assert_eq!(tree.pointer("ies"), None);
-    *tree.pointer_mut("/ies/0/value").unwrap() = tree!("y");
+    assert_eq!(tree.get("ies"), Some(&tree!([{"id": 10, "value": "x"}])));
+    assert_eq!((tree.get("none"), tree["ies"].get("id")), (None, None));
+    tree["ies"][0]["value"] = tree!("y");
     tree["new"]["member"] = tree!(1);
     assert_eq!(tree["new"], tree!({"member": 1}));
-    assert_eq!(tree["ies"][0]["value"].take(), "y");
-    assert_eq!(tree["ies"][0]["value"], Value::Null);
+    assert_eq!(tree["ies"][0]["value"], tree!("y"));
 }
 
 #[test]
@@ -252,34 +231,30 @@ fn a_value_says_what_it_is_and_gives_what_it_holds() {
         tree!([1]),
         tree!({"a": 1}),
     ];
-    // What each one is, in the order of `values`: null, boolean, number, u64, i64,
-    // f64, string, list, object
+    // What each one is, in the order of `values`: null, boolean, number, string, list,
+    // object
     let kinds = [
-        [1, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 1, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 1, 1, 1, 0, 0, 0, 0],
-        [0, 0, 1, 0, 1, 0, 0, 0, 0],
-        [0, 0, 1, 0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 1, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 1],
+        [1, 0, 0, 0, 0, 0],
+        [0, 1, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0],
+        [0, 0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 0, 1],
     ];
     for (value, kind) in values.iter().zip(kinds) {
         let is = [
             value.is_null(),
             value.is_boolean(),
             value.is_number(),
-            value.is_u64(),
-            value.is_i64(),
-            value.is_f64(),
             value.is_string(),
             value.is_array(),
             value.is_object(),
         ];
         assert_eq!(is, kind.map(|bit| bit == 1), "{value}");
-        assert_eq!(value.as_null().is_some(), kind[0] == 1, "{value}");
         assert_eq!(value.as_number().is_some(), kind[2] == 1, "{value}");
-        assert_eq!(value.as_array().is_some(), kind[7] == 1, "{value}");
+        assert_eq!(value.as_array().is_some(), kind[4] == 1, "{value}");
     }
     assert_eq!(values[1].as_bool(), Some(true));
     assert_eq!(
@@ -295,11 +270,8 @@ fn a_value_says_what_it_is_and_gives_what_it_holds() {
     *values[7].get_mut("a").unwrap() = tree!(2);
     assert_eq!(values[7], tree!({"a": 2}));
     assert_eq!(values[7].get_mut("b"), None);
-    *values[6].get_mut(0).unwrap() = tree!(0);
+    values[6][0] = tree!(0);
     assert_eq!(values[6], tree!([0, 2]));
-    // A string compares with a text, and with nothing else
-    assert!(values[5] == *"text" && values[5] != *"other");
-    assert!(values[2] != *"7");
 }
 
 #[test]
@@ -316,7 +288,7 @@ fn an_object_shows_its_members_in_their_order() {
 }
 
 #[test]
-fn a_value_is_made_from_what_it_holds_and_compares_with_it() {
+fn a_value_is_made_from_what_it_holds() {
     let number = serde_json::Number::from(5);
     let from = [
         (Value::from(&1.5), tree!(1.5)),
@@ -337,25 +309,9 @@ fn a_value_is_made_from_what_it_holds_and_compares_with_it() {
     let mut members = Map::new();
     members.insert("a".to_string(), tree!(1));
     assert_eq!(Value::from(members.clone()), tree!({"a": 1}));
-    // A member of an object goes by its name as a `String` too
-    let mut object = tree!({"a": 1});
-    let name = "a".to_string();
-    assert_eq!(object.get(name.clone()), Some(&tree!(1)));
-    *object.get_mut(name).unwrap() = tree!(2);
-    assert_eq!(object.get("b".to_string()), None);
-    assert_eq!(object.get_mut("b".to_string()), None);
-    assert_eq!(object, tree!({"a": 2}));
     // Through a mutable object, each member changes
     for (_, value) in &mut members {
         *value = tree!(9);
     }
     assert_eq!(members["a"], tree!(9));
-    // A string compares with a text of any of its types, on either side
-    let text = tree!("text");
-    let (same, other, one) = ("text".to_string(), "other".to_string(), "1".to_string());
-    assert!(text == same && same == text);
-    assert!(*"text" == text && "text" == text);
-    assert!(text != other && other != text);
-    assert!(*"other" != text && "other" != text);
-    assert!(tree!(1) != one);
 }

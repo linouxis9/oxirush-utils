@@ -18,7 +18,6 @@
 //! The value of a tree: JSON whose objects keep their members in the order in which they
 //! are written, whatever the features of `serde_json` in a build.
 
-use alloc::borrow::ToOwned;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
@@ -29,12 +28,14 @@ pub use serde_json::Number;
 /// A tree: a JSON value whose objects keep their members in the order in which they were
 /// written, which is that of the specification for the tree of a message.
 ///
-/// It has the variants and the calls of `serde_json::Value`, and converts to and from
-/// one. Two objects are equal when they have the same members, whatever their order, as
-/// two JSON objects are. It prints as JSON, its members in their order, and `{:#}`
-/// prints it indented.
+/// It has the variants of `serde_json::Value` and its usual calls, and converts to and
+/// from one. Two objects are equal when they have the same members, whatever their
+/// order, as two JSON objects are. It prints as JSON, its members in their order, and
+/// `{:#}` prints it indented. A member is `tree["name"]` and an entry `tree[0]`, which
+/// are `null` where the tree has none.
 ///
 /// ```
+/// use oxirush_utils::tree;
 /// use oxirush_utils::tree::{Map, Value};
 ///
 /// let mut slice = Map::new();
@@ -42,8 +43,9 @@ pub use serde_json::Number;
 /// slice.insert("sd".into(), "0000ff".into());
 /// let tree = Value::Object(slice);
 /// assert_eq!(tree.to_string(), r#"{"sst":1,"sd":"0000ff"}"#);
-/// assert_eq!(tree, serde_json::json!({"sd": "0000ff", "sst": 1}));
-/// assert_eq!(tree["sst"], 1);
+/// assert_eq!(tree, tree!({"sd": "0000ff", "sst": 1}));
+/// assert_eq!(tree["sst"].as_u64(), Some(1));
+/// assert!(tree["sd"]["what"].is_null());
 /// ```
 #[derive(Clone, Default)]
 pub enum Value {
@@ -145,27 +147,16 @@ impl Map {
         }
     }
 
-    /// Give the member `name` the value `value` at `position`, or at the end for a position
-    /// past it: the member moves there when the object has it. The value that it had, if
-    /// any.
-    pub fn shift_insert(&mut self, position: usize, name: String, value: Value) -> Option<Value> {
-        let was = self.shift_remove(&name);
+    /// Put back at `position` a member that was taken out of it, for the undo of an edit.
+    pub(crate) fn insert_at(&mut self, position: usize, name: String, value: Value) {
         let position = position.min(self.members.len());
         self.members.insert(position, (name, value));
-        was
     }
 
     /// Take the member `name` out, and leave the others in their order.
     pub fn shift_remove(&mut self, name: &str) -> Option<Value> {
         let position = self.position(name)?;
         Some(self.members.remove(position).1)
-    }
-
-    /// Take the member `name` out, and leave the others in their order: as
-    /// [`shift_remove`](Self::shift_remove), which keeps the order of the members, and
-    /// not as the `swap_remove` of an `IndexMap`.
-    pub fn remove(&mut self, name: &str) -> Option<Value> {
-        self.shift_remove(name)
     }
 
     /// The member `name`, to give it a value when it has none.
@@ -388,21 +379,6 @@ impl Value {
         matches!(self, Value::Number(_))
     }
 
-    /// Whether it is a whole number that a `u64` holds.
-    pub fn is_u64(&self) -> bool {
-        matches!(self, Value::Number(number) if number.is_u64())
-    }
-
-    /// Whether it is a whole number that an `i64` holds.
-    pub fn is_i64(&self) -> bool {
-        matches!(self, Value::Number(number) if number.is_i64())
-    }
-
-    /// Whether it is a number with a fraction or an exponent.
-    pub fn is_f64(&self) -> bool {
-        matches!(self, Value::Number(number) if number.is_f64())
-    }
-
     /// Whether it is a string.
     pub fn is_string(&self) -> bool {
         matches!(self, Value::String(_))
@@ -416,11 +392,6 @@ impl Value {
     /// Whether it is an object.
     pub fn is_object(&self) -> bool {
         matches!(self, Value::Object(_))
-    }
-
-    /// `()` for `null`.
-    pub fn as_null(&self) -> Option<()> {
-        self.is_null().then_some(())
     }
 
     /// The boolean that it is.
@@ -494,162 +465,71 @@ impl Value {
         }
     }
 
-    /// The member of an object by its name, or the entry of a list by its position.
-    pub fn get<I: Index>(&self, index: I) -> Option<&Value> {
-        index.index_into(self)
+    /// The member of an object by its name.
+    pub fn get(&self, name: &str) -> Option<&Value> {
+        self.as_object()?.get(name)
     }
 
-    /// The member of an object by its name, or the entry of a list by its position, to
-    /// change.
-    pub fn get_mut<I: Index>(&mut self, index: I) -> Option<&mut Value> {
-        index.index_into_mut(self)
-    }
-
-    /// The value at a JSON pointer (RFC 6901), as `"/message/protocolIEs/0"`: the empty
-    /// pointer is the value itself.
-    pub fn pointer(&self, pointer: &str) -> Option<&Value> {
-        if pointer.is_empty() {
-            return Some(self);
-        }
-        let rest = pointer.strip_prefix('/')?;
-        rest.split('/').try_fold(self, |value, token| {
-            let token = token.replace("~1", "/").replace("~0", "~");
-            match value {
-                Value::Object(members) => members.get(&token),
-                Value::Array(entries) => entries.get(super::position(&token)?),
-                _ => None,
-            }
-        })
-    }
-
-    /// The value at a JSON pointer, to change.
-    pub fn pointer_mut(&mut self, pointer: &str) -> Option<&mut Value> {
-        if pointer.is_empty() {
-            return Some(self);
-        }
-        let rest = pointer.strip_prefix('/')?;
-        rest.split('/').try_fold(self, |value, token| {
-            let token = token.replace("~1", "/").replace("~0", "~");
-            match value {
-                Value::Object(members) => members.get_mut(&token),
-                Value::Array(entries) => entries.get_mut(super::position(&token)?),
-                _ => None,
-            }
-        })
-    }
-
-    /// The value, which `null` takes the place of.
-    pub fn take(&mut self) -> Value {
-        core::mem::take(self)
+    /// The member of an object by its name, to change.
+    pub fn get_mut(&mut self, name: &str) -> Option<&mut Value> {
+        self.as_object_mut()?.get_mut(name)
     }
 }
 
-/// What indexes a value: the name of a member, or the position of an entry.
-pub trait Index: private::Sealed {
-    #[doc(hidden)]
-    fn index_into<'v>(&self, value: &'v Value) -> Option<&'v Value>;
-    #[doc(hidden)]
-    fn index_into_mut<'v>(&self, value: &'v mut Value) -> Option<&'v mut Value>;
-    #[doc(hidden)]
-    fn index_or_insert<'v>(&self, value: &'v mut Value) -> &'v mut Value;
-}
-
-mod private {
-    pub trait Sealed {}
-    impl Sealed for usize {}
-    impl Sealed for str {}
-    impl Sealed for alloc::string::String {}
-    impl<T: Sealed + ?Sized> Sealed for &T {}
-}
-
-impl Index for usize {
-    fn index_into<'v>(&self, value: &'v Value) -> Option<&'v Value> {
-        value.as_array()?.get(*self)
-    }
-
-    fn index_into_mut<'v>(&self, value: &'v mut Value) -> Option<&'v mut Value> {
-        value.as_array_mut()?.get_mut(*self)
-    }
-
-    fn index_or_insert<'v>(&self, value: &'v mut Value) -> &'v mut Value {
-        match value {
-            Value::Array(entries) => {
-                let length = entries.len();
-                entries.get_mut(*self).unwrap_or_else(|| {
-                    panic!("cannot access index {self} of a list of length {length}")
-                })
-            }
-            _ => panic!("cannot access index {self} of a value that is no list"),
-        }
-    }
-}
-
-impl Index for str {
-    fn index_into<'v>(&self, value: &'v Value) -> Option<&'v Value> {
-        value.as_object()?.get(self)
-    }
-
-    fn index_into_mut<'v>(&self, value: &'v mut Value) -> Option<&'v mut Value> {
-        value.as_object_mut()?.get_mut(self)
-    }
-
-    fn index_or_insert<'v>(&self, value: &'v mut Value) -> &'v mut Value {
-        if value.is_null() {
-            *value = Value::Object(Map::new());
-        }
-        match value {
-            Value::Object(members) => members.entry(self.to_owned()).or_default(),
-            _ => panic!("cannot access member {self:?} of a value that is no object"),
-        }
-    }
-}
-
-impl Index for String {
-    fn index_into<'v>(&self, value: &'v Value) -> Option<&'v Value> {
-        self.as_str().index_into(value)
-    }
-
-    fn index_into_mut<'v>(&self, value: &'v mut Value) -> Option<&'v mut Value> {
-        self.as_str().index_into_mut(value)
-    }
-
-    fn index_or_insert<'v>(&self, value: &'v mut Value) -> &'v mut Value {
-        self.as_str().index_or_insert(value)
-    }
-}
-
-impl<T: Index + ?Sized> Index for &T {
-    fn index_into<'v>(&self, value: &'v Value) -> Option<&'v Value> {
-        (**self).index_into(value)
-    }
-
-    fn index_into_mut<'v>(&self, value: &'v mut Value) -> Option<&'v mut Value> {
-        (**self).index_into_mut(value)
-    }
-
-    fn index_or_insert<'v>(&self, value: &'v mut Value) -> &'v mut Value {
-        (**self).index_or_insert(value)
-    }
-}
-
-impl<I: Index> ops::Index<I> for Value {
+impl ops::Index<&str> for Value {
     type Output = Value;
 
-    /// The member or the entry, and `null` where there is none.
-    fn index(&self, index: I) -> &Value {
-        index.index_into(self).unwrap_or(&NULL)
+    /// The member of an object, and `null` where there is none.
+    fn index(&self, name: &str) -> &Value {
+        self.get(name).unwrap_or(&NULL)
     }
 }
 
-impl<I: Index> ops::IndexMut<I> for Value {
-    /// The member, which an object takes as `null` when it has none, and which `null`
-    /// takes as an object with that member; or the entry.
+impl ops::IndexMut<&str> for Value {
+    /// The member of an object, which the object takes as `null` when it has none, and
+    /// which `null` takes as an object with that member.
     ///
     /// # Panics
     ///
-    /// For a position past the end of a list, and for a value of another kind.
-    fn index_mut(&mut self, index: I) -> &mut Value {
-        index.index_or_insert(self)
+    /// For a value that is neither an object nor `null`.
+    fn index_mut(&mut self, name: &str) -> &mut Value {
+        if self.is_null() {
+            *self = Value::Object(Map::new());
+        }
+        match self {
+            Value::Object(members) => members.entry(name).or_insert(Value::Null),
+            _ => panic!("cannot access member {name:?} of a value that is no object"),
+        }
+    }
+}
+
+impl ops::Index<usize> for Value {
+    type Output = Value;
+
+    /// The entry of a list, and `null` where there is none.
+    fn index(&self, position: usize) -> &Value {
+        self.as_array()
+            .and_then(|entries| entries.get(position))
+            .unwrap_or(&NULL)
+    }
+}
+
+impl ops::IndexMut<usize> for Value {
+    /// The entry of a list.
+    ///
+    /// # Panics
+    ///
+    /// For a position past the end of the list, and for a value that is no list.
+    fn index_mut(&mut self, position: usize) -> &mut Value {
+        match self {
+            Value::Array(entries) => {
+                let length = entries.len();
+                entries.get_mut(position).unwrap_or_else(|| {
+                    panic!("cannot access index {position} of a list of length {length}")
+                })
+            }
+            _ => panic!("cannot access index {position} of a value that is no list"),
+        }
     }
 }
 
@@ -670,95 +550,6 @@ impl PartialEq for Value {
 }
 
 impl Eq for Value {}
-
-impl PartialEq<serde_json::Value> for Value {
-    /// Whether the two are the same JSON: objects whatever the order of their members.
-    fn eq(&self, other: &serde_json::Value) -> bool {
-        match (self, other) {
-            (Value::Null, serde_json::Value::Null) => true,
-            (Value::Bool(a), serde_json::Value::Bool(b)) => a == b,
-            (Value::Number(a), serde_json::Value::Number(b)) => a == b,
-            (Value::String(a), serde_json::Value::String(b)) => a == b,
-            (Value::Array(a), serde_json::Value::Array(b)) => {
-                a.len() == b.len() && a.iter().zip(b).all(|(a, b)| a == b)
-            }
-            (Value::Object(a), serde_json::Value::Object(b)) => {
-                a.len() == b.len()
-                    && a.iter()
-                        .all(|(name, value)| b.get(name).is_some_and(|b| value == b))
-            }
-            _ => false,
-        }
-    }
-}
-
-impl PartialEq<Value> for serde_json::Value {
-    fn eq(&self, other: &Value) -> bool {
-        other == self
-    }
-}
-
-macro_rules! equal_to {
-    ($($ty:ty => $as:ident as $wide:ty),* $(,)?) => {$(
-        impl PartialEq<$ty> for Value {
-            fn eq(&self, other: &$ty) -> bool {
-                self.$as().is_some_and(|value| value == *other as $wide)
-            }
-        }
-        impl PartialEq<$ty> for &Value {
-            fn eq(&self, other: &$ty) -> bool {
-                (**self) == *other
-            }
-        }
-        impl PartialEq<Value> for $ty {
-            fn eq(&self, other: &Value) -> bool {
-                other == self
-            }
-        }
-    )*};
-}
-
-equal_to! {
-    u8 => as_u64 as u64, u16 => as_u64 as u64, u32 => as_u64 as u64, u64 => as_u64 as u64,
-    usize => as_u64 as u64, i8 => as_i64 as i64, i16 => as_i64 as i64, i32 => as_i64 as i64,
-    i64 => as_i64 as i64, isize => as_i64 as i64, f64 => as_f64 as f64, bool => as_bool as bool,
-}
-
-impl PartialEq<str> for Value {
-    fn eq(&self, other: &str) -> bool {
-        self.as_str() == Some(other)
-    }
-}
-
-impl PartialEq<&str> for Value {
-    fn eq(&self, other: &&str) -> bool {
-        self.as_str() == Some(*other)
-    }
-}
-
-impl PartialEq<String> for Value {
-    fn eq(&self, other: &String) -> bool {
-        self.as_str() == Some(other.as_str())
-    }
-}
-
-impl PartialEq<Value> for str {
-    fn eq(&self, other: &Value) -> bool {
-        other == self
-    }
-}
-
-impl PartialEq<Value> for &str {
-    fn eq(&self, other: &Value) -> bool {
-        other == self
-    }
-}
-
-impl PartialEq<Value> for String {
-    fn eq(&self, other: &Value) -> bool {
-        other == self
-    }
-}
 
 // ── Conversions ─────────────────────────────────────────────────────────────
 
