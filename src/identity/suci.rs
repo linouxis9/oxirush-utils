@@ -15,16 +15,17 @@
    limitations under the License.
 */
 
-//! The SUCI of an IMSI as a value, with its routing indicator and its protection scheme.
-//! What conceals an identity and what reads a concealed one are no part of it.
+//! The SUCI of an IMSI as a value, with its routing indicator and its protection scheme,
+//! and the SUCI of either form. What conceals an identity and what reads a concealed one
+//! are no part of it.
 
 use super::digits::decimal;
 #[cfg(feature = "alloc")]
-use super::nai::{MAC_TAG, PROFILE_A_KEY, PROFILE_B_KEY};
+use super::nai::{MAC_TAG, NaiSuci, PROFILE_A_KEY, PROFILE_B_KEY, home_network_domain};
 use super::plmn::FILLER;
 use super::{Error, Fault};
 #[cfg(feature = "alloc")]
-use super::{Faults, Imsi, Plmn, Tolerated, tbcd};
+use super::{Faults, Imsi, Plmn, SupiType, Tolerated, tbcd};
 #[cfg(feature = "alloc")]
 use alloc::{string::String, vec::Vec};
 use core::fmt;
@@ -600,5 +601,178 @@ impl FromStr for ImsiSuci {
             key_id,
             octets.collect::<Result<_, _>>()?,
         )
+    }
+}
+
+/// A SUCI as a 5GS mobile identity carries it (3GPP TS 24.501 clause 9.11.3.4): that of
+/// an IMSI, or the SUCI in the form of a NAI of a network specific identifier, a GCI or
+/// a GLI.
+///
+/// It prints as the service-based interfaces write a SUCI (`SupiOrSuci` in the OpenAPI
+/// of TS 29.571): `suci-`, the SUPI type, the MCC and the MNC of an IMSI or the realm of
+/// a NAI, the routing indicator, the scheme as one hexadecimal digit, the key identifier
+/// and the scheme output, with a hyphen between them.
+///
+/// ```
+/// use oxirush_utils::identity::{ImsiSuci, NaiSuci, Plmn, RoutingIndicator, Suci, SupiType};
+///
+/// let plmn = Plmn::new("208", "93")?;
+/// let suci = Suci::Imsi(ImsiSuci::null(plmn, RoutingIndicator::default(), "0000000001")?);
+/// assert_eq!(suci.to_string(), "suci-0-208-93-0-0-0-0000000001");
+///
+/// // The SUPI format of the first octet says which form the octets hold
+/// let nai: NaiSuci = "type1.rid678.schid0.useriduser17@example.com".parse()?;
+/// let read = Suci::from_nas_octets(&nai.to_nas_octets()?)?;
+/// assert_eq!(read.supi_type(), SupiType::NetworkSpecific);
+/// assert_eq!(read.to_string(), "suci-1-example.com-678-0-0-user17");
+///
+/// // The SUCI of an IMSI in the form of a NAI, in the home network domain
+/// assert_eq!(
+///     suci.to_nai()?.to_string(),
+///     "type0.rid0.schid0.userid0000000001@5gc.mnc093.mcc208.3gppnetwork.org"
+/// );
+/// # Ok::<(), oxirush_utils::identity::Error>(())
+/// ```
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Suci {
+    /// The SUCI of an IMSI.
+    Imsi(ImsiSuci),
+    /// The SUCI in the form of a NAI.
+    Nai(NaiSuci),
+}
+
+#[cfg(feature = "alloc")]
+impl Suci {
+    /// The type of the SUPI that the SUCI conceals.
+    pub fn supi_type(&self) -> SupiType {
+        match self {
+            Self::Imsi(_) => SupiType::Imsi,
+            Self::Nai(suci) => suci.supi_type(),
+        }
+    }
+
+    /// The routing indicator.
+    pub fn routing_indicator(&self) -> RoutingIndicator {
+        match self {
+            Self::Imsi(suci) => suci.routing_indicator(),
+            Self::Nai(suci) => suci.routing_indicator(),
+        }
+    }
+
+    /// The protection scheme.
+    pub fn protection_scheme(&self) -> ProtectionScheme {
+        match self {
+            Self::Imsi(suci) => suci.protection_scheme(),
+            Self::Nai(suci) => suci.protection_scheme(),
+        }
+    }
+
+    /// The identifier of the public key of the home network: 0 under the null scheme.
+    /// With the scheme, it names the private key that reads the SUCI.
+    pub fn home_network_public_key_identifier(&self) -> u8 {
+        match self {
+            Self::Imsi(suci) => suci.home_network_public_key_identifier(),
+            Self::Nai(suci) => suci.home_network_public_key_identifier(),
+        }
+    }
+
+    /// The octets of the SUCI as a 5GS mobile identity.
+    ///
+    /// # Errors
+    ///
+    /// A SUCI in the form of a NAI whose SUPI is an IMSI, as [`NaiSuci::to_nas_octets`]
+    /// refuses it.
+    pub fn to_nas_octets(&self) -> Result<Vec<u8>, Error> {
+        match self {
+            Self::Imsi(suci) => Ok(suci.to_nas_octets()),
+            Self::Nai(suci) => suci.to_nas_octets(),
+        }
+    }
+
+    /// The SUCI that `octets` hold as a 5GS mobile identity: in the form of a NAI for the
+    /// SUPI format of one, and of an IMSI otherwise.
+    ///
+    /// # Errors
+    ///
+    /// What [`ImsiSuci::from_nas_octets`] or [`NaiSuci::from_nas_octets`] refuses.
+    pub fn from_nas_octets(octets: &[u8]) -> Result<Self, Error> {
+        let (suci, faults) = Self::from_nas_octets_tolerant(octets)?;
+        match faults.first() {
+            Some(fault) => Err(*fault),
+            None => Ok(suci),
+        }
+    }
+
+    /// [`from_nas_octets`](Self::from_nas_octets), for octets as other implementations
+    /// send them, by the tolerant readers of the two forms.
+    ///
+    /// # Errors
+    ///
+    /// Octets that are no SUCI however they are read.
+    pub fn from_nas_octets_tolerant(octets: &[u8]) -> Result<Tolerated<Self>, Error> {
+        match octets.first().map(|first| (first >> 4) & 0x07) {
+            Some(1..=3) => {
+                let (suci, faults) = NaiSuci::from_nas_octets_tolerant(octets)?;
+                Ok((Self::Nai(suci), faults))
+            }
+            _ => {
+                let (suci, faults) = ImsiSuci::from_nas_octets_tolerant(octets)?;
+                Ok((Self::Imsi(suci), faults))
+            }
+        }
+    }
+
+    /// The SUCI in the form of a NAI: itself, or that of an IMSI in the home network
+    /// domain of its PLMN (3GPP TS 23.003 clause 28.7.3).
+    ///
+    /// # Errors
+    ///
+    /// The output of a scheme of the operator is longer than a NAI holds.
+    pub fn to_nai(&self) -> Result<NaiSuci, Error> {
+        let suci = match self {
+            Self::Nai(suci) => return Ok(suci.clone()),
+            Self::Imsi(suci) => suci,
+        };
+        let realm = home_network_domain(suci.plmn);
+        let (routing, scheme, key_id) = (suci.routing_indicator, suci.scheme, suci.key_id);
+        match suci.msin() {
+            Some(msin) => NaiSuci::null(SupiType::Imsi, routing, msin, &realm),
+            None => {
+                let output = suci.output.clone();
+                NaiSuci::concealed(SupiType::Imsi, routing, scheme, key_id, output, &realm)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl fmt::Display for Suci {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let suci = match self {
+            Self::Imsi(suci) => return suci.fmt(f),
+            Self::Nai(suci) => suci,
+        };
+        let (kind, realm) = (suci.supi_type().type_number(), suci.realm());
+        let (routing, scheme) = (suci.routing_indicator(), suci.protection_scheme());
+        let (scheme, key) = (
+            scheme.identifier(),
+            suci.home_network_public_key_identifier(),
+        );
+        write!(f, "suci-{kind}-{realm}-{routing}-{scheme:x}-{key}-")?;
+        match (suci.clear(), suci.concealed_output()) {
+            (Some(clear), _) => f.write_str(clear),
+            (None, output) => {
+                (output.unwrap_or_default().iter()).try_for_each(|octet| write!(f, "{octet:02x}"))
+            }
+        }
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl fmt::Debug for Suci {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Suci({self})")
     }
 }

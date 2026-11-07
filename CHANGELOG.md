@@ -4,6 +4,12 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+- `identity::Suci`, the SUCI of either form, `Imsi(ImsiSuci)` or `Nai(NaiSuci)`,
+  read from a 5GS mobile identity by its SUPI format, with its parts, the NAI
+  form of the SUCI of an IMSI, and the text of the service-based interfaces.
+  `identity::Algorithm`, the identity of a security algorithm, which ciphering
+  and integrity share in 5GS and EPS. The crates of the family take them in the
+  place of their own.
 - Items with no use beside another way are gone: `tree::to_value` (call
   `to_tree`), `bits()` of the types of identity (`u8::from`), `ImsiSuci::of`
   and `Guti5g::of` (`ImsiSuci::null` and `Guti5g::new`), `STmsiEps::to_u64`,

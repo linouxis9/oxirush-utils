@@ -23,11 +23,11 @@
 //! the name of the type.
 //!
 //! What holds a text or a list needs the feature `alloc`: the SUPI that owns its text,
-//! the SUCI of an IMSI and the SUCI in the form of a NAI, TBCD strings, and identity
-//! digits as octets. The rest needs no allocator: the PLMN, the IMSI, the IMEI and the
+//! the SUCI of an IMSI, the SUCI in the form of a NAI and the SUCI of either form, TBCD
+//! strings, and identity digits as octets. The rest needs no allocator: the PLMN, the IMSI, the IMEI and the
 //! IMEISV as values, the GUTIs, the S-TMSIs and the TAIs, the types of identity, the
 //! routing indicator and the protection scheme of a SUCI, the grammar of a NAI, a SUPI
-//! that borrows its text, and the errors.
+//! that borrows its text, the identity of a security algorithm, and the errors.
 //!
 //! ```
 //! use oxirush_utils::identity::{Guti5g, Imsi, Plmn};
@@ -63,6 +63,7 @@
 //! Which reader a family calls is its own decision. A tolerant reader never makes a
 //! value up: octets that are not the identity however they are read stay an error.
 
+mod algorithm;
 pub mod digits;
 mod error;
 mod guti;
@@ -73,6 +74,7 @@ mod supi;
 mod tai;
 mod types;
 
+pub use algorithm::Algorithm;
 #[cfg(feature = "alloc")]
 pub use digits::tbcd;
 pub use digits::{Imei, Imeisv, Imsi};
@@ -82,7 +84,7 @@ pub use guti::{Guti5g, GutiEps, STmsi5g, STmsiEps};
 pub use nai::NaiSuci;
 pub use plmn::Plmn;
 #[cfg(feature = "alloc")]
-pub use suci::ImsiSuci;
+pub use suci::{ImsiSuci, Suci};
 pub use suci::{ProtectionScheme, RoutingIndicator};
 pub use supi::{Supi, SupiType};
 pub use tai::{Tai5gs, TaiEps};

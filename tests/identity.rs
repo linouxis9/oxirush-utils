@@ -6,9 +6,9 @@
 //! 0000000008): each implementation sent them in a NAS message.
 
 use oxirush_utils::identity::{
-    Error, Fault, Guti5g, GutiEps, IdentityType, Imei, Imeisv, Imsi, ImsiSuci,
+    Algorithm, Error, Fault, Guti5g, GutiEps, IdentityType, Imei, Imeisv, Imsi, ImsiSuci,
     MobileIdentityType5gs, MobileIdentityTypeEps, NaiSuci, Plmn, ProtectionScheme,
-    RoutingIndicator, STmsi5g, STmsiEps, Supi, SupiType, Tai5gs, TaiEps, digits, nai, tbcd,
+    RoutingIndicator, STmsi5g, STmsiEps, Suci, Supi, SupiType, Tai5gs, TaiEps, digits, nai, tbcd,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -2336,4 +2336,143 @@ fn a_guti_has_its_amf_pointer_and_a_username_253_octets() {
     assert_eq!(guti.amf_pointer(), 0x25);
     assert!(nai::check_username(&"a".repeat(253)).is_ok());
     assert!(nai::check_username(&"a".repeat(254)).is_err());
+}
+
+// ── The SUCI of either form, and the algorithms ─────────────────────────────
+
+/// The SUPI format of the first octet says which form a SUCI has (TS 24.501 table
+/// 9.11.3.4.1): 1 to 3 a NAI, 0 an IMSI, and 4 to 7 an IMSI too, which the tolerant
+/// reader says.
+#[test]
+fn a_suci_is_read_in_the_form_that_its_supi_format_says() {
+    let imsi = hex::decode("0102f839f0ff000010").unwrap();
+    let read = Suci::from_nas_octets(&imsi).unwrap();
+    assert_eq!(read, Suci::Imsi(ImsiSuci::from_nas_octets(&imsi).unwrap()));
+    assert_eq!(read.to_nas_octets(), Ok(imsi.clone()));
+    assert_eq!(read.to_string(), "suci-0-208-93-0-0-0-01");
+    assert_eq!(format!("{read:?}"), "Suci(suci-0-208-93-0-0-0-01)");
+    let text = "type1.rid678.schid0.useriduser17@example.com";
+    for (format, kind) in [
+        (1, SupiType::NetworkSpecific),
+        (2, SupiType::Gci),
+        (3, SupiType::Gli),
+    ] {
+        let text = text.replace("type1", &format!("type{}", kind.type_number()));
+        let text = match kind {
+            SupiType::Gli => text.replace("rid678", "rid0").replace("user17", "dXNlcg=="),
+            SupiType::Gci => text.replace("rid678", "rid0"),
+            _ => text,
+        };
+        let octets = nas(format, &text);
+        let read = Suci::from_nas_octets(&octets).unwrap();
+        assert_eq!(read, Suci::Nai(nai_suci(&text)), "{text}");
+        assert_eq!(read.supi_type(), kind);
+        assert_eq!(read.to_nas_octets(), Ok(octets));
+    }
+    // A spare SUPI format is an IMSI, with its fault
+    let mut spare = imsi.clone();
+    spare[0] = 0x41;
+    let (read, faults) = Suci::from_nas_octets_tolerant(&spare).unwrap();
+    assert_eq!((read.supi_type(), faults.len()), (SupiType::Imsi, 1));
+    assert_eq!(
+        Suci::from_nas_octets(&spare).unwrap_err().member,
+        "supi-format"
+    );
+    // A spare bit of a NAI, with its fault
+    let mut spare = nas(1, text);
+    spare[0] = 0x91;
+    let (read, faults) = Suci::from_nas_octets_tolerant(&spare).unwrap();
+    assert_eq!((read, faults.len()), (Suci::Nai(nai_suci(text)), 1));
+    // What is no SUCI however it is read
+    for octets in [
+        &[][..],
+        &[0x02, 0xf8],
+        &hex::decode("0202f839f0ff000010").unwrap(),
+    ] {
+        assert!(
+            Suci::from_nas_octets_tolerant(octets).is_err(),
+            "{octets:02x?}"
+        );
+    }
+}
+
+/// The parts of either form, and its text as the service-based interfaces write it.
+#[test]
+fn a_suci_of_either_form_has_its_parts_and_its_text() {
+    let plmn = plmn("208-93");
+    let routing = RoutingIndicator::new("12").unwrap();
+    let output: Vec<u8> = (0..32 + 5 + 8).collect();
+    let imsi = ImsiSuci::concealed(
+        plmn,
+        routing,
+        ProtectionScheme::PROFILE_A,
+        7,
+        output.clone(),
+    )
+    .unwrap();
+    let suci = Suci::Imsi(imsi.clone());
+    assert_eq!(
+        (
+            suci.supi_type(),
+            suci.routing_indicator(),
+            suci.protection_scheme(),
+            suci.home_network_public_key_identifier()
+        ),
+        (SupiType::Imsi, routing, ProtectionScheme::PROFILE_A, 7)
+    );
+    assert_eq!(suci.to_string(), imsi.to_string());
+    let text = "type1.rid0.schid12.hnkey3.outc0ffee@example.com";
+    let suci = Suci::Nai(nai_suci(text));
+    assert_eq!(
+        (
+            suci.supi_type(),
+            suci.routing_indicator(),
+            suci.protection_scheme(),
+            suci.home_network_public_key_identifier()
+        ),
+        (
+            SupiType::NetworkSpecific,
+            RoutingIndicator::default(),
+            ProtectionScheme::new(12).unwrap(),
+            3
+        )
+    );
+    assert_eq!(suci.to_string(), "suci-1-example.com-0-c-3-c0ffee");
+    let suci = Suci::Nai(nai_suci("type3.rid0.schid0.useriddXNlcg==@example.com"));
+    assert_eq!(suci.to_string(), "suci-3-example.com-0-0-0-dXNlcg==");
+    // The SUCI of an IMSI in the form of a NAI: in clear, and concealed
+    let null = Suci::Imsi(ImsiSuci::null(plmn, routing, "0000000001").unwrap());
+    assert_eq!(
+        null.to_nai().unwrap(),
+        nai_suci("type0.rid12.schid0.userid0000000001@5gc.mnc093.mcc208.3gppnetwork.org")
+    );
+    let concealed = Suci::Imsi(imsi).to_nai().unwrap();
+    assert_eq!(
+        (concealed.supi_type(), concealed.concealed_output()),
+        (SupiType::Imsi, Some(&output[..]))
+    );
+    assert_eq!(concealed.realm(), "5gc.mnc093.mcc208.3gppnetwork.org");
+    // One that is a NAI already is itself, and an IMSI as a NAI has no mobile identity
+    let nai = Suci::Nai(concealed.clone());
+    assert_eq!(nai.to_nai(), Ok(concealed));
+    assert_eq!(nai.to_nas_octets().unwrap_err().member, "supi-type");
+}
+
+/// TS 33.501 clause 5.11.1 and TS 33.401 clause 5.1.3: the identities 0 to 3, alike for
+/// ciphering and integrity; 4 to 7 are reserved.
+#[test]
+fn an_algorithm_is_its_identity() {
+    let all = [
+        Algorithm::Null,
+        Algorithm::Snow3g,
+        Algorithm::Aes,
+        Algorithm::Zuc,
+    ];
+    for (identity, algorithm) in all.into_iter().enumerate() {
+        assert_eq!(Algorithm::try_from(identity as u8), Ok(algorithm));
+        assert_eq!(u8::from(algorithm), identity as u8);
+    }
+    for reserved in 4..=255 {
+        assert_eq!(Algorithm::try_from(reserved), Err(reserved));
+    }
 }

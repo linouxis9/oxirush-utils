@@ -48,9 +48,10 @@
 //!
 //! | Task | Items |
 //! |------|-------|
-//! | An identity through its forms | [`Imsi`](identity::Imsi), [`Plmn`](identity::Plmn), [`ImsiSuci`](identity::ImsiSuci), [`Supi`](identity::Supi), [`Guti5g`](identity::Guti5g), [`STmsi5g`](identity::STmsi5g) |
+//! | An identity through its forms | [`Imsi`](identity::Imsi), [`Plmn`](identity::Plmn), [`ImsiSuci`](identity::ImsiSuci), [`Suci`](identity::Suci), [`Supi`](identity::Supi), [`Guti5g`](identity::Guti5g), [`STmsi5g`](identity::STmsi5g) |
 //! | IMEI, IMEISV, and the identities of EPS | [`Imei`](identity::Imei), [`Imeisv`](identity::Imeisv), [`GutiEps`](identity::GutiEps), [`Tai5gs`](identity::Tai5gs), [`TaiEps`](identity::TaiEps) |
 //! | The SUCI in the form of a NAI | [`NaiSuci`](identity::NaiSuci), [`nai::check_realm`](identity::nai::check_realm) |
+//! | The identity of a security algorithm | [`Algorithm`](identity::Algorithm) |
 //! | What other implementations send | [`Imeisv::from_nas_octets_tolerant`](identity::Imeisv::from_nas_octets_tolerant), [`Fault`](identity::Fault) |
 //! | A type as a tree | [`tree::Tree`], [`tree!`], [`tree::from_value`] |
 //! | Paths | [`tree::select`], [`tree::paths`], [`tree::set`], [`tree::insert`], [`tree::remove`] |
@@ -61,7 +62,7 @@
 //!
 //! | Module | Has | Feature |
 //! |--------|-----|---------|
-//! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the SUPI with its type, the SUCI of an IMSI and the SUCI in the form of a NAI with the grammar of a NAI, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity | none |
+//! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the SUPI with its type, the SUCI of an IMSI and the SUCI in the form of a NAI with the grammar of a NAI, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity, the identity of a security algorithm | none |
 //! | [`tree`](mod@tree) | The tree of a message as a JSON value that keeps the order of its members, and `tree!` that writes one: the forms of the plain values, the writer and the reader of members, paths with `select`, `paths`, `set`, `remove`, `insert`, and `Serialize` and `Deserialize` for a type through its tree | `tree` |
 //!
 //! The crate is `no_std` with `alloc`, has no dependency without a feature, and no
