@@ -19,8 +19,6 @@
 //! are written, whatever the features of `serde_json` in a build.
 
 use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
-use alloc::collections::BTreeSet;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt;
@@ -68,41 +66,17 @@ pub enum Value {
 /// that is added goes at the end, one that is given another value keeps its place, and
 /// one that is taken out leaves the others in theirs.
 ///
-/// It is a list. An object of more than 256 members also keeps an index: the position of
-/// each member under the hash of its name, in the order of the hashes, so that a member is
-/// found by its name in a time that grows as log n, and no name is copied. Whatever builds
-/// an object of n members with [`insert`](Self::insert), finds each of them, reads one from
-/// JSON or compares two takes a time that grows as n log n. Moving or taking out a member,
-/// which moves those after it, takes a time that grows as n.
+/// It is a list, which is searched for a name: a value of a protocol has a few dozen
+/// members at most, as the 84 bits of a 5GMM capability, and a search of so few names
+/// takes less than a map. An object that is read from a format has 4096 members at most.
 #[derive(Clone, Default)]
 pub struct Map {
     members: Vec<(String, Value)>,
-    /// For an object of more than [`INDEXED`] members, the hash of the name of each member
-    /// with its position. In a box, it leaves a value of a tree the size that it has
-    /// without an index.
-    #[allow(clippy::box_collection, reason = "a value of a tree keeps its size")]
-    index: Option<Box<BTreeSet<(u64, usize)>>>,
 }
 
-/// The number of members above which an object keeps an index of its names. A value of a
-/// protocol has fewer, as the 84 bits of a 5GMM capability, and a search of so few names
-/// takes less than the index: a value of NAS that has an index is read and shown a third
-/// slower than without.
-const INDEXED: usize = 256;
-
-/// The hash of a name in the index: SipHash-2-4, whose collisions of 64 bits whoever writes
-/// the names cannot find, so that no object of many members has many under one hash. Its
-/// key is fixed: a crate without `std` has no source of a random one.
-#[allow(
-    deprecated,
-    reason = "SipHasher is the SipHash of core, which has no other"
-)]
-fn hash(name: &str) -> u64 {
-    use core::hash::Hasher;
-    let mut hasher = core::hash::SipHasher::new();
-    hasher.write(name.as_bytes());
-    hasher.finish()
-}
+/// The most members that an object that is read has: far more than a value of a protocol
+/// has, and few enough that a search of each name stays short.
+const MOST_MEMBERS: usize = 4096;
 
 impl Map {
     /// An object without members.
@@ -114,7 +88,6 @@ impl Map {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             members: Vec::with_capacity(capacity),
-            index: None,
         }
     }
 
@@ -131,72 +104,11 @@ impl Map {
     /// Take every member out.
     pub fn clear(&mut self) {
         self.members.clear();
-        self.index = None;
     }
 
     /// The position of the member of this name.
-    #[inline]
     fn position(&self, name: &str) -> Option<usize> {
-        match &self.index {
-            Some(index) => {
-                let hash = hash(name);
-                let under = index.range((hash, 0)..=(hash, usize::MAX));
-                under
-                    .map(|(_, position)| *position)
-                    .find(|position| self.members[*position].0 == name)
-            }
-            None => self.members.iter().position(|(known, _)| known == name),
-        }
-    }
-
-    /// Add a member of a name that the object does not have, at the end.
-    #[inline]
-    fn push(&mut self, name: String, value: Value) {
-        match self.index.is_none() && self.members.len() < INDEXED {
-            true => self.members.push((name, value)),
-            false => self.push_indexed(name, value),
-        }
-    }
-
-    /// Add a member at the end of an object that has an index, or that has one with it.
-    #[cold]
-    #[inline(never)]
-    fn push_indexed(&mut self, name: String, value: Value) {
-        if let Some(index) = &mut self.index {
-            index.insert((hash(&name), self.members.len()));
-        }
-        self.members.push((name, value));
-        if self.index.is_none() && self.members.len() > INDEXED {
-            self.reindex();
-        }
-    }
-
-    /// Make the index of the members, or leave it out for an object of [`INDEXED`]
-    /// members or fewer.
-    fn reindex(&mut self) {
-        self.index = (self.members.len() > INDEXED).then(|| {
-            let members = self.members.iter().enumerate();
-            Box::new(members.map(|(at, (name, _))| (hash(name), at)).collect())
-        });
-    }
-
-    /// Move the positions of the index from `from` by one, after a member was put at
-    /// `from` (`up`) or taken out of it, which keeps the order of the index: a time that
-    /// grows as n, without a hash.
-    fn moved(&mut self, from: usize, up: bool) {
-        if self.members.len() <= INDEXED {
-            self.index = None;
-            return;
-        }
-        let Some(index) = self.index.take() else {
-            return self.reindex();
-        };
-        let entries = index.into_iter().map(|(hash, at)| match (at >= from, up) {
-            (false, _) => (hash, at),
-            (true, true) => (hash, at + 1),
-            (true, false) => (hash, at - 1),
-        });
-        self.index = Some(Box::new(entries.collect()));
+        self.members.iter().position(|(known, _)| known == name)
     }
 
     /// The member of this name.
@@ -206,22 +118,13 @@ impl Map {
 
     /// The member of this name, to change.
     pub fn get_mut(&mut self, name: &str) -> Option<&mut Value> {
-        let member = match &self.index {
-            Some(_) => {
-                let position = self.position(name)?;
-                self.members.get_mut(position)
-            }
-            None => self.members.iter_mut().find(|(known, _)| known == name),
-        };
+        let member = self.members.iter_mut().find(|(known, _)| known == name);
         member.map(|(_, value)| value)
     }
 
     /// The member of this name, with its name as the object has it.
     pub fn get_key_value(&self, name: &str) -> Option<(&String, &Value)> {
-        let member = match &self.index {
-            Some(_) => self.members.get(self.position(name)?),
-            None => self.members.iter().find(|(known, _)| known == name),
-        };
+        let member = self.members.iter().find(|(known, _)| known == name);
         member.map(|(name, value)| (name, value))
     }
 
@@ -236,7 +139,7 @@ impl Map {
         match self.get_mut(&name) {
             Some(was) => Some(core::mem::replace(was, value)),
             None => {
-                self.push(name, value);
+                self.members.push((name, value));
                 None
             }
         }
@@ -248,24 +151,14 @@ impl Map {
     pub fn shift_insert(&mut self, position: usize, name: String, value: Value) -> Option<Value> {
         let was = self.shift_remove(&name);
         let position = position.min(self.members.len());
-        let hashed = self.index.is_some().then(|| hash(&name));
         self.members.insert(position, (name, value));
-        self.moved(position, true);
-        if let (Some(index), Some(hash)) = (&mut self.index, hashed) {
-            index.insert((hash, position));
-        }
         was
     }
 
     /// Take the member `name` out, and leave the others in their order.
     pub fn shift_remove(&mut self, name: &str) -> Option<Value> {
         let position = self.position(name)?;
-        let (name, value) = self.members.remove(position);
-        if let Some(index) = &mut self.index {
-            index.remove(&(hash(&name), position));
-        }
-        self.moved(position, false);
-        Some(value)
+        Some(self.members.remove(position).1)
     }
 
     /// Take the member `name` out, and leave the others in their order: as
@@ -286,11 +179,7 @@ impl Map {
 
     /// Keep the members for which `keep` says so.
     pub fn retain(&mut self, mut keep: impl FnMut(&String, &mut Value) -> bool) {
-        let before = self.members.len();
         self.members.retain_mut(|(name, value)| keep(name, value));
-        if self.members.len() != before {
-            self.reindex();
-        }
     }
 
     /// The members, in their order.
@@ -324,12 +213,7 @@ impl Map {
 
     /// The members, from the first, which have each their own name.
     pub(crate) fn from_members(members: Vec<(String, Value)>) -> Self {
-        let mut map = Self {
-            members,
-            index: None,
-        };
-        map.reindex();
-        map
+        Self { members }
     }
 
     /// The positions of the members, in the order of their names, and in that of the
@@ -360,7 +244,7 @@ impl<'m> Entry<'m> {
         match self {
             Entry::Occupied(value) => value,
             Entry::Vacant(map, name) => {
-                map.push(name, value());
+                map.members.push((name, value()));
                 &mut map
                     .members
                     .last_mut()
@@ -1214,10 +1098,14 @@ impl<'de> serde_core::de::Visitor<'de> for Visitor {
         let mut members: Vec<(String, Value)> =
             Vec::with_capacity(object.size_hint().unwrap_or(0).min(4096));
         while let Some((name, value)) = object.next_entry::<String, Value>()? {
+            if members.len() == MOST_MEMBERS {
+                return Err(A::Error::custom(alloc::format!(
+                    "an object has {MOST_MEMBERS} members at most"
+                )));
+            }
             members.push((name, value));
         }
-        // A name that comes twice, found in the order of the names: a time that grows
-        // as n log n, for an object of any size.
+        // A name that comes twice, found in the order of the names.
         let mut names: Vec<&str> = members.iter().map(|(name, _)| name.as_str()).collect();
         names.sort_unstable();
         if let Some(twice) = names.windows(2).find(|pair| pair[0] == pair[1]) {
@@ -1227,48 +1115,5 @@ impl<'de> serde_core::de::Visitor<'de> for Visitor {
             )));
         }
         Ok(Value::Object(Map::from_members(members)))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// An object of the members "0" to `count - 1`, each null.
-    fn object(count: usize) -> Map {
-        let mut map = Map::new();
-        for name in 0..count {
-            map.insert(name.to_string(), Value::Null);
-        }
-        map
-    }
-
-    #[test]
-    fn an_object_has_an_index_while_it_has_more_than_indexed_members() {
-        assert!(object(INDEXED).index.is_none());
-        assert!(object(INDEXED + 1).index.is_some());
-        // Made at once of its members, the same
-        let members = |count: usize| (0..count).map(|name| (name.to_string(), Value::Null));
-        assert!(
-            Map::from_members(members(INDEXED).collect())
-                .index
-                .is_none()
-        );
-        assert!(
-            Map::from_members(members(INDEXED + 1).collect())
-                .index
-                .is_some()
-        );
-        let mut map = object(INDEXED + 2);
-        assert!(map.index.is_some());
-        // A member taken out leaves INDEXED + 1, and the index, which still finds each
-        assert_eq!(map.shift_remove("0"), Some(Value::Null));
-        assert!(map.index.is_some());
-        assert_eq!(map.position("1"), Some(0));
-        assert_eq!(map.position(&(INDEXED + 1).to_string()), Some(INDEXED));
-        // Another leaves INDEXED, and no index
-        assert_eq!(map.shift_remove("1"), Some(Value::Null));
-        assert!(map.index.is_none());
-        assert_eq!(map.position("2"), Some(0));
     }
 }

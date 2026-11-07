@@ -364,11 +364,15 @@ over this crate's, and "about the same" is within 10 %:
 | Read a tree of 925 octets | 2,645 ns | 2,880 ns | about the same |
 | Write it | 923 ns ±15% between builds | 2,140 ns | 2.3x |
 | Select a value of it | 219 ns | 238 ns | about the same |
-| Put 100,000 members into an object | 21.0 ms | 18.6 ms | 0.89x |
-| Read an object of 100,000 members, 1,088,891 octets | 14.6 ms | 20.7 ms | 1.4x |
+| Put 4096 members into an object, one after the other | 15.9 ms | 0.65 ms | 0.04x |
+| Read an object of 4096 members, 39,851 octets | 380 µs | 774 µs | 2.0x |
 
 A tree keeps the members of an object in their order, where a
-`serde_json::Value` sorts them. Reading a PLMN, an IMSI or a 5G-GUTI takes 9
+`serde_json::Value` sorts them. An object is a list that is searched for a
+name, which takes less than a map for the few dozen members of a value of a
+protocol: putting n members one after the other takes a time that grows as
+n², and an object that is read has 4096 members at most. The two rows of 4096
+members were measured on 2026-11-07, when an object became a list. Reading a PLMN, an IMSI or a 5G-GUTI takes 9
 to 14 ns without an allocation, and the SUCI of an IMSI 80 ns.
 [`benches/`](benches/README.md) has the allocations, the other identities and
 the method. In `benches/`:

@@ -4,6 +4,8 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+- An object of a tree is a list of its members without an index, and an
+  object that is read has 4096 members at most.
 - The feature `serde` is part of `tree`, which brought its one dependency
   already: `tree::serde` and `impl_serde!` come with the tree.
 - `Guti5g::to_mapped_eps` and `GutiEps::to_mapped_5g`: the GUTI of EPS that a

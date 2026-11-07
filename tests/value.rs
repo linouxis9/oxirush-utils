@@ -2,7 +2,7 @@
 //! `tree!` writes, and which converts to and from a `serde_json::Value`.
 
 use oxirush_utils::tree;
-use oxirush_utils::tree::{Map, Members, Value};
+use oxirush_utils::tree::{Map, Value};
 use std::time::{Duration, Instant};
 
 #[test]
@@ -60,11 +60,11 @@ fn two_trees_are_equal_whatever_the_order_of_their_members() {
     assert_eq!(tree!("x"), "x");
     assert_eq!(tree!(true), true);
     assert_ne!(tree!("7"), 7);
-    // Wide objects in two orders, compared in a time that grows as n log n.
-    let forward: Map = (0..65_536)
+    // Wide objects in two orders, compared by the order of their names.
+    let forward: Map = (0..4096)
         .map(|index| (format!("m{index}"), tree!(index)))
         .collect();
-    let backward: Map = (0..65_536)
+    let backward: Map = (0..4096)
         .rev()
         .map(|index| (format!("m{index}"), tree!(index)))
         .collect();
@@ -153,110 +153,31 @@ fn an_object_of_many_members_keeps_them_where_they_are() {
 }
 
 #[test]
-fn an_object_does_what_a_list_of_its_members_does_on_both_sides_of_its_index() {
-    // Each call on an object that grows past the 256 members above which it keeps an index
-    // of its names and shrinks back, again and again, against a list of the members.
-    let mut map = Map::new();
-    let mut list: Vec<(String, Value)> = Vec::new();
-    let mut seed = 0x2545_f491_4f6c_dd1d_u64;
-    let mut next = |below: u64| {
-        seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
-        (seed >> 33) % below
+fn an_object_that_is_read_has_4096_members_at_most() {
+    let object = |count: usize| {
+        let members: Vec<String> = (0..count)
+            .map(|index| format!("\"m{index}\":{index}"))
+            .collect();
+        format!("{{{}}}", members.join(","))
     };
-    // The steps at which the object has an index, and those at which it went back below.
-    let (mut indexed, mut crossed, mut was) = (0, 0, false);
-    for step in 0..12_000 {
-        let name = format!("m{}", next(480));
-        let value = tree!(step);
-        let at = list.iter().position(|(known, _)| *known == name);
-        match next(if list.len() < 320 { 4 } else { 7 }) {
-            0 | 1 => {
-                let was = at.map(|at| core::mem::replace(&mut list[at].1, value.clone()));
-                if at.is_none() {
-                    list.push((name.clone(), value.clone()));
-                }
-                assert_eq!(map.insert(name, value), was);
-            }
-            2 => {
-                let position = next(list.len() as u64 + 2) as usize;
-                let was = at.map(|at| list.remove(at).1);
-                list.insert(position.min(list.len()), (name.clone(), value.clone()));
-                assert_eq!(map.shift_insert(position, name, value), was);
-            }
-            3 => {
-                if at.is_none() {
-                    list.push((name.clone(), value.clone()));
-                }
-                let expected = list
-                    .iter()
-                    .find(|(known, _)| *known == name)
-                    .unwrap()
-                    .1
-                    .clone();
-                assert_eq!(*map.entry(name).or_insert(value), expected);
-            }
-            4 | 5 => {
-                let was = at.map(|at| list.remove(at).1);
-                assert_eq!(map.shift_remove(&name), was);
-            }
-            _ => {
-                // A third of the members, which takes a large object back below the index.
-                let third = next(3);
-                let kept = |name: &str| name[1..].parse::<u64>().unwrap() % 3 != third;
-                list.retain(|(known, _)| kept(known));
-                map.retain(|known, _| kept(known));
-            }
-        }
-        let names: Vec<&String> = list.iter().map(|(name, _)| name).collect();
-        assert_eq!(map.keys().collect::<Vec<_>>(), names, "{step}");
-        for (name, value) in &list {
-            assert_eq!(map.get(name), Some(value), "{step} {name}");
-        }
-        assert_eq!(map.get("m480"), None);
-        let is = list.len() > 256;
-        indexed += usize::from(is);
-        crossed += usize::from(was && !is);
-        was = is;
-    }
-    assert!(indexed > 4_000 && crossed > 20, "{indexed} {crossed}");
-}
-
-#[test]
-fn an_object_of_n_members_is_built_and_read_in_a_time_that_grows_as_n_log_n() {
-    // What the reader of a message does with an object that a peer writes: each member is
-    // put into another object, one after the other; then each is found, changed and
-    // written by its name.
-    let count = 100_000;
-    let members: Vec<String> = (0..count)
-        .map(|index| format!("\"m{index}\":{index}"))
-        .collect();
-    let text = format!("{{{}}}", members.join(","));
-    let read: Value = text.parse().unwrap();
-    let started = Instant::now();
-    let mut copy = Map::new();
-    for (name, value) in read.as_object().unwrap() {
-        assert_eq!(copy.insert(name.clone(), value.clone()), None);
-    }
-    let mut written = Members::new();
-    for (name, value) in &copy {
-        written.put(name, value.clone());
-    }
-    let collected: Map = copy.clone().into_iter().collect();
-    for index in 0..count {
-        let name = format!("m{index}");
-        assert_eq!(copy.get(&name), Some(&tree!(index)));
-        *copy.get_mut(&name).unwrap() = tree!(index + 1);
-        *copy.entry(name).or_default() = tree!(index);
-    }
-    let mut tree = Value::Object(copy);
-    for index in 0..1000 {
-        tree::set(&mut tree, &format!("/m{}", count - 1 - index), tree!(true)).unwrap();
-    }
-    let elapsed = started.elapsed();
-    assert_eq!(written.finish(), read);
-    assert_eq!(Value::Object(collected), read);
-    assert_eq!(tree[format!("m{}", count - 1).as_str()], true);
-    assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    let read: Value = object(4096).parse().unwrap();
+    assert_eq!(read.as_object().map(Map::len), Some(4096));
+    assert_eq!(read["m4095"], 4095);
+    let error = object(4097).parse::<Value>().unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .starts_with("an object has 4096 members at most"),
+        "{error}"
+    );
+    // In a list, as deep as it is
+    let error = format!("[{{\"a\":{}}}]", object(4097))
+        .parse::<Value>()
+        .unwrap_err();
+    assert!(
+        error.to_string().starts_with("an object has 4096"),
+        "{error}"
+    );
 }
 
 #[test]

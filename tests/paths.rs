@@ -1414,8 +1414,8 @@ fn a_name_written_twice_in_an_object_is_refused() {
     // Twice in two objects is no repetition.
     let read: Value = serde_json::from_str(r#"[{"a": 1}, {"a": 2}]"#).unwrap();
     assert_eq!(read, tree!([{"a": 1}, {"a": 2}]));
-    // A wide object takes a time that grows as n log n.
-    let wide = (0..65_536)
+    // In an object of as many members as one that is read has
+    let wide = (0..4095)
         .map(|index| format!("\"m{index}\":{index}"))
         .collect::<Vec<_>>()
         .join(",");
@@ -1488,13 +1488,13 @@ fn the_operations_are_linear_in_the_size_of_the_tree() {
         (error.kind(), error.reason()),
         (ErrorKind::Limit, "a path selects 65536 values at most")
     );
-    // A plain tree of as many members.
-    let members: tree::Map = (0..MOST)
+    // A plain tree of as many members as an object that is read has.
+    let members: tree::Map = (0..4096)
         .map(|index| (format!("m{index}"), tree!(index)))
         .collect();
     let wide = Value::Object(members);
-    assert_eq!(tree::paths(&wide).len(), MOST);
-    assert_eq!(tree::select(&wide, "/M65534"), Ok(vec![&tree!(65534)]));
+    assert_eq!(tree::paths(&wide).len(), 4096);
+    assert_eq!(tree::select(&wide, "/M4095"), Ok(vec![&tree!(4095)]));
     let elapsed = started.elapsed();
     // A count for each entry would be four thousand million steps: minutes.
     assert!(elapsed < Duration::from_secs(20), "{elapsed:?}");

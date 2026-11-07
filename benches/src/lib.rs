@@ -54,8 +54,9 @@ pub struct Operation {
 /// The tree of an NGAP INITIAL CONTEXT SETUP REQUEST, as oxirush-ngap writes it.
 pub const MESSAGE: &str = r#"{"message":"InitialContextSetupRequest","ies":[{"AMF-UE-NGAP-ID":3},{"RAN-UE-NGAP-ID":2},{"GUAMI":{"pLMNIdentity":"208-93","aMFRegionID":202,"aMFSetID":1020,"aMFPointer":1}},{"PDUSessionResourceSetupListCxtReq":[{"pDUSessionID":1,"s-NSSAI":{"sST":1,"sD":"0000ff"},"pDUSessionResourceSetupRequestTransfer":{"PDUSessionAggregateMaximumBitRate":{"pDUSessionAggregateMaximumBitRateDL":1000000000,"pDUSessionAggregateMaximumBitRateUL":1000000000}}}]},{"AllowedNSSAI":[{"s-NSSAI":{"sST":1,"sD":"0000ff"}}]},{"UESecurityCapabilities":{"nRencryptionAlgorithms":{"value":"e000","length":16},"nRintegrityProtectionAlgorithms":{"value":"e000","length":16},"eUTRAencryptionAlgorithms":{"value":"e000","length":16},"eUTRAintegrityProtectionAlgorithms":{"value":"e000","length":16}}},{"SecurityKey":"5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a"},{"NAS-PDU":"7e02a3b4c5d6017e0042010177000bf202f8394001ca00006cf15400"}]}"#;
 
-/// The members of the wide object: 100,000 names.
-pub const MEMBERS: usize = 100_000;
+/// The members of the wide object: 4096 names, the most that an object of a tree that is
+/// read has.
+pub const MEMBERS: usize = 4096;
 
 /// What `REGISTRATION ACCEPT` of Open5GS had as its 5G-GUTI.
 pub const GUTI: [u8; 11] = [
@@ -132,11 +133,11 @@ pub fn operations() -> Vec<Operation> {
         }),
     );
 
-    // An object of 100,000 members, put one after the other and read as text.
+    // An object of 4096 members, put one after the other and read as text.
     let names: Vec<String> = (0..MEMBERS).map(|index| format!("m{index}")).collect();
     let ours = names.clone();
     add(
-        "put-100000-members",
+        "put-4096-members",
         "oxirush-utils",
         true,
         Box::new(move || {
@@ -149,7 +150,7 @@ pub fn operations() -> Vec<Operation> {
     );
     let theirs = names.clone();
     add(
-        "put-100000-members",
+        "put-4096-members",
         "serde_json",
         true,
         Box::new(move || {
@@ -163,7 +164,7 @@ pub fn operations() -> Vec<Operation> {
     let wide = wide(&names);
     let ours = wide.clone();
     add(
-        "read-100000-members",
+        "read-4096-members",
         "oxirush-utils",
         true,
         Box::new(move || {
@@ -171,7 +172,7 @@ pub fn operations() -> Vec<Operation> {
         }),
     );
     add(
-        "read-100000-members",
+        "read-4096-members",
         "serde_json",
         true,
         Box::new(move || {

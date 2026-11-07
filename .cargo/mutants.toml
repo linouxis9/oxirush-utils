@@ -47,12 +47,6 @@ exclude_re = [
     # The derived PartialOrd of `Supi`, which derives Ord too, is `Some(Ord::cmp)`: the
     # `partial_cmp` of `Text`, which is private, is called by nothing.
     "src/identity/supi\\.rs:.*: replace <impl PartialOrd for Text<'_>>::partial_cmp -> Option<core::cmp::Ordering> with None",
-    # An object of INDEXED members that gets one more by `push_indexed` is reindexed with
-    # `>=` as it is not with `>`: `reindex` makes no index for INDEXED members.
-    "src/tree/value\\.rs:.*: replace > with >= in Map::push_indexed$",
-    # And `push` that takes `push_indexed` for fewer than INDEXED members, with `>` for
-    # `<`, does what it does: the member is added, and no index is made for so few.
-    "src/tree/value\\.rs:.*: replace < with > in Map::push$",
     # The defaults of the methods of `Family` are what their mutants give: the default
     # shape, no names, a null that is no value, nothing done.
     "src/tree/walk\\.rs:.*: replace Family::(start|entry|member) -> Self::Shape with Default::default\\(\\)$",
