@@ -2,132 +2,74 @@
 
 All notable changes to `oxirush-utils` are recorded here.
 
-## Unreleased
+## 0.2.0 - Unreleased
 
-- `Reading::member` and `Reading::optional` take the name of the member, in the
-  place of its position among the names: `reading.member(&members, "sst", ..)`.
-  A name that the type does not list panics.
-- `Supi` owns its text, has no lifetime, and needs the feature `alloc`, as the
-  SUCIs do: `into_owned` is gone.
-- `identity::Suci`, the SUCI of either form, `Imsi(ImsiSuci)` or `Nai(NaiSuci)`,
-  read from a 5GS mobile identity by its SUPI format, with its parts, the NAI
-  form of the SUCI of an IMSI, and the text of the service-based interfaces.
-  `identity::Algorithm`, the identity of a security algorithm, which ciphering
-  and integrity share in 5GS and EPS. The crates of the family take them in the
-  place of their own.
-- Items with no use beside another way are gone: `tree::to_value` (call
-  `to_tree`), `bits()` of the types of identity (`u8::from`), `ImsiSuci::of`
-  and `Guti5g::of` (`ImsiSuci::null` and `Guti5g::new`), `STmsiEps::to_u64`,
-  `tree::written_as`, `tree::select_forms_in`, `tree::Form` with
-  `Family::form`, `Entry::or_insert_with` and `Entry::or_default`, and the
-  constants `MAX_OCTETS`, `MAX_SEGMENTS` and `MAX_SELECTED`, which the
-  documentation of paths states.
-- `to_nas_octets` of `Imsi`, `Imei` and `Imeisv` gives the octets, and takes
-  the three low bits of the type of identity: it cannot fail.
-- `Value` keeps the calls that a tree needs: `pointer` and `pointer_mut` (a
-  second syntax of paths beside `select`), `take`, `as_null`, `is_u64`,
-  `is_i64`, `is_f64`, the trait `Index`, and the comparisons with a
-  `serde_json::Value`, a number or a string are gone. `get` takes the name of a
-  member; `tree[name]` and `tree[position]` stay. `Map::remove` is
-  `shift_remove`, and `shift_insert` is gone.
-- An object of a tree is a list of its members without an index, and an
-  object that is read has 4096 members at most.
-- The feature `serde` is part of `tree`, which brought its one dependency
-  already: `tree::serde` and `impl_serde!` come with the tree.
-- `Guti5g::to_mapped_eps` and `GutiEps::to_mapped_5g`: the GUTI of EPS that a
-  5G-GUTI maps to when the UE moves from 5GS to E-UTRAN, and the 5G-GUTI that a
-  GUTI maps to the other way (3GPP TS 23.003 clause 2.10.2). The 24 bits of the
-  AMF identifier are those of the MME Group ID and the MME Code, in their order.
-- The keywords take `supi` in the place of `telecom`, and the description says 5GS and EPS, as those who look for the crate search.
+### Added
+
+- `identity::Suci`, the SUCI of either form (`Imsi(ImsiSuci)` or `Nai(NaiSuci)`),
+  read from a 5GS mobile identity by its SUPI format, with its parts, the NAI form
+  of the SUCI of an IMSI, and the text of the service-based interfaces.
+- `identity::Algorithm`, the identity of a security algorithm, which ciphering and
+  integrity share in 5GS and EPS.
+- `Guti5g::to_mapped_eps` and `GutiEps::to_mapped_5g` (3GPP TS 23.003 clause 2.10.2).
+
+### Changed
+
+- The feature `serde` is part of `tree`.
+- `Supi` owns its text and needs the feature `alloc`.
+- `Reading::member` and `Reading::optional` take the name of the member, not its
+  position; a name that the type does not list panics.
+- `Value::get` takes the name of a member.
+- `to_nas_octets` of `Imsi`, `Imei` and `Imeisv` cannot fail: it takes the three low
+  bits of the type of identity.
+- An object of a tree is a list without an index; one that is read has 4096 members
+  at most.
+
+### Removed
+
+- `Value::pointer`, `pointer_mut`, `take`, `as_null`, `is_u64`, `is_i64`, `is_f64`,
+  the trait `tree::Index`, and the comparisons of a tree with a `serde_json::Value`,
+  a number or a string.
+- `Map::remove` and `Map::shift_insert`, `Entry::or_insert_with`,
+  `Entry::or_default`.
+- `tree::to_value`, `tree::written_as`, `tree::select_forms_in`, `tree::Form` and
+  `Family::form`, and the constants `MAX_OCTETS`, `MAX_SEGMENTS`, `MAX_SELECTED`.
+- `bits()` of the types of identity, `ImsiSuci::of`, `Guti5g::of`,
+  `STmsiEps::to_u64`, `Supi::into_owned`.
+
+### Migration from 0.1
+
+| 0.1 | 0.2 |
+|-----|-----|
+| `features = ["serde"]` | `features = ["tree"]` |
+| `Supi<'a>`, `supi.into_owned()` | `Supi`, `supi` |
+| `reading.member(&members, 0, ..)` | `reading.member(&members, "sst", ..)` |
+| `tree::to_value(&x)` | `x.to_tree()` |
+| `value.pointer("/a/0")` | `tree::select(&value, "/a/0")`, or `value["a"][0]` |
+| `value.get(0)` | `value[0]`, or `value.as_array()?.get(0)` |
+| `value.take()` | `core::mem::take(&mut value)` |
+| `assert_eq!(value, 1)`, `value == json` | `assert_eq!(value, tree!(1))`, `value == Value::from(json)` |
+| `map.remove(name)` | `map.shift_remove(name)` |
+| `entry.or_default()` | `entry.or_insert(Value::Null)` |
+| `kind.bits()` | `u8::from(kind)` |
+| `imsi.to_nas_octets(1)?` | `imsi.to_nas_octets(1)` |
+| `ImsiSuci::of(imsi, 2)` | `ImsiSuci::null(imsi.plmn(2)?, RoutingIndicator::default(), imsi.msin(2)?)` |
+| `Guti5g::of(plmn, region, s_tmsi)` | `Guti5g::new(plmn, region, s_tmsi.amf_set_id(), s_tmsi.amf_pointer(), s_tmsi.tmsi())?` |
 
 ## 0.1.0 - 2026-10-24
 
-The first version: what the OxiRush crates share, so that each rule exists
-once.
+The first version.
 
-- `identity`: the PLMN with its two codings by name, `to_nas_octets` (3GPP
-  TS 24.008 clause 10.5.1.3) and `to_ap_octets` (TS 38.413 clause 9.3.3.5 and
-  TS 36.413 clause 9.2.3.8); TBCD strings and the identity digits of a mobile
-  identity; `Imsi`, `Imei` with its spare digit or its check digit, `Imeisv`;
-  `Guti5g` and `STmsi5g`, `GutiEps` and `STmsiEps`; `Tai5gs` and `TaiEps`; the
-  types of identity of TS 24.501, TS 24.301 and TS 24.008. A value is checked
-  when it is made, prints whole, and is `Eq`, `Ord` and `Hash`, and `Copy`
-  where it holds no text. An error names the member at fault and says why, as
-  "`mcc` has 2 digits, and must have 3": a character that is no digit is
-  refused as that character, before the digits are counted.
-- `Supi` with its `SupiType`, whose number in TS 23.003 clause 2.2B and whose
-  SUPI format in TS 24.501 table 9.11.3.4.1 differ for a GLI and a GCI.
-  `ImsiSuci`, the SUCI of an IMSI as the value of its parts, with
-  `RoutingIndicator` and `ProtectionScheme`: the 5GS mobile identity of
-  TS 24.501 figure 9.11.3.4.3, and the text `suci-0-208-93-0-0-0-0000000001`.
-  The crate conceals nothing and reads no concealed identity.
-- `NaiSuci`, the SUCI in the form of a NAI that a network specific
-  identifier, a GCI or a GLI has, and an IMSI as a NAI (TS 23.003 clauses
-  28.7.3, 28.15.5 and 28.16.5): the text
-  `type1.rid678.schid0.useriduser17@example.com` and the 5GS mobile identity
-  that holds it, with the rules of each SUPI type, the key identifier of the
-  scheme and the fields of a profile of ECIES. The scheme output of either
-  form that is made has the lengths of the parts of its profile (TS 33.501
-  annex C.3.4): 41 to 45 octets for an IMSI with profile A, 42 to 46 with
-  profile B.
-  `nai::check_realm` and `nai::check_username` check the grammar of RFC 7542,
-  and `nai::home_network_domain` writes the realm of an IMSI. With the
-  feature `idna` a realm and a username are also in Unicode normalization
-  form C, and a realm is a name that IDNA takes as it is written, in either
-  case (TS 23.003 clause 28.7.2).
-- A reader of octets is canonical: it gives a value only for the octets that
-  the value is written as. The readers named `_tolerant` also take what other
-  implementations are known to send, with a list of what was not by the
-  clause, which allocates nothing: another end mark than `1111` after an even
-  number of identity digits, the spare bit of the first octet of a 5G-GUTI or
-  a 5G-S-TMSI, the spare bits and the spare SUPI formats of a SUCI, and the
-  scheme output of a SUCI of an IMSI of another length than its profile gives
-  it, which only the home network reads, and refuses.
-- `tree`, with the feature `tree`: the tree of a message as a `tree::Value`,
-  JSON whose objects keep their members in the order in which they were
-  written, which `tree!` writes in the code as `serde_json::json!` does. It
-  converts to and from a `serde_json::Value`. Of the features of
-  `serde_json`, the crate turns on `float_roundtrip` alone: the JSON of a
-  program that depends on it keeps the order that the program chose, and a
-  number with a fraction that a tree prints is read back as it was. An
-  object of more than 256 members keeps an index of the hashes of its names
-  with their positions, which copies no name, so that one is found in a time
-  that grows as log n; a smaller one, as every value of a protocol, is a list
-  that is searched. A name written twice in an object of JSON is
-  refused. `Tree`, `Members` and `Reading` write a type as a tree and read it
-  from one, with refusals that say the member and why, and nothing of what
-  is written in `Reading::secret`, where a key is read. `Reading::named`
-  reads `true` and `false` as those names of a type that has them, as YAML
-  leaves them unquoted, and refuses another name of a type of more than 12
-  with the nearest of them (`tree::nearest`), or its first. Octets are
-  hexadecimal in lower case, read in either; a number is a JSON number; a
-  name is read by its letters and its digits, however it is written.
-- Paths on a tree: `select`, `paths`, `set`, `remove` and `insert`, with
-  4096 octets, 64 segments and 65,536 selected values at most (the longest
-  list of the protocols, the connections of an NG RESET), one error type
-  with a kind, and edits that are done whole or not at all, in the place of
-  the tree: what an edit changes is kept and put back when a later place
-  cannot take it, and nothing of the tree is copied. `Family` is what a
-  family of messages adds where its trees are more than objects and lists;
-  the functions that end with `_in` take one, `places_in` gives the places of
-  a path with what the family knows of each, and `open_in` shows the values
-  on the way of a path as the family opens them, every place of a segment in
-  one walk of the tree. `null` is read as absent, but where the family says
-  that the type of the place is NULL (`Family::null_is_value`): an
-  alternative `{"pLMNWide": null}` is then a value that a path lists and
-  selects. `Root`, `Edit`, `Key`, `Step`, `Absent`, `Listed` and `Removal`
-  are `#[non_exhaustive]`, and `Root::new` makes a root. A family refuses an
-  edit in its step, before anything changes, takes a segment in a member with
-  its own rule there (`Next::through`), and gives its errors a code of its
-  own.
-  `written_as` brings a value that someone wrote to the form that a tree
-  shows at a place, for a comparison.
-- `tree::serde`, with the feature `serde`: `Serialize` and `Deserialize` for
-  a type through its tree, by `impl_serde!` or the two functions that it
-  calls. `impl_serde!` takes a type with a lifetime as `Name<'a>`, which is
-  deserialized with any lifetime.
-- `no_std`, no `unsafe`, no dependency without a feature. What holds a text
-  or a list is the feature `alloc`, which `tree` and `idna` turn on: without
-  it the crate needs no allocator, so that a program without one can take the
-  PLMN, the GUTIs and the other values that have their digits in place. The
-  minimum supported Rust version is 1.88.
+- `identity`: the PLMN with its NAS and AP codings, TBCD strings, `Imsi`, `Imei`,
+  `Imeisv`, `Supi` and `SupiType`, `ImsiSuci` and `NaiSuci` with `RoutingIndicator`
+  and `ProtectionScheme`, `Guti5g`, `STmsi5g`, `GutiEps`, `STmsiEps`, `Tai5gs`,
+  `TaiEps`, the types of identity, and the grammar of a NAI (`nai::check_realm`,
+  `nai::check_username`, with the feature `idna` for internationalized names).
+  Values are checked when they are made and print whole; readers of octets are
+  canonical, and those named `_tolerant` take what other implementations send.
+- `tree`, with the feature `tree`: a JSON tree that keeps the order of its members,
+  `tree!`, `Tree` with `Members` and `Reading`, paths with `select`, `paths`, `set`,
+  `remove` and `insert`, and `Family` for the rules of a family of messages.
+- `tree::serde`, with the feature `serde`: `Serialize` and `Deserialize` through the
+  tree, by `impl_serde!`.
+- `no_std`, no `unsafe`, no dependency without a feature; MSRV 1.88.

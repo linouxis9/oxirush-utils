@@ -1,6 +1,6 @@
 [package]
 name = "oxirush-utils"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "3GPP identities for 5GS and EPS as Rust values (PLMN, IMSI, IMEI, SUPI, SUCI, 5G-GUTI, GUTI, TAI) in their NAS, AP and text forms, and the JSON tree and paths that the OxiRush crates share. no_std."
 license = "Apache-2.0"

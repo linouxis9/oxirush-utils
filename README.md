@@ -35,11 +35,11 @@ Each example is followed by its output.
 
 ```toml
 [dependencies]
-oxirush-utils = { version = "0.1", features = ["alloc"] }
+oxirush-utils = { version = "0.2", features = ["alloc"] }
 # With the tree and its paths, which need an allocator too:
-# oxirush-utils = { version = "0.1", features = ["tree"] }
+# oxirush-utils = { version = "0.2", features = ["tree"] }
 # Without an allocator, the values that have their digits in place:
-# oxirush-utils = "0.1"
+# oxirush-utils = "0.2"
 ```
 
 | Feature | Adds | Through |
