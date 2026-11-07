@@ -328,9 +328,7 @@ fn an_imsi_has_its_plmn_and_its_msin_by_the_length_of_the_mnc() {
     assert!(error("20893000000000x").contains("the character `x`"));
     assert!(error("208-93-0000000001").contains("the character `-`"));
     // The type of identity of an IMSI is 1 in TS 24.008 and in TS 24.301.
-    let octets = imsi
-        .to_nas_octets(MobileIdentityTypeEps::Imsi.bits())
-        .unwrap();
+    let octets = imsi.to_nas_octets(MobileIdentityTypeEps::Imsi.into());
     assert_eq!(octets, [0x29, 0x80, 0x39, 0x00, 0x00, 0x00, 0x00, 0x10]);
     assert_eq!(Imsi::from_nas_octets(1, &octets), Ok(imsi));
     // Another type of identity is not this one.
@@ -391,7 +389,7 @@ fn an_imei_has_a_spare_digit_or_its_check_digit() {
 #[test]
 fn an_imeisv_with_another_end_mark_is_read_with_its_fault_and_is_not_canonical() {
     let sent = [0x15, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    let kind = MobileIdentityType5gs::Imeisv.bits();
+    let kind = MobileIdentityType5gs::Imeisv.into();
     let fault = Imeisv::from_nas_octets(kind, &sent).unwrap_err();
     assert_eq!(
         (fault.member, fault.fault),
@@ -405,7 +403,7 @@ fn an_imeisv_with_another_end_mark_is_read_with_its_fault_and_is_not_canonical()
         "`imeisv` has the half octet 0x0 where its end mark is, and the end mark is 0xf"
     );
     // What the value writes is the canonical form, which has no fault.
-    let canonical = imeisv.to_nas_octets(kind).unwrap();
+    let canonical = imeisv.to_nas_octets(kind);
     assert_eq!(
         canonical,
         [0x15, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0]
@@ -529,7 +527,6 @@ fn a_guti_and_an_s_tmsi_have_the_octets_and_the_text_of_their_parts() {
         format!("{s_tmsi} {s_tmsi:?}"),
         "5g-s-tmsi-ff81deadbeef STmsi5g(5g-s-tmsi-ff81deadbeef)"
     );
-    assert_eq!(Guti5g::of(plmn("310-410"), 0xca, s_tmsi), guti);
 
     let error = |result: Result<Guti5g, Error>| result.unwrap_err().to_string();
     let new = |set, pointer| Guti5g::new(plmn("208-93"), 0, set, pointer, 0);
@@ -733,7 +730,7 @@ fn a_type_of_identity_has_the_number_of_its_clause() {
     ];
     for (bits, kind) in fgs.into_iter().enumerate() {
         assert_eq!(
-            (kind.bits(), Fgs::try_from(bits as u8)),
+            (u8::from(kind), Fgs::try_from(bits as u8)),
             (bits as u8, Ok(kind))
         );
         assert_eq!(Fgs::of(0xf8 | bits as u8), Ok(kind));
@@ -751,7 +748,7 @@ fn a_type_of_identity_has_the_number_of_its_clause() {
         (5, IdentityType::Tmgi),
     ] {
         assert_eq!(
-            (kind.bits(), IdentityType::try_from(bits)),
+            (u8::from(kind), IdentityType::try_from(bits)),
             (bits, Ok(kind))
         );
     }
@@ -764,9 +761,9 @@ fn a_type_of_identity_has_the_number_of_its_clause() {
     // The IMEI is 3 in a mobile identity of 5GS and of EPS, and 2 in TS 24.008.
     assert_eq!(
         (
-            Fgs::Imei.bits(),
-            Eps::Imei.bits(),
-            IdentityType::Imei.bits()
+            u8::from(Fgs::Imei),
+            u8::from(Eps::Imei),
+            u8::from(IdentityType::Imei)
         ),
         (3, 3, 2)
     );
@@ -994,7 +991,12 @@ fn the_suci_of_an_imsi_has_the_parts_and_the_octets_of_its_clauses() {
 
     // Annex C.4.2.1: the scheme output of the null scheme is the MSIN in BCD.
     let imsi = Imsi::new("274012001002086").unwrap();
-    let null = ImsiSuci::of(imsi, 3).unwrap();
+    let null = ImsiSuci::null(
+        imsi.plmn(3).unwrap(),
+        RoutingIndicator::default(),
+        imsi.msin(3).unwrap(),
+    )
+    .unwrap();
     assert_eq!(
         (null.plmn(), null.msin()),
         (plmn("274-012"), Some("001002086"))

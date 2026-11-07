@@ -100,11 +100,10 @@ mod walk;
 
 pub use error::{Error, ErrorKind};
 pub use forms::{
-    Form, alternative, bits, hex, named, nearest, octets, same_name, signed, text, unhex, unsigned,
-    written_as,
+    alternative, bits, hex, named, nearest, octets, same_name, signed, text, unhex, unsigned,
 };
-pub use members::{Members, Read, Reading, Refused, Tree, from_value, member, to_value};
-pub use path::{MAX_OCTETS, MAX_SEGMENTS, MAX_SELECTED, escape, position, segments};
+pub use members::{Members, Read, Reading, Refused, Tree, from_value, member};
+pub use path::{escape, position, segments};
 pub use value::{Entry, Map, Number, Value};
 
 // The `vec!` of `alloc`, which `tree!` writes a list with in a crate without `std`.
@@ -112,6 +111,5 @@ pub use value::{Entry, Map, Number, Value};
 pub use alloc::vec as __vec;
 pub use walk::{
     Absent, Edit, Family, Key, Listed, Next, Place, Plain, Removal, Root, Step, insert, insert_in,
-    open_in, paths, paths_in, places_in, remove, remove_in, select, select_forms_in, select_in,
-    set, set_in,
+    open_in, paths, paths_in, places_in, remove, remove_in, select, select_in, set, set_in,
 };

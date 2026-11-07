@@ -52,9 +52,9 @@
 //! | IMEI, IMEISV, and the identities of EPS | [`Imei`](identity::Imei), [`Imeisv`](identity::Imeisv), [`GutiEps`](identity::GutiEps), [`Tai5gs`](identity::Tai5gs), [`TaiEps`](identity::TaiEps) |
 //! | The SUCI in the form of a NAI | [`NaiSuci`](identity::NaiSuci), [`nai::check_realm`](identity::nai::check_realm) |
 //! | What other implementations send | [`Imeisv::from_nas_octets_tolerant`](identity::Imeisv::from_nas_octets_tolerant), [`Fault`](identity::Fault) |
-//! | A type as a tree | [`tree::Tree`], [`tree!`], [`tree::to_value`], [`tree::from_value`] |
+//! | A type as a tree | [`tree::Tree`], [`tree!`], [`tree::from_value`] |
 //! | Paths | [`tree::select`], [`tree::paths`], [`tree::set`], [`tree::insert`], [`tree::remove`] |
-//! | The rules of a family of messages | [`tree::Family`], [`tree::select_in`], [`tree::written_as`] |
+//! | The rules of a family of messages | [`tree::Family`], [`tree::select_in`] |
 //! | Any format of serde | [`impl_serde!`] |
 //!
 //! # Modules

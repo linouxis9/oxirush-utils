@@ -12,7 +12,7 @@
 use oxirush_utils::tree;
 use oxirush_utils::tree::Value;
 use oxirush_utils::tree::{
-    Absent, Edit, Error, ErrorKind, Family, Form, Listed, Next, Place, Plain, Removal, Root, Step,
+    Absent, Edit, Error, ErrorKind, Family, Listed, Next, Place, Removal, Root, Step,
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -111,10 +111,6 @@ impl Family for Nas {
             InNas::Ie => Removal::Null,
             _ => Removal::Take,
         }
-    }
-
-    fn form(&self, _shape: &InNas, _value: &Value) -> Form {
-        Form::Plain
     }
 }
 
@@ -597,13 +593,6 @@ impl Family for Ap {
             (counts[&id] == 1).then(|| name.to_string())
         };
         Some(list.iter().map(name).collect())
-    }
-
-    fn form(&self, shape: &InAp, _value: &Value) -> Form {
-        match shape {
-            InAp::Octets => Form::Octets,
-            _ => Form::Plain,
-        }
     }
 
     fn edited(&self, view: &mut Value, at: &[tree::Key], _shape: &InAp, _edit: Edit) {
@@ -1480,7 +1469,7 @@ fn the_operations_are_linear_in_the_size_of_the_tree() {
     tree::insert_in(&Ap, &mut pdu, "/ngap/-", ie(10, 0)).unwrap();
     assert_eq!(
         tree::select(&pdu, "/message/protocolIEs/*/value").map(|values| values.len()),
-        Ok(tree::MAX_SELECTED)
+        Ok(65_536)
     );
     tree::insert_in(&Ap, &mut pdu, "/ngap/-", ie(10, 0)).unwrap();
     let error = tree::select(&pdu, "/message/protocolIEs/*/value").unwrap_err();
@@ -1529,49 +1518,6 @@ fn a_tree_is_listed_as_deep_as_a_path_goes() {
     }
     let paths = tree::paths(&lists);
     assert_eq!(paths[0].0, "/0".repeat(64));
-}
-
-// ── Comparing with a value that someone wrote ───────────────────────────────
-
-/// A tree shows octets in lower case and reads them in either: a comparison with a value
-/// that someone wrote takes that value as the tree shows it at that place. `C0` is the
-/// octets `c0` at a place of octets, and other text than `c0` at a place of text.
-#[test]
-fn a_written_value_is_compared_as_the_tree_shows_it_at_its_place() {
-    let pdu = tree!({"message": {"protocolIEs": [
-        {"id": 38, "criticality": "reject", "value": "c0"},
-        {"id": 65000, "criticality": "ignore", "value": "c0"},
-    ]}});
-    let same = |path: &str, written: Value| {
-        let selected = tree::select_forms_in(&Ap, &pdu, path).unwrap();
-        let [(value, form)] = selected[..] else {
-            panic!("{path} selects one value");
-        };
-        *value == tree::written_as(form, &written)
-    };
-    // The value of the NAS-PDU is octets.
-    assert!(same("/ngap/NAS-PDU/value", tree!("C0")));
-    assert!(same("/ngap/NAS-PDU/value", tree!("c0")));
-    assert!(!same("/ngap/NAS-PDU/value", tree!("c1")));
-    // The family says nothing of the other value: it is text, and `C0` is other text.
-    assert!(!same("/ngap/1/value", tree!("C0")));
-    assert!(same("/ngap/1/value", tree!("c0")));
-    // One of several, each as the tree shows it.
-    let one_of = tree::written_as(Form::Octets, &tree!(["C0", "FF", "not octets"]));
-    assert_eq!(one_of, tree!(["c0", "ff", "not octets"]));
-    // A name of a set is the one that the tree shows.
-    let names = Form::Named(&["plmn-not-allowed", "congestion"]);
-    assert_eq!(
-        tree::written_as(names, &tree!("PLMN not allowed")),
-        tree!("plmn-not-allowed")
-    );
-    assert_eq!(
-        tree::written_as(names, &tree!("no such cause")),
-        tree!("no such cause")
-    );
-    assert_eq!(tree::written_as(Form::Plain, &tree!(3)), tree!(3));
-    let plain = tree::select_forms_in(&Plain, &pdu, "/message/protocolIEs/0/value").unwrap();
-    assert_eq!(plain, [(&tree!("c0"), Form::Plain)]);
 }
 
 /// A member that is listed in the place of the value that holds it lists what it holds

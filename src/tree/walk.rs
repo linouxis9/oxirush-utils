@@ -18,7 +18,7 @@
 //! Paths on a tree: `select`, `paths`, `set`, `remove` and `insert`, and what a family of
 //! messages adds to them where its trees are more than objects and lists.
 
-use super::forms::{Form, key, same_name};
+use super::forms::{key, same_name};
 use super::path::{MAX_SEGMENTS, MAX_SELECTED, escape, position, segments};
 use super::value::{Map, Value};
 use super::{Error, ErrorKind};
@@ -429,13 +429,6 @@ pub trait Family {
         Removal::Take
     }
 
-    /// How the value at a place of `shape` is written, for a comparison with a value
-    /// that someone wrote: see [`written_as`](super::written_as).
-    fn form(&self, shape: &Self::Shape, value: &Value) -> Form {
-        let _ = (shape, value);
-        Form::Plain
-    }
-
     /// Whether `null` at a place of `shape` is a value: the one value of a type that has
     /// no other, as the NULL of ASN.1, which a CHOICE has as an alternative. A tree is
     /// written so, `{"pLMNWide": null}`; elsewhere `null` is read as a member that is
@@ -716,25 +709,6 @@ pub fn select_in<'v, F: Family>(
     let places = walk(family, tree, path, None)?;
     let values = places.into_iter().filter_map(|place| there(family, &place));
     Ok(values.collect())
-}
-
-/// [`select_in`], with how each value is written at its place: what a comparison with a
-/// value that someone wrote brings that value to, with [`written_as`](super::written_as).
-///
-/// # Errors
-///
-/// Those of [`select_in`].
-pub fn select_forms_in<'v, F: Family>(
-    family: &F,
-    tree: &'v Value,
-    path: &str,
-) -> Result<Vec<(&'v Value, Form)>, Error> {
-    let places = walk(family, tree, path, None)?;
-    let selected = places.into_iter().filter_map(|place| {
-        let value = there(family, &place)?;
-        Some((value, family.form(&place.shape, value)))
-    });
-    Ok(selected.collect())
 }
 
 /// The value of a place that is there: one that is not `null`, or `null` where the family

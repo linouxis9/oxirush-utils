@@ -54,18 +54,6 @@ fn octets_are_hexadecimal_in_lower_case_and_are_read_in_either() {
         );
         assert_eq!(text, hex::encode(&octets));
     }
-    // At a place of octets, what someone wrote is in lower case when it is octets, and
-    // as it was written when it is not.
-    assert_eq!(
-        tree::written_as(tree::Form::Octets, &tree!("02F8")),
-        tree!("02f8")
-    );
-    for text in ["XY", "02F", "0x02"] {
-        assert_eq!(
-            tree::written_as(tree::Form::Octets, &tree!(text)),
-            tree!(text)
-        );
-    }
 }
 
 /// oxirush-ngap `a_name_is_the_same_whatever_its_case_and_what_is_between_its_letters`,
@@ -228,7 +216,7 @@ fn sample() -> Sample {
 
 #[test]
 fn a_value_is_written_with_its_members_in_their_order_and_read_back() {
-    let written = tree::to_value(&sample());
+    let written = sample().to_tree();
     assert_eq!(
         written.to_string(),
         r#"{"count":18446744073709551615,"offset":-8,"flag":true,"kind":"5gs-services-not-allowed","name":"C0","payload":"c0ff","fixed":"02f839","mask":{"value":"c0","length":3},"either":{"number":7},"list":[1,2,3]}"#
@@ -259,7 +247,7 @@ fn a_value_is_written_with_its_members_in_their_order_and_read_back() {
 #[test]
 fn a_refusal_says_the_member_and_why() {
     let refused = |edit: &dyn Fn(&mut Value)| {
-        let mut tree = tree::to_value(&sample());
+        let mut tree = sample().to_tree();
         edit(&mut tree);
         let error = tree::from_value::<Sample>(&tree).unwrap_err();
         assert!(

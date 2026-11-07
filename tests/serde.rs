@@ -41,7 +41,7 @@ impl Tree for Request {
     fn to_tree(&self) -> Value {
         let mut members = Members::new();
         // Not the order of the alphabet: that of the type.
-        members.put("slices", self.slices.iter().map(tree::to_value).collect());
+        members.put("slices", self.slices.iter().map(Tree::to_tree).collect());
         members.put("cause", tree::text(&self.cause));
         members.finish()
     }
@@ -113,7 +113,7 @@ fn json_carries_the_tree() {
     assert_eq!(serde_json::from_str::<Request>(&text).unwrap(), request());
     assert_eq!(
         Value::from(serde_json::to_value(request()).unwrap()),
-        tree::to_value(&request())
+        request().to_tree()
     );
     let read: Request =
         serde_json::from_value(json!({"Cause": "x", "SLICES": [{"SD": "0000FF", "sst": 9}]}))

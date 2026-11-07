@@ -55,7 +55,7 @@ use alloc::vec::Vec;
 /// }
 ///
 /// let slice = Slice { sst: 1, sd: Some([0, 0, 0xff]) };
-/// assert_eq!(tree::to_value(&slice), tree!({"sst": 1, "sd": "0000ff"}));
+/// assert_eq!(slice.to_tree(), tree!({"sst": 1, "sd": "0000ff"}));
 ///
 /// // A name is read however it is written, and a refusal says where and why
 /// let read: Slice = tree::from_value(&tree!({"SST": 2}))?;
@@ -83,33 +83,6 @@ pub trait Tree: Sized {
 /// A tree that is not a value of its type: the [`Reading`] has why.
 #[derive(Debug)]
 pub struct Refused;
-
-/// The tree of `value`.
-///
-/// ```
-/// # use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
-/// # #[derive(Debug, PartialEq)]
-/// # struct Timer { seconds: u32 }
-/// # impl Tree for Timer {
-/// #     const NAME: &'static str = "GPRS timer";
-/// #     fn to_tree(&self) -> Value {
-/// #         let mut members = Members::new();
-/// #         members.put("seconds", tree::unsigned(self.seconds.into()));
-/// #         members.finish()
-/// #     }
-/// #     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
-/// #         let members = reading.members(value, &["seconds"])?;
-/// #         let seconds = reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 11160))?;
-/// #         Ok(Self { seconds: seconds as u32 })
-/// #     }
-/// # }
-/// // A type of the tree, as the example of `Tree` writes one
-/// let tree = tree::to_value(&Timer { seconds: 3600 });
-/// assert_eq!(tree.to_string(), r#"{"seconds":3600}"#);
-/// ```
-pub fn to_value<T: Tree>(value: &T) -> Value {
-    value.to_tree()
-}
 
 /// The value of the type `T` that `value` writes.
 ///
@@ -552,12 +525,11 @@ impl Reading {
     /// The length is refused when the octets are more or fewer than it takes, and so is a
     /// bit after the last that is not zero.
     pub fn bits(&mut self, value: &Value) -> Result<(Vec<u8>, usize), Refused> {
-        let Some(members) = value.as_object() else {
+        if value.as_object().is_none() {
             let octets = self.octets(value)?;
             let length = octets.len() * 8;
             return Ok((octets, length));
-        };
-        let _ = members;
+        }
         let of = self.members(value, &["value", "length"])?;
         let octets = self.member(&of, 0, |value, reading| reading.octets(value))?;
         let length = self.member(&of, 1, |value, reading| {

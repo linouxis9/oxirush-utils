@@ -238,7 +238,7 @@ impl Guti5g {
     }
 
     /// The 5G-GUTI of a PLMN, an AMF Region ID and a 5G-S-TMSI.
-    pub fn of(plmn: Plmn, amf_region_id: u8, s_tmsi: STmsi5g) -> Self {
+    fn of(plmn: Plmn, amf_region_id: u8, s_tmsi: STmsi5g) -> Self {
         Self {
             plmn,
             amf_region_id,
@@ -386,7 +386,7 @@ impl FromStr for Guti5g {
 /// use oxirush_utils::identity::STmsiEps;
 ///
 /// let s_tmsi = STmsiEps::new(0x01, 0xdead_beef);
-/// assert_eq!(s_tmsi.to_u64(), 0x01_dead_beef);
+/// assert_eq!((s_tmsi.mme_code(), s_tmsi.m_tmsi()), (0x01, 0xdead_beef));
 /// assert_eq!(s_tmsi.to_string(), "s-tmsi-01deadbeef");
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -412,7 +412,7 @@ impl STmsiEps {
     }
 
     /// The 40 bits of the S-TMSI as a number: the MME Code, then the M-TMSI.
-    pub fn to_u64(&self) -> u64 {
+    fn to_u64(self) -> u64 {
         u64::from(self.mme_code) << 32 | u64::from(self.m_tmsi)
     }
 }

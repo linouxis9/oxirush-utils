@@ -227,15 +227,10 @@ pub enum Entry<'m> {
 impl<'m> Entry<'m> {
     /// The value of the member, which is `value` when the object had none.
     pub fn or_insert(self, value: Value) -> &'m mut Value {
-        self.or_insert_with(|| value)
-    }
-
-    /// The value of the member, which `value` gives when the object had none.
-    pub fn or_insert_with(self, value: impl FnOnce() -> Value) -> &'m mut Value {
         match self {
             Entry::Occupied(value) => value,
             Entry::Vacant(map, name) => {
-                map.members.push((name, value()));
+                map.members.push((name, value));
                 &mut map
                     .members
                     .last_mut()
@@ -243,11 +238,6 @@ impl<'m> Entry<'m> {
                     .1
             }
         }
-    }
-
-    /// The value of the member, which is `null` when the object had none.
-    pub fn or_default(self) -> &'m mut Value {
-        self.or_insert(Value::Null)
     }
 }
 

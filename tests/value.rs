@@ -80,7 +80,7 @@ fn an_object_keeps_its_members_where_they_are() {
     assert_eq!(map.shift_remove("z"), Some(tree!("z")));
     assert_eq!(map.keys().collect::<Vec<_>>(), ["a", "m", "n"]);
     *map.entry("b").or_insert(tree!(0)) = tree!(4);
-    *map.entry("m").or_default() = tree!(5);
+    *map.entry("m").or_insert(Value::Null) = tree!(5);
     map.retain(|name, _| name != "a");
     assert_eq!(
         Value::Object(map.clone()).to_string(),

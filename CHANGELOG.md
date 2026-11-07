@@ -4,6 +4,15 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+- Items with no use beside another way are gone: `tree::to_value` (call
+  `to_tree`), `bits()` of the types of identity (`u8::from`), `ImsiSuci::of`
+  and `Guti5g::of` (`ImsiSuci::null` and `Guti5g::new`), `STmsiEps::to_u64`,
+  `tree::written_as`, `tree::select_forms_in`, `tree::Form` with
+  `Family::form`, `Entry::or_insert_with` and `Entry::or_default`, and the
+  constants `MAX_OCTETS`, `MAX_SEGMENTS` and `MAX_SELECTED`, which the
+  documentation of paths states.
+- `to_nas_octets` of `Imsi`, `Imei` and `Imeisv` gives the octets, and takes
+  the three low bits of the type of identity: it cannot fail.
 - `Value` keeps the calls that a tree needs: `pointer` and `pointer_mut` (a
   second syntax of paths beside `select`), `take`, `as_null`, `is_u64`,
   `is_i64`, `is_f64`, the trait `Index`, and the comparisons with a

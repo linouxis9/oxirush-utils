@@ -361,20 +361,6 @@ impl ImsiSuci {
             .then(|| Error::length("scheme-output", unit, length, shortest, longest))
     }
 
-    /// The SUCI of an IMSI that is not concealed, for an MNC of `mnc_digits` digits and
-    /// the routing indicator 0.
-    ///
-    /// # Errors
-    ///
-    /// `mnc_digits` is neither 2 nor 3, or the IMSI has no digit after its PLMN.
-    pub fn of(imsi: Imsi, mnc_digits: usize) -> Result<Self, Error> {
-        Self::null(
-            imsi.plmn(mnc_digits)?,
-            RoutingIndicator::default(),
-            imsi.msin(mnc_digits)?,
-        )
-    }
-
     /// The PLMN of the home network.
     pub fn plmn(&self) -> Plmn {
         self.plmn

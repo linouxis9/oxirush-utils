@@ -134,7 +134,12 @@ pub fn encode(type_of_identity: u8, digits: &str) -> Result<Vec<u8>, Error> {
         return Err(Error::new("type-of-identity", fault));
     }
     decimal("identity-digits", digits, 1, usize::MAX)?;
-    let digits = digits.as_bytes();
+    Ok(pack(type_of_identity, digits.as_bytes()))
+}
+
+/// The octets of decimal digits, one at least, after a type of identity of three bits.
+#[cfg(feature = "alloc")]
+fn pack(type_of_identity: u8, digits: &[u8]) -> Vec<u8> {
     let odd = (digits.len() as u8 & 1) << 3;
     let mut octets = Vec::with_capacity(1 + digits.len() / 2);
     octets.push((digits[0] - b'0') << 4 | odd | type_of_identity);
@@ -142,7 +147,7 @@ pub fn encode(type_of_identity: u8, digits: &str) -> Result<Vec<u8>, Error> {
         let high = pair.get(1).map_or(FILLER, |digit| digit - b'0');
         octets.push(high << 4 | (pair[0] - b'0'));
     }
-    Ok(octets)
+    octets
 }
 
 /// The type of identity and the digits that `octets` hold, as [`encode`] writes them.
@@ -280,7 +285,7 @@ fn strict<T>(read: Tolerated<T>) -> Result<T, Error> {
 }
 
 macro_rules! digits_identity {
-    ($name:ident, $member:literal, $min:literal, $max:literal, $what:literal) => {
+    ($name:ident, $member:literal, $what:literal) => {
         impl $name {
             #[doc = concat!("The digits of the ", $what, ".")]
             pub fn as_str(&self) -> &str {
@@ -289,15 +294,12 @@ macro_rules! digits_identity {
 
             #[doc = concat!("The octets of the ", $what, " as the identity digits of a mobile")]
             /// identity ([`digits::encode`](encode)), with the type of identity that the
-            /// information element gives it: bits 3 to 1 of the first octet.
-            ///
-            /// # Errors
-            ///
-            /// `type_of_identity` is above 7.
+            /// information element gives it, whose three low bits are bits 3 to 1 of the
+            /// first octet.
             #[cfg(feature = "alloc")]
             #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
-            pub fn to_nas_octets(&self, type_of_identity: u8) -> Result<Vec<u8>, Error> {
-                encode(type_of_identity, self.as_str())
+            pub fn to_nas_octets(&self, type_of_identity: u8) -> Vec<u8> {
+                pack(type_of_identity & 0x07, self.as_str().as_bytes())
             }
 
             #[doc = concat!("The ", $what, " that `octets` hold as the identity digits of a")]
@@ -368,7 +370,7 @@ macro_rules! digits_identity {
 ///
 /// // In an EPS mobile identity, where the type of identity of an IMSI is 1
 /// # #[cfg(feature = "alloc")]
-/// assert_eq!(imsi.to_nas_octets(1)?, [0x29, 0x80, 0x39, 0x00, 0x00, 0x00, 0x00, 0x10]);
+/// assert_eq!(imsi.to_nas_octets(1), [0x29, 0x80, 0x39, 0x00, 0x00, 0x00, 0x00, 0x10]);
 /// # Ok::<(), oxirush_utils::identity::Error>(())
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -407,7 +409,7 @@ impl Imsi {
     }
 }
 
-digits_identity!(Imsi, "imsi", 6, 15, "IMSI");
+digits_identity!(Imsi, "imsi", "IMSI");
 
 /// An IMEI: 15 decimal digits, which are a type allocation code of eight digits, a
 /// serial number of six, and a check digit or a spare digit (3GPP TS 23.003 clause 6.2.1).
@@ -497,7 +499,7 @@ fn check_digit(tac_snr: &[u8]) -> u8 {
     (10 - sum % 10) % 10
 }
 
-digits_identity!(Imei, "imei", 15, 15, "IMEI");
+digits_identity!(Imei, "imei", "IMEI");
 
 /// An IMEISV: 16 decimal digits, which are a type allocation code of eight digits, a
 /// serial number of six and a software version number of two (3GPP TS 23.003 clause
@@ -511,7 +513,7 @@ digits_identity!(Imei, "imei", 15, 15, "IMEI");
 ///
 /// // In a 5GS mobile identity, where the type of identity of an IMEISV is 5
 /// # #[cfg(feature = "alloc")] {
-/// let octets = imeisv.to_nas_octets(5)?;
+/// let octets = imeisv.to_nas_octets(5);
 /// assert_eq!(octets, [0x45, 0x09, 0x51, 0x24, 0x30, 0x32, 0x57, 0x01, 0xf1]);
 /// # }
 /// # Ok::<(), oxirush_utils::identity::Error>(())
@@ -545,4 +547,4 @@ impl Imeisv {
     }
 }
 
-digits_identity!(Imeisv, "imeisv", 16, 16, "IMEISV");
+digits_identity!(Imeisv, "imeisv", "IMEISV");

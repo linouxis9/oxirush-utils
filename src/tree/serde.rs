@@ -64,7 +64,7 @@
 //! ```
 
 use super::value::Value;
-use super::{Tree, from_value, to_value};
+use super::{Tree, from_value};
 use serde_core::de::Error as _;
 
 // The traits of serde, which `impl_serde!` names here: a crate that calls it need not
@@ -78,7 +78,7 @@ pub use serde_core::{Deserialize, Deserializer, Serialize, Serializer};
 ///
 /// Those of the serializer.
 pub fn serialize<T: Tree, S: Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error> {
-    to_value(value).serialize(serializer)
+    value.to_tree().serialize(serializer)
 }
 
 /// Deserialize a value from its tree, which the format has to describe.

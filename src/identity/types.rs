@@ -33,11 +33,6 @@ macro_rules! type_of_identity {
         }
 
         impl $name {
-            /// The three bits of the type of identity.
-            pub fn bits(self) -> u8 {
-                self as u8
-            }
-
             /// The type of identity of the first octet of a mobile identity: its bits 3
             /// to 1.
             ///
@@ -82,7 +77,7 @@ type_of_identity! {
     ///
     /// // The first octet of a 5G-GUTI
     /// assert_eq!(MobileIdentityType5gs::of(0xf2)?, MobileIdentityType5gs::Guti);
-    /// assert_eq!(MobileIdentityType5gs::Imeisv.bits(), 5);
+    /// assert_eq!(u8::from(MobileIdentityType5gs::Imeisv), 5);
     /// # Ok::<(), oxirush_utils::identity::Error>(())
     /// ```
     MobileIdentityType5gs, "the 5GS mobile identity" {

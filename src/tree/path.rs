@@ -24,14 +24,14 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 /// The most octets that a path has.
-pub const MAX_OCTETS: usize = 4096;
+pub(crate) const MAX_OCTETS: usize = 4096;
 /// The most segments that a path has, the root among them. A tree that is nested deeper
 /// is one value from there on.
-pub const MAX_SEGMENTS: usize = 64;
+pub(crate) const MAX_SEGMENTS: usize = 64;
 /// The most values that a path selects: as many as the longest list of the application
 /// protocols has, the 65,536 connections of an NG RESET (maxnoofNGConnectionsToReset of
 /// TS 38.413), so that `*` takes each entry of any list that a message has.
-pub const MAX_SELECTED: usize = 65_536;
+pub(crate) const MAX_SELECTED: usize = 65_536;
 
 /// The segments of a path: the text between its `/`, with `~1` for a `/` and `~0` for a
 /// `~` in a segment, as a JSON pointer (RFC 6901) writes them.

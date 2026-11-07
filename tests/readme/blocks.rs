@@ -98,7 +98,7 @@ fn block_3() {
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The identity digits of an IMSI in a mobile identity, after its type of identity
         let imsi = Imsi::new("208930000000001")?;
-        println!("{:02x?}", imsi.to_nas_octets(1)?);
+        println!("{:02x?}", imsi.to_nas_octets(1));
 
         // An IMEI as a mobile sends it, and with its check digit; the SVN of an IMEISV
         println!("{}", Imei::with_spare_digit("49015420323751")?);
@@ -182,7 +182,7 @@ fn block_6() {
     }
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
-        println!("{}", tree::to_value(&Slice { sst: 1, sd: Some([0, 0, 0xff]) }));
+        println!("{}", Slice { sst: 1, sd: Some([0, 0, 0xff]) }.to_tree());
 
         // A name is read however it is written, and octets in either case
         let read: Slice = tree::from_value(&tree!({"SST": 2, "sd": "0000FF"}))?;

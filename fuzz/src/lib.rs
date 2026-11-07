@@ -62,7 +62,7 @@ pub fn identity(octets: &[u8]) {
     }
     for kind in 0..8 {
         if let Ok((imeisv, faults)) = Imeisv::from_nas_octets_tolerant(kind, octets) {
-            let canonical = imeisv.to_nas_octets(kind).unwrap();
+            let canonical = imeisv.to_nas_octets(kind);
             assert_eq!(Imeisv::from_nas_octets(kind, &canonical), Ok(imeisv));
             assert_eq!(
                 Imeisv::from_nas_octets(kind, octets).is_ok(),
@@ -70,10 +70,10 @@ pub fn identity(octets: &[u8]) {
             );
         }
         if let Ok(imsi) = Imsi::from_nas_octets(kind, octets) {
-            assert_eq!(imsi.to_nas_octets(kind).unwrap(), octets);
+            assert_eq!(imsi.to_nas_octets(kind), octets);
         }
         if let Ok(imei) = Imei::from_nas_octets(kind, octets) {
-            assert_eq!(imei.to_nas_octets(kind).unwrap(), octets);
+            assert_eq!(imei.to_nas_octets(kind), octets);
         }
     }
     // The temporary identities.
@@ -268,7 +268,7 @@ pub fn paths(octets: &[u8]) {
     // Each path that is listed selects its value, in a tree without a member `*`.
     let plain = !has_a_star(&tree);
     for (listed, held) in tree::paths(&tree) {
-        if plain && listed.len() <= tree::MAX_OCTETS {
+        if plain && listed.len() <= 4096 {
             let selected = tree::select(&tree, &listed).unwrap();
             assert!(selected.contains(&&held), "{listed}");
         }
@@ -278,11 +278,10 @@ pub fn paths(octets: &[u8]) {
     }
     // Any path selects, or is refused: no more values than a path selects.
     if let Ok(selected) = tree::select(&tree, &path) {
-        assert!(selected.len() <= tree::MAX_SELECTED);
+        assert!(selected.len() <= 65_536);
         assert!(selected.iter().all(|value| !value.is_null()));
     }
     let _ = tree::select_in(&ById, &tree, &path);
-    let _ = tree::select_forms_in(&ById, &tree, &path);
 
     // An edit is done whole, or not at all.
     let mut edited = tree.clone();
