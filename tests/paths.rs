@@ -1598,9 +1598,17 @@ fn an_edit_of_a_place_that_is_gone_is_refused_and_undone() {
             _: &str,
             next: &mut Next<'v, ()>,
         ) -> Result<Step<()>, Error> {
-            let entry = &place.value().and_then(Value::as_array).unwrap()[1];
-            next.entry(1, entry, ());
-            next.entry(1, entry, ());
+            match place.value() {
+                Some(Value::Array(entries)) => {
+                    next.entry(1, &entries[1], ());
+                    next.entry(1, &entries[1], ());
+                }
+                Some(Value::Object(members)) => {
+                    next.member("a", &members["a"], ());
+                    next.member("a", &members["a"], ());
+                }
+                _ => return Ok(Step::Plain),
+            }
             Ok(Step::Taken)
         }
     }
@@ -1609,6 +1617,12 @@ fn an_edit_of_a_place_that_is_gone_is_refused_and_undone() {
     let error = tree::remove_in(&Twice, &mut tree, "/1").unwrap_err();
     assert_eq!(error.kind(), ErrorKind::NothingSelected);
     assert_eq!(tree, before);
+    // A member taken out is put back at its place, before the others
+    let before = tree!({"a": 1, "b": 2});
+    let mut tree = before.clone();
+    let error = tree::remove_in(&Twice, &mut tree, "/a").unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::NothingSelected);
+    assert_eq!(tree.to_string(), before.to_string());
 }
 
 /// A name that an object does not have is refused with its names: twelve at most, and
