@@ -222,8 +222,8 @@ impl Tree for Slice {
     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
         let members = reading.members(value, &["sst", "sd"])?;
         Ok(Self {
-            sst: reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 255))? as u8,
-            sd: reading.optional(&members, 1, |value, reading| reading.octet_array(value))?,
+            sst: reading.member(&members, "sst", |value, reading| reading.unsigned(value, 0, 255))? as u8,
+            sd: reading.optional(&members, "sd", |value, reading| reading.octet_array(value))?,
         })
     }
 }
@@ -318,7 +318,7 @@ impl Tree for Timer {
 
     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
         let members = reading.members(value, &["seconds"])?;
-        let seconds = reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 11160))?;
+        let seconds = reading.member(&members, "seconds", |value, reading| reading.unsigned(value, 0, 11160))?;
         Ok(Self { seconds: seconds as u32 })
     }
 }

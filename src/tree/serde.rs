@@ -45,8 +45,8 @@
 //!     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
 //!         let members = reading.members(value, &["plmn", "tac"])?;
 //!         Ok(Self {
-//!             plmn: reading.member(&members, 0, |value, reading| reading.text(value))?.into(),
-//!             tac: reading.member(&members, 1, |value, reading| reading.unsigned(value, 0, 0xff_ffff))? as u32,
+//!             plmn: reading.member(&members, "plmn", |value, reading| reading.text(value))?.into(),
+//!             tac: reading.member(&members, "tac", |value, reading| reading.unsigned(value, 0, 0xff_ffff))? as u32,
 //!         })
 //!     }
 //! }
@@ -113,7 +113,7 @@ pub fn deserialize<'de, T: Tree, D: Deserializer<'de>>(deserializer: D) -> Resul
 /// #     }
 /// #     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
 /// #         let members = reading.members(value, &["seconds"])?;
-/// #         let seconds = reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 11160))?;
+/// #         let seconds = reading.member(&members, "seconds", |value, reading| reading.unsigned(value, 0, 11160))?;
 /// #         Ok(Self { seconds: seconds as u32 })
 /// #     }
 /// # }

@@ -48,8 +48,8 @@ use alloc::vec::Vec;
 ///     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
 ///         let members = reading.members(value, &["sst", "sd"])?;
 ///         Ok(Self {
-///             sst: reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 255))? as u8,
-///             sd: reading.optional(&members, 1, |value, reading| reading.octet_array(value))?,
+///             sst: reading.member(&members, "sst", |value, reading| reading.unsigned(value, 0, 255))? as u8,
+///             sd: reading.optional(&members, "sd", |value, reading| reading.octet_array(value))?,
 ///         })
 ///     }
 /// }
@@ -99,7 +99,7 @@ pub struct Refused;
 /// #     }
 /// #     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
 /// #         let members = reading.members(value, &["seconds"])?;
-/// #         let seconds = reading.member(&members, 0, |value, reading| reading.unsigned(value, 0, 11160))?;
+/// #         let seconds = reading.member(&members, "seconds", |value, reading| reading.unsigned(value, 0, 11160))?;
 /// #         Ok(Self { seconds: seconds as u32 })
 /// #     }
 /// # }
@@ -224,6 +224,14 @@ pub struct Read<'v> {
     values: Vec<Option<&'v Value>>,
 }
 
+impl<'v> Read<'v> {
+    /// The value of the member `name`, which the type lists.
+    fn value(&self, name: &str) -> Option<&'v Value> {
+        let position = self.names.iter().position(|known| *known == name);
+        self.values[position.expect("a member that its type lists")]
+    }
+}
+
 impl Reading {
     fn new() -> Self {
         Self {
@@ -323,16 +331,20 @@ impl Reading {
         Ok(Read { names, values })
     }
 
-    /// The member at `position` among the names of a value, which its type always has:
-    /// `read` reads it.
+    /// The member `name` of a value, which its type always has: `read` reads it.
+    ///
+    /// # Panics
+    ///
+    /// `name` is none of the names that [`members`](Self::members) was given: the type
+    /// reads a member that it does not list.
     pub fn member<'v, T>(
         &mut self,
         of: &Read<'v>,
-        position: usize,
+        name: &'static str,
         read: impl FnOnce(&'v Value, &mut Self) -> Result<T, Refused>,
     ) -> Result<T, Refused> {
-        self.at.push(Name::Member(of.names[position]));
-        let Some(value) = of.values[position] else {
+        self.at.push(Name::Member(name));
+        let Some(value) = of.value(name) else {
             return Err(self.refuse(ErrorKind::Value, "the member is missing"));
         };
         let value = read(value, self)?;
@@ -340,18 +352,22 @@ impl Reading {
         Ok(value)
     }
 
-    /// The member at `position` among the names of a value, which may be absent: one
-    /// that is left out, or written as `null`.
+    /// The member `name` of a value, which may be absent: one that is left out, or
+    /// written as `null`.
+    ///
+    /// # Panics
+    ///
+    /// As [`member`](Self::member).
     pub fn optional<'v, T>(
         &mut self,
         of: &Read<'v>,
-        position: usize,
+        name: &'static str,
         read: impl FnOnce(&'v Value, &mut Self) -> Result<T, Refused>,
     ) -> Result<Option<T>, Refused> {
-        let Some(value) = of.values[position] else {
+        let Some(value) = of.value(name) else {
             return Ok(None);
         };
-        self.at.push(Name::Member(of.names[position]));
+        self.at.push(Name::Member(name));
         let value = read(value, self)?;
         self.at.pop();
         Ok(Some(value))
@@ -531,8 +547,8 @@ impl Reading {
             return Ok((octets, length));
         }
         let of = self.members(value, &["value", "length"])?;
-        let octets = self.member(&of, 0, |value, reading| reading.octets(value))?;
-        let length = self.member(&of, 1, |value, reading| {
+        let octets = self.member(&of, "value", |value, reading| reading.octets(value))?;
+        let length = self.member(&of, "length", |value, reading| {
             reading.unsigned(value, 0, usize::MAX as u64)
         })? as usize;
         if length.div_ceil(8) != octets.len() {

@@ -4,6 +4,9 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+- `Reading::member` and `Reading::optional` take the name of the member, in the
+  place of its position among the names: `reading.member(&members, "sst", ..)`.
+  A name that the type does not list panics.
 - `Supi` owns its text, has no lifetime, and needs the feature `alloc`, as the
   SUCIs do: `into_owned` is gone.
 - `identity::Suci`, the SUCI of either form, `Imsi(ImsiSuci)` or `Nai(NaiSuci)`,

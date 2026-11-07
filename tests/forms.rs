@@ -170,19 +170,19 @@ impl Tree for Sample {
     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
         let of = reading.members(value, MEMBERS)?;
         Ok(Self {
-            count: reading.member(&of, 0, |value, reading| {
+            count: reading.member(&of, "count", |value, reading| {
                 reading.unsigned(value, 0, u64::MAX)
             })?,
-            offset: reading.member(&of, 1, |value, reading| reading.signed(value, -8, 7))?,
-            flag: reading.member(&of, 2, |value, reading| reading.boolean(value))?,
-            kind: reading.member(&of, 3, |value, reading| reading.named(value, KINDS))?,
+            offset: reading.member(&of, "offset", |value, reading| reading.signed(value, -8, 7))?,
+            flag: reading.member(&of, "flag", |value, reading| reading.boolean(value))?,
+            kind: reading.member(&of, "kind", |value, reading| reading.named(value, KINDS))?,
             name: reading
-                .member(&of, 4, |value, reading| reading.text(value))?
+                .member(&of, "name", |value, reading| reading.text(value))?
                 .into(),
-            payload: reading.member(&of, 5, |value, reading| reading.octets(value))?,
-            fixed: reading.member(&of, 6, |value, reading| reading.octet_array(value))?,
-            mask: reading.member(&of, 7, |value, reading| reading.bits(value))?,
-            either: reading.member(&of, 8, |value, reading| match value {
+            payload: reading.member(&of, "payload", |value, reading| reading.octets(value))?,
+            fixed: reading.member(&of, "fixed", |value, reading| reading.octet_array(value))?,
+            mask: reading.member(&of, "mask", |value, reading| reading.bits(value))?,
+            either: reading.member(&of, "either", |value, reading| match value {
                 Value::String(_) => reading.named(value, &["nothing"]).map(|_| Either::Nothing),
                 value => {
                     let (_, content) = reading.alternative(value, &["number"])?;
@@ -190,10 +190,12 @@ impl Tree for Sample {
                     reading.within("number", content, read).map(Either::Number)
                 }
             })?,
-            list: reading.member(&of, 9, |value, reading| {
+            list: reading.member(&of, "list", |value, reading| {
                 reading.list(value, |entry, reading| reading.unsigned(entry, 0, 255))
             })?,
-            maybe: reading.optional(&of, 10, |value, reading| reading.unsigned(value, 0, 255))?,
+            maybe: reading.optional(&of, "maybe", |value, reading| {
+                reading.unsigned(value, 0, 255)
+            })?,
         })
     }
 }
@@ -485,4 +487,24 @@ fn a_null_is_read_from_null_alone() {
 fn letters_taken_out_at_the_start_count_as_edits() {
     assert_eq!(tree::nearest(&["abc"], "xxabc", 1), ["abc"]);
     assert!(tree::nearest(&["abc"], "xxxabc", 1).is_empty());
+}
+
+/// A member is read by its name: a type that reads one that it does not list is wrong,
+/// and is told so at once, where a position would have read another member.
+#[test]
+#[should_panic(expected = "a member that its type lists")]
+fn a_type_that_reads_a_member_that_it_does_not_list_is_told_so() {
+    struct Misread;
+    impl Tree for Misread {
+        const NAME: &'static str = "Misread";
+        fn to_tree(&self) -> Value {
+            Members::new().finish()
+        }
+        fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+            let of = reading.members(value, &["sst", "sd"])?;
+            reading.optional(&of, "st", |_, _| Ok(()))?;
+            Ok(Self)
+        }
+    }
+    let _ = tree::from_value::<Misread>(&tree!({"sst": 1}));
 }

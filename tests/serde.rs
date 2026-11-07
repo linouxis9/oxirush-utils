@@ -23,8 +23,9 @@ impl Tree for Slice {
     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
         let of = reading.members(value, &["sst", "sd"])?;
         Ok(Self {
-            sst: reading.member(&of, 0, |value, reading| reading.unsigned(value, 0, 255))? as u8,
-            sd: reading.optional(&of, 1, |value, reading| reading.octet_array(value))?,
+            sst: reading.member(&of, "sst", |value, reading| reading.unsigned(value, 0, 255))?
+                as u8,
+            sd: reading.optional(&of, "sd", |value, reading| reading.octet_array(value))?,
         })
     }
 }
@@ -49,11 +50,11 @@ impl Tree for Request {
     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
         let of = reading.members(value, &["slices", "cause"])?;
         Ok(Self {
-            slices: reading.member(&of, 0, |value, reading| {
+            slices: reading.member(&of, "slices", |value, reading| {
                 reading.list(value, Slice::from_tree)
             })?,
             cause: reading
-                .member(&of, 1, |value, reading| reading.text(value))?
+                .member(&of, "cause", |value, reading| reading.text(value))?
                 .into(),
         })
     }
