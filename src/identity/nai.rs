@@ -278,7 +278,7 @@ fn is_gli(text: &str) -> bool {
     let value = |character: u8| match character {
         b'A'..=b'Z' => Some(character - b'A'),
         b'a'..=b'z' => Some(character - b'a' + 26),
-        b'0'..=b'9' => Some(character - b'0' + 52),
+        b'0'..=b'9' => Some(52 + character - b'0'),
         b'+' => Some(62),
         b'/' => Some(63),
         _ => None,
