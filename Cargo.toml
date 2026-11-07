@@ -79,9 +79,5 @@ name = "serde"
 required-features = ["tree"]
 
 [[test]]
-name = "readme"
-required-features = ["tree"]
-
-[[test]]
 name = "value"
 required-features = ["tree"]

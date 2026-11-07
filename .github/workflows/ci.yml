@@ -116,7 +116,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       # What ships builds on its own, and nothing else ships.
       - run: cargo package --all-features
-      - run: "! cargo package --list | grep -E '^(fuzz|\\.github)/'"
+      - run: "! cargo package --list | grep -E '^(fuzz|benches|readme|\\.github)/'"
 
   fuzz:
     name: Fuzz the identities and the paths (2 minutes)
@@ -142,3 +142,20 @@ jobs:
       - run: cargo fmt --check
       - run: cargo fmt --check --manifest-path fuzz/Cargo.toml
       - run: cargo fmt --check --manifest-path benches/Cargo.toml
+
+  # The README and the front page of the documentation print what they show: readme/
+  # is a package of its own, whose build script writes their blocks.
+  readme:
+    name: The README blocks print what they show
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: readme
+      - run: cargo test --manifest-path readme/Cargo.toml
+      - run: cargo clippy --manifest-path readme/Cargo.toml --all-targets -- -D warnings
+      - run: cargo fmt --check --manifest-path readme/Cargo.toml

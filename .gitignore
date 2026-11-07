@@ -5,3 +5,4 @@
 Cargo.lock
 /benches/target/
 /mutants.out*/
+/readme/target/
