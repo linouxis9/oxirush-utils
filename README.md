@@ -44,7 +44,7 @@ oxirush-utils = { version = "0.1", features = ["alloc"] }
 
 | Feature | Adds | Through |
 |---------|------|---------|
-| `alloc` | What holds a text or a list: the SUPI that owns its text, the SUCIs, TBCD strings, identity digits as octets | |
+| `alloc` | What holds a text or a list: the SUPI, the SUCIs, TBCD strings, identity digits as octets | |
 | `tree` | The tree of a message, its forms and its paths, and `Serialize` and `Deserialize` for a type through its tree | `serde_json`, `serde_core` |
 | `idna` | The realm and the username of a NAI checked as internationalized names too: Unicode normalization form C, and a realm that IDNA takes as it is written | `idna`, `unicode-normalization` |
 

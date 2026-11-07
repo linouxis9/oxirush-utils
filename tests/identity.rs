@@ -809,13 +809,8 @@ fn a_supi_is_written_with_its_type() {
     );
     assert_eq!(Supi::imsi("208930000000001"), Ok(imsi.clone()));
     assert_eq!(Supi::from(Imsi::new("208930000000001").unwrap()), imsi);
-    let owned: Supi<'static> = "nai-user@example.com".parse().unwrap();
-    assert_eq!(
-        owned,
-        Supi::network_specific("user@example.com")
-            .unwrap()
-            .into_owned()
-    );
+    let owned: Supi = "nai-user@example.com".parse().unwrap();
+    assert_eq!(owned, Supi::network_specific("user@example.com").unwrap());
     assert_eq!(
         (owned.identity(), owned.as_imsi()),
         ("user@example.com", None)

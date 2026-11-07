@@ -4,6 +4,8 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+- `Supi` owns its text, has no lifetime, and needs the feature `alloc`, as the
+  SUCIs do: `into_owned` is gone.
 - `identity::Suci`, the SUCI of either form, `Imsi(ImsiSuci)` or `Nai(NaiSuci)`,
   read from a 5GS mobile identity by its SUPI format, with its parts, the NAI
   form of the SUCI of an IMSI, and the text of the service-based interfaces.

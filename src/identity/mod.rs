@@ -22,12 +22,11 @@
 //! masked: `Display` is the form that a log and a tree show, and `Debug` the same with
 //! the name of the type.
 //!
-//! What holds a text or a list needs the feature `alloc`: the SUPI that owns its text,
-//! the SUCI of an IMSI, the SUCI in the form of a NAI and the SUCI of either form, TBCD
+//! What holds a text or a list needs the feature `alloc`: the SUPI, the SUCI of an IMSI, the SUCI in the form of a NAI and the SUCI of either form, TBCD
 //! strings, and identity digits as octets. The rest needs no allocator: the PLMN, the IMSI, the IMEI and the
 //! IMEISV as values, the GUTIs, the S-TMSIs and the TAIs, the types of identity, the
-//! routing indicator and the protection scheme of a SUCI, the grammar of a NAI, a SUPI
-//! that borrows its text, the identity of a security algorithm, and the errors.
+//! routing indicator and the protection scheme of a SUCI, the grammar of a NAI, the type
+//! of a SUPI, the identity of a security algorithm, and the errors.
 //!
 //! ```
 //! use oxirush_utils::identity::{Guti5g, Imsi, Plmn};
@@ -86,7 +85,9 @@ pub use plmn::Plmn;
 #[cfg(feature = "alloc")]
 pub use suci::{ImsiSuci, Suci};
 pub use suci::{ProtectionScheme, RoutingIndicator};
-pub use supi::{Supi, SupiType};
+#[cfg(feature = "alloc")]
+pub use supi::Supi;
+pub use supi::SupiType;
 pub use tai::{Tai5gs, TaiEps};
 pub use types::{IdentityType, MobileIdentityType5gs, MobileIdentityTypeEps};
 

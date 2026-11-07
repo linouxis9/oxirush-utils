@@ -17,12 +17,9 @@
 
 //! The SUPI, and the types of SUPI by both of their numberings.
 
-use super::{Error, Fault, Imsi};
+use super::{Error, Fault};
 #[cfg(feature = "alloc")]
-use alloc::string::String;
-use core::fmt;
-#[cfg(feature = "alloc")]
-use core::str::FromStr;
+use {super::Imsi, alloc::string::String, core::fmt, core::str::FromStr};
 
 /// The type of a SUPI: an IMSI, a network specific identifier, a global line identifier
 /// or a global cable identifier.
@@ -130,6 +127,7 @@ impl SupiType {
 }
 
 /// The longest NAI of a SUPI: a username and a realm of 253 octets each, and `@`.
+#[cfg(feature = "alloc")]
 const LONGEST_NAI: usize = 253 + 1 + 253;
 
 /// A SUPI: an IMSI, or a NAI that is a network specific identifier, a GLI or a GCI
@@ -137,9 +135,7 @@ const LONGEST_NAI: usize = 253 + 1 + 253;
 ///
 /// It is written and read with its type before it, as `imsi-208930000000001` and
 /// `nai-user@example.com`, which is how the service-based interfaces write one (`Supi`
-/// in the OpenAPI of TS 29.571). It borrows its text, or owns it after
-/// `into_owned`, with the feature `alloc`: one that is borrowed is made without an
-/// allocation.
+/// in the OpenAPI of TS 29.571).
 ///
 /// The NAI of a SUPI is a username, `@` and a realm that is not empty, of 507 octets at
 /// most. Its grammar, that of RFC 7542, is not checked here.
@@ -155,69 +151,23 @@ const LONGEST_NAI: usize = 253 + 1 + 253;
 /// assert_eq!(nai.to_string(), "nai-user@example.com");
 /// # Ok::<(), oxirush_utils::identity::Error>(())
 /// ```
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Supi<'a> {
+pub struct Supi {
     kind: SupiType,
-    identity: Text<'a>,
+    identity: String,
 }
 
-/// The text of a SUPI: the caller's, or one of its own, which needs an allocator. Two are
-/// compared by their characters, whoever holds them.
-#[derive(Clone)]
-enum Text<'a> {
-    Borrowed(&'a str),
-    #[cfg(feature = "alloc")]
-    Owned(String),
-}
-
-impl Text<'_> {
-    fn as_str(&self) -> &str {
-        match self {
-            Self::Borrowed(text) => text,
-            #[cfg(feature = "alloc")]
-            Self::Owned(text) => text,
-        }
-    }
-}
-
-impl PartialEq for Text<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_str() == other.as_str()
-    }
-}
-
-impl Eq for Text<'_> {}
-
-impl PartialOrd for Text<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Text<'_> {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.as_str().cmp(other.as_str())
-    }
-}
-
-impl core::hash::Hash for Text<'_> {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state);
-    }
-}
-
-impl<'a> Supi<'a> {
+#[cfg(feature = "alloc")]
+impl Supi {
     /// The SUPI that is the IMSI of these digits.
     ///
     /// # Errors
     ///
     /// `imsi` is not an IMSI: 6 to 15 decimal digits.
-    pub fn imsi(imsi: &'a str) -> Result<Self, Error> {
-        Imsi::new(imsi)?;
-        Ok(Self {
-            kind: SupiType::Imsi,
-            identity: Text::Borrowed(imsi),
-        })
+    pub fn imsi(imsi: &str) -> Result<Self, Error> {
+        Ok(Self::from(Imsi::new(imsi)?))
     }
 
     /// The SUPI that is a network specific identifier: the NAI `nai`.
@@ -225,7 +175,7 @@ impl<'a> Supi<'a> {
     /// # Errors
     ///
     /// `nai` is longer than 507 octets, or is not a username, `@` and a realm.
-    pub fn network_specific(nai: &'a str) -> Result<Self, Error> {
+    pub fn network_specific(nai: &str) -> Result<Self, Error> {
         Self::nai(SupiType::NetworkSpecific, nai)
     }
 
@@ -234,7 +184,7 @@ impl<'a> Supi<'a> {
     /// # Errors
     ///
     /// As [`network_specific`](Self::network_specific).
-    pub fn gli(nai: &'a str) -> Result<Self, Error> {
+    pub fn gli(nai: &str) -> Result<Self, Error> {
         Self::nai(SupiType::Gli, nai)
     }
 
@@ -243,18 +193,18 @@ impl<'a> Supi<'a> {
     /// # Errors
     ///
     /// As [`network_specific`](Self::network_specific).
-    pub fn gci(nai: &'a str) -> Result<Self, Error> {
+    pub fn gci(nai: &str) -> Result<Self, Error> {
         Self::nai(SupiType::Gci, nai)
     }
 
-    fn nai(kind: SupiType, nai: &'a str) -> Result<Self, Error> {
+    fn nai(kind: SupiType, nai: &str) -> Result<Self, Error> {
         if nai.len() > LONGEST_NAI {
             return Err(Error::length("nai", "octets", nai.len(), 3, LONGEST_NAI));
         }
         match nai.rsplit_once('@') {
             Some((_, realm)) if !realm.is_empty() => Ok(Self {
                 kind,
-                identity: Text::Borrowed(nai),
+                identity: String::from(nai),
             }),
             _ => {
                 let expected = "a username, @ and a realm, as user@example.com";
@@ -269,7 +219,7 @@ impl<'a> Supi<'a> {
     /// # Errors
     ///
     /// `text` starts with none of the four, or what follows is not a SUPI of that type.
-    pub fn parse(text: &'a str) -> Result<Self, Error> {
+    pub fn parse(text: &str) -> Result<Self, Error> {
         let kinds = [
             SupiType::Imsi,
             SupiType::NetworkSpecific,
@@ -296,7 +246,7 @@ impl<'a> Supi<'a> {
     /// The identity without its type: the digits of an IMSI, or the whole NAI. It is
     /// what the derivation of K_AMF takes as the SUPI (3GPP TS 33.501 annex A.7.0).
     pub fn identity(&self) -> &str {
-        self.identity.as_str()
+        &self.identity
     }
 
     /// The IMSI, when the SUPI is one.
@@ -306,47 +256,38 @@ impl<'a> Supi<'a> {
             _ => None,
         }
     }
+}
 
-    /// The same SUPI, which owns its text.
-    #[cfg(feature = "alloc")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
-    pub fn into_owned(self) -> Supi<'static> {
-        Supi {
-            kind: self.kind,
-            identity: Text::Owned(String::from(self.identity())),
+#[cfg(feature = "alloc")]
+impl From<Imsi> for Supi {
+    fn from(imsi: Imsi) -> Self {
+        Self {
+            kind: SupiType::Imsi,
+            identity: String::from(imsi.as_str()),
         }
     }
 }
 
 #[cfg(feature = "alloc")]
-#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
-impl From<Imsi> for Supi<'static> {
-    fn from(imsi: Imsi) -> Self {
-        Self {
-            kind: SupiType::Imsi,
-            identity: Text::Owned(String::from(imsi.as_str())),
-        }
-    }
-}
-
-impl fmt::Display for Supi<'_> {
+impl fmt::Display for Supi {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}", self.kind.prefix(), self.identity())
     }
 }
 
-impl fmt::Debug for Supi<'_> {
+#[cfg(feature = "alloc")]
+impl fmt::Debug for Supi {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Supi({self})")
     }
 }
 
 #[cfg(feature = "alloc")]
-#[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
-impl FromStr for Supi<'static> {
+impl FromStr for Supi {
     type Err = Error;
 
+    /// [`Supi::parse`].
     fn from_str(text: &str) -> Result<Self, Error> {
-        Supi::parse(text).map(Supi::into_owned)
+        Self::parse(text)
     }
 }

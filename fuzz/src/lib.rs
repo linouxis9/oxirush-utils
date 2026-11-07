@@ -183,7 +183,7 @@ pub fn identity(octets: &[u8]) {
     }
     if let Ok(supi) = Supi::parse(text) {
         assert_eq!(supi.to_string(), text);
-        assert_eq!(text.parse(), Ok(supi.clone().into_owned()));
+        assert_eq!(text.parse(), Ok(supi.clone()));
         assert_eq!(supi.as_imsi().is_some(), text.starts_with("imsi-"));
     }
     if let Ok(suci) = text.parse::<ImsiSuci>() {
