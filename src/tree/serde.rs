@@ -127,8 +127,9 @@ pub fn deserialize<'de, T: Tree, D: Deserializer<'de>>(deserializer: D) -> Resul
 /// ```
 #[macro_export]
 macro_rules! impl_serde {
-    ($($name:ident $(<$life:lifetime>)?),+ $(,)?) => {$(
-        impl$(<$life>)? $crate::tree::serde::Serialize for $name$(<$life>)? {
+    // The two implementations for one type, with the lifetime that it has.
+    (@one [$($life:lifetime)?] $name:ty) => {
+        impl$(<$life>)? $crate::tree::serde::Serialize for $name {
             fn serialize<S: $crate::tree::serde::Serializer>(
                 &self,
                 serializer: S,
@@ -137,30 +138,18 @@ macro_rules! impl_serde {
             }
         }
 
-        impl<'de $(, $life)?> $crate::tree::serde::Deserialize<'de> for $name$(<$life>)? {
+        impl<'de $(, $life)?> $crate::tree::serde::Deserialize<'de> for $name {
             fn deserialize<D: $crate::tree::serde::Deserializer<'de>>(
                 deserializer: D,
             ) -> ::core::result::Result<Self, D::Error> {
                 $crate::tree::serde::deserialize(deserializer)
             }
         }
+    };
+    ($($name:ident $(<$life:lifetime>)?),+ $(,)?) => {$(
+        $crate::impl_serde!(@one [$($life)?] $name$(<$life>)?);
     )+};
     ($($name:ty),+ $(,)?) => {$(
-        impl $crate::tree::serde::Serialize for $name {
-            fn serialize<S: $crate::tree::serde::Serializer>(
-                &self,
-                serializer: S,
-            ) -> ::core::result::Result<S::Ok, S::Error> {
-                $crate::tree::serde::serialize(self, serializer)
-            }
-        }
-
-        impl<'de> $crate::tree::serde::Deserialize<'de> for $name {
-            fn deserialize<D: $crate::tree::serde::Deserializer<'de>>(
-                deserializer: D,
-            ) -> ::core::result::Result<Self, D::Error> {
-                $crate::tree::serde::deserialize(deserializer)
-            }
-        }
+        $crate::impl_serde!(@one [] $name);
     )+};
 }

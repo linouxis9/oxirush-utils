@@ -45,8 +45,7 @@ oxirush-utils = { version = "0.1", features = ["alloc"] }
 | Feature | Adds | Through |
 |---------|------|---------|
 | `alloc` | What holds a text or a list: the SUPI that owns its text, the SUCIs, TBCD strings, identity digits as octets | |
-| `tree` | The tree of a message, its forms and its paths | `serde_json` |
-| `serde` | `Serialize` and `Deserialize` for a type through its tree | `serde_core` |
+| `tree` | The tree of a message, its forms and its paths, and `Serialize` and `Deserialize` for a type through its tree | `serde_json`, `serde_core` |
 | `idna` | The realm and the username of a NAI checked as internationalized names too: Unicode normalization form C, and a realm that IDNA takes as it is written | `idna`, `unicode-normalization` |
 
 No feature is on by default. `tree` turns on the `float_roundtrip` feature of
@@ -297,8 +296,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Any format of serde
 
-With the `serde` feature, a type is serialized and deserialized through its
-tree, so YAML and JSON carry the same form.
+A type is serialized and deserialized through its tree, so YAML and JSON
+carry the same form.
 
 ```rust
 use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};

@@ -57,31 +57,12 @@
 //! | The rules of a family of messages | [`tree::Family`], [`tree::select_in`], [`tree::written_as`] |
 //! | Any format of serde | [`impl_serde!`] |
 //!
-// Without its feature an item of the tasks is plain text: the links are checked in the
-// build of every feature, which docs.rs makes.
-#![cfg_attr(not(feature = "serde"), allow(rustdoc::broken_intra_doc_links))]
 //! # Modules
 //!
 //! | Module | Has | Feature |
 //! |--------|-----|---------|
 //! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the SUPI with its type, the SUCI of an IMSI and the SUCI in the form of a NAI with the grammar of a NAI, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity | none |
-// A module that a feature turns on is a link when the build has it.
-#![cfg_attr(
-    feature = "tree",
-    doc = "| [`tree`](mod@tree) | The tree of a message as a JSON value that keeps the order of its members, and `tree!` that writes one: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |"
-)]
-#![cfg_attr(
-    not(feature = "tree"),
-    doc = "| `tree` | The tree of a message as a JSON value that keeps the order of its members, and `tree!` that writes one: the forms of the plain values, the writer and the reader of members, and paths with `select`, `paths`, `set`, `remove`, `insert` | `tree` |"
-)]
-#![cfg_attr(
-    feature = "serde",
-    doc = "| [`tree::serde`] | `Serialize` and `Deserialize` for a type through its tree | `serde` |"
-)]
-#![cfg_attr(
-    not(feature = "serde"),
-    doc = "| `tree::serde` | `Serialize` and `Deserialize` for a type through its tree | `serde` |"
-)]
+//! | [`tree`](mod@tree) | The tree of a message as a JSON value that keeps the order of its members, and `tree!` that writes one: the forms of the plain values, the writer and the reader of members, paths with `select`, `paths`, `set`, `remove`, `insert`, and `Serialize` and `Deserialize` for a type through its tree | `tree` |
 //!
 //! The crate is `no_std` with `alloc`, has no dependency without a feature, and no
 //! `unsafe`. With the feature `idna`, the realm and the username of a NAI are also
@@ -103,6 +84,9 @@
 //! - [oxirush-sctp](https://docs.rs/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 
 #![no_std]
+// Without its feature an item of the tables is plain text: the links are checked in the
+// build of every feature, which docs.rs makes.
+#![cfg_attr(not(feature = "tree"), allow(rustdoc::broken_intra_doc_links))]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -116,6 +100,6 @@ pub mod identity;
 pub mod tree;
 
 /// The blocks of the README, which are compiled and run with the documentation tests.
-#[cfg(all(doctest, feature = "serde"))]
+#[cfg(all(doctest, feature = "tree"))]
 #[doc = include_str!("../README.md")]
 struct _Readme;

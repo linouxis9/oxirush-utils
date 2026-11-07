@@ -28,12 +28,11 @@ include = [
 # the TAIs, the types of identity, the routing indicator and the protection scheme of a
 # SUCI, the grammar of a NAI and the errors.
 alloc = []
-# The tree of a message, its forms and its paths. A tree is a `tree::Value`, whose objects
-# keep their members in the order in which they are written: the crate turns on no
-# feature of `serde_json` that orders a `serde_json::Map`, which is as the program has it.
+# The tree of a message, its forms and its paths, and `Serialize` and `Deserialize` for a
+# type through its tree. A tree is a `tree::Value`, whose objects keep their members in
+# the order in which they are written: the crate turns on no feature of `serde_json` that
+# orders a `serde_json::Map`, which is as the program has it.
 tree = ["alloc", "dep:serde_json", "dep:serde_core"]
-# `Serialize` and `Deserialize` for a type through its tree.
-serde = ["tree"]
 # The realm and the username of a NAI are also checked as internationalized names:
 # Unicode normalization form C, and a realm that IDNA takes as it is written. Without it
 # they are checked by the grammar of RFC 7542 alone. It brings the Unicode tables of
@@ -77,11 +76,11 @@ required-features = ["tree"]
 
 [[test]]
 name = "serde"
-required-features = ["serde"]
+required-features = ["tree"]
 
 [[test]]
 name = "readme"
-required-features = ["serde"]
+required-features = ["tree"]
 
 [[test]]
 name = "value"

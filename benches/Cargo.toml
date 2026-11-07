@@ -9,7 +9,7 @@ publish = false
 license = "Apache-2.0"
 
 [dependencies]
-oxirush-utils = { path = "..", features = ["serde"] }
+oxirush-utils = { path = "..", features = ["tree"] }
 # The `Value` of serde_json, with its default features: its objects sorted by their names.
 serde_json = "1.0.154"
 

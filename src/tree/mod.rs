@@ -94,8 +94,6 @@ mod forms;
 mod macros;
 mod members;
 mod path;
-#[cfg(feature = "serde")]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 pub mod serde;
 mod value;
 mod walk;

@@ -4,6 +4,8 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+- The feature `serde` is part of `tree`, which brought its one dependency
+  already: `tree::serde` and `impl_serde!` come with the tree.
 - `Guti5g::to_mapped_eps` and `GutiEps::to_mapped_5g`: the GUTI of EPS that a
   5G-GUTI maps to when the UE moves from 5GS to E-UTRAN, and the 5G-GUTI that a
   GUTI maps to the other way (3GPP TS 23.003 clause 2.10.2). The 24 bits of the
