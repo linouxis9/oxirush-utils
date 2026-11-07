@@ -128,8 +128,8 @@ jobs:
         with:
           workspaces: fuzz
       - run: cargo install cargo-fuzz --locked
-      - run: cargo fuzz run identity -- -max_total_time=60 -max_len=64
-      - run: cargo fuzz run paths -- -max_total_time=60 -max_len=512
+      - run: cargo fuzz run identity -- -max_total_time=60 -max_len=64 -dict=fuzz/identity.dict
+      - run: cargo fuzz run paths -- -max_total_time=60 -max_len=512 -dict=fuzz/paths.dict
 
   fmt:
     name: Format
