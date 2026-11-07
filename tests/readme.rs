@@ -8,10 +8,9 @@
 //! that its page shows under its block.
 //!
 //! A page is the README, or the documentation of the crate: the `//!` lines
-//! of `src/lib.rs`. A block that is checked opens with ` ```rust `; one that
-//! opens with ` ```rust,ignore ` uses other crates of the family, and the
-//! package of `family/` runs it. The output of a block is the `json` and
-//! `text` blocks that follow it with nothing but blank lines between them. A
+//! of `src/lib.rs`. A block that is checked opens with ` ```rust `. The
+//! output of a block is the `json` and `text` blocks that follow it with
+//! nothing but blank lines between them. A
 //! block that shows no output prints none. A block that has a `main` is run
 //! as the documentation test runs it: its function calls `main`, which
 //! returns a `Result`, and an error fails the test.

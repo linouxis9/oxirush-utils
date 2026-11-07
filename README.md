@@ -102,44 +102,8 @@ The NAS octets of an identity are the value of an IE of
 PLMN are those of the identities of
 [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
 [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap). The messages of
-all three are trees of this crate, read by the same paths.
-
-```rust,ignore
-use oxirush_nas::nas_5gs::{
-    Nas5gsMessage, NasFGsMobileIdentity, NasFGsRegistrationResult, NasRegistrationAccept,
-    RegistrationResult,
-};
-use oxirush_ngap::{helpers, ngap::PLMNIdentity};
-use oxirush_utils::identity::{Guti5g, Plmn};
-use oxirush_utils::tree;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let plmn: Plmn = "310-410".parse()?;
-    let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
-
-    // The 5G-GUTI of a REGISTRATION ACCEPT of oxirush-nas is this value
-    let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
-    let identity = NasFGsMobileIdentity::from_guti(guti);
-    let accept = NasRegistrationAccept::new(result).with_fg_guti(identity);
-    let accept = Nas5gsMessage::new_5gmm(accept);
-    println!("{}", hex::encode(accept.encode()?));
-
-    // The PLMN identity of a GUAMI of oxirush-ngap has its AP octets
-    let guami = helpers::guami(PLMNIdentity(plmn.to_ap_octets()), 0xca, 0x3fe, 0x01)?;
-    println!("{:?}: {:02x?}", guami.plmn_identity, guami.plmn_identity.0);
-
-    // The tree of the NAS message is a tree of this crate
-    let tree = accept.to_tree();
-    println!("{:?}", tree::select(&tree, "/5g-guti/guti/tmsi")?);
-    Ok(())
-}
-```
-
-```text
-7e0042010177000bf2130014caff81deadbeef
-PLMNIdentity(310-410): [13, 40, 01]
-[Number(3735928559)]
-```
+all three are trees of this crate, read by the same paths: their READMEs show
+how.
 
 ## IMEI, IMEISV, and the identities of EPS
 
@@ -433,9 +397,7 @@ cargo +nightly fuzz run paths -- -max_total_time=60 -max_len=512
 ```
 
 Each Rust block of this page is checked with what it prints
-([`tests/readme.rs`](tests/readme.rs) says how). The block that uses other
-crates of the family runs in the package of [`family/`](family/), which takes
-those crates at the versions that its manifest names.
+([`tests/readme.rs`](tests/readme.rs) says how).
 
 A pull request comes with a test for what it changes. Sign off your commits
 (`git commit -s`): by contributing you agree to the [Developer Certificate
