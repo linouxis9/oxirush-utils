@@ -314,6 +314,28 @@ impl Guti5g {
         let guti = Self::of(plmn, amf_region_id, STmsi5g::from_parts(parts));
         Ok((guti, faults))
     }
+
+    /// The GUTI of EPS that the 5G-GUTI maps to, when the UE moves from 5GS to E-UTRAN
+    /// (3GPP TS 23.003 clause 2.10.2.1.2): the same PLMN, the AMF Region ID and bits 9
+    /// to 2 of the AMF Set ID as the MME Group ID, bits 1 and 0 of the AMF Set ID and
+    /// the AMF Pointer as the MME Code, and the 5G-TMSI as the M-TMSI. The 24 bits of
+    /// the AMF identifier are those of the MME identifier, in their order, so that
+    /// [`GutiEps::to_mapped_5g`] maps it back.
+    ///
+    /// ```
+    /// use oxirush_utils::identity::{Guti5g, GutiEps, Plmn};
+    ///
+    /// let plmn = Plmn::new("208", "93")?;
+    /// let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
+    /// assert_eq!(guti.to_mapped_eps(), GutiEps::new(plmn, 0xcaff, 0x81, 0xdead_beef));
+    /// assert_eq!(guti.to_mapped_eps().to_mapped_5g(), guti);
+    /// # Ok::<(), oxirush_utils::identity::Error>(())
+    /// ```
+    pub fn to_mapped_eps(&self) -> GutiEps {
+        let [_, _, _, _, amf_region_id, set_high, set_low_and_pointer, ..] = self.to_nas_octets();
+        let mme_group_id = u16::from_be_bytes([amf_region_id, set_high]);
+        GutiEps::new(self.plmn, mme_group_id, set_low_and_pointer, self.tmsi())
+    }
 }
 
 impl fmt::Display for Guti5g {
@@ -512,6 +534,27 @@ impl GutiEps {
             mme_code,
             u32::from_be_bytes(tmsi),
         ))
+    }
+
+    /// The 5G-GUTI that the GUTI maps to, when the UE moves from E-UTRAN to 5GS (3GPP
+    /// TS 23.003 clause 2.10.2.2.2): the same PLMN, bits 15 to 8 of the MME Group ID as
+    /// the AMF Region ID, its bits 7 to 0 and bits 7 and 6 of the MME Code as the AMF
+    /// Set ID, bits 5 to 0 of the MME Code as the AMF Pointer, and the M-TMSI as the
+    /// 5G-TMSI. It is the reverse of [`Guti5g::to_mapped_eps`].
+    ///
+    /// ```
+    /// use oxirush_utils::identity::{Guti5g, GutiEps, Plmn};
+    ///
+    /// let plmn = Plmn::new("208", "93")?;
+    /// let guti = GutiEps::new(plmn, 0x0100, 0x41, 0xc000_04f4);
+    /// assert_eq!(guti.to_mapped_5g(), Guti5g::new(plmn, 0x01, 0x001, 0x01, 0xc000_04f4)?);
+    /// # Ok::<(), oxirush_utils::identity::Error>(())
+    /// ```
+    pub fn to_mapped_5g(&self) -> Guti5g {
+        let [amf_region_id, set_high] = self.mme_group_id.to_be_bytes();
+        let [t1, t2, t3, t4] = self.s_tmsi.m_tmsi.to_be_bytes();
+        let parts = [set_high, self.s_tmsi.mme_code, t1, t2, t3, t4];
+        Guti5g::of(self.plmn, amf_region_id, STmsi5g::from_parts(parts))
     }
 }
 

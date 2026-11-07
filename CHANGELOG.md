@@ -4,6 +4,10 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+- `Guti5g::to_mapped_eps` and `GutiEps::to_mapped_5g`: the GUTI of EPS that a
+  5G-GUTI maps to when the UE moves from 5GS to E-UTRAN, and the 5G-GUTI that a
+  GUTI maps to the other way (3GPP TS 23.003 clause 2.10.2). The 24 bits of the
+  AMF identifier are those of the MME Group ID and the MME Code, in their order.
 - The keywords take `supi` in the place of `telecom`, and the description says 5GS and EPS, as those who look for the crate search.
 
 ## 0.1.0 - 2026-10-24

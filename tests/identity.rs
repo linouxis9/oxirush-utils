@@ -570,6 +570,51 @@ fn a_guti_and_an_s_tmsi_have_the_octets_and_the_text_of_their_parts() {
     assert_eq!(format!("{:?}", eps.s_tmsi()), "STmsiEps(s-tmsi-0200000007)");
 }
 
+/// TS 23.003 clause 2.10.2.1.2: the AMF Region ID is bits 15 to 8 of the MME Group ID,
+/// bits 9 to 2 of the AMF Set ID are its bits 7 to 0, bits 1 and 0 of the AMF Set ID are
+/// bits 7 and 6 of the MME Code, and the AMF Pointer is its bits 5 to 0. The MCC, the MNC
+/// and the TMSI are kept. Clause 2.10.2.2.2 maps them back.
+#[test]
+fn a_5g_guti_and_a_guti_map_to_each_other_bit_by_bit() {
+    for (region, set, pointer, group, code) in [
+        (0x01, 0x001, 0x01, 0x0100, 0x41),
+        (0x80, 0x000, 0x00, 0x8000, 0x00),
+        (0x01, 0x000, 0x00, 0x0100, 0x00),
+        (0x00, 0x200, 0x00, 0x0080, 0x00),
+        (0x00, 0x004, 0x00, 0x0001, 0x00),
+        (0x00, 0x002, 0x00, 0x0000, 0x80),
+        (0x00, 0x001, 0x00, 0x0000, 0x40),
+        (0x00, 0x003, 0x00, 0x0000, 0xc0),
+        (0x00, 0x000, 0x20, 0x0000, 0x20),
+        (0x00, 0x000, 0x3f, 0x0000, 0x3f),
+        (0xff, 0x3ff, 0x3f, 0xffff, 0xff),
+        (0xca, 0x3fe, 0x01, 0xcaff, 0x81),
+    ] {
+        for (plmn, tmsi) in [(plmn("310-410"), 0xdead_beef), (plmn("208-93"), 1)] {
+            let guti = Guti5g::new(plmn, region, set, pointer, tmsi).unwrap();
+            let eps = GutiEps::new(plmn, group, code, tmsi);
+            assert_eq!(guti.to_mapped_eps(), eps, "{guti}");
+            assert_eq!(eps.to_mapped_5g(), guti, "{eps}");
+        }
+    }
+    // The 24 bits of the AMF identifier are those of the MME Group ID and the MME Code, in
+    // their order: each of the 2^24 identifiers maps to its own, and back.
+    let (numbers, home) = (&mut Numbers(23003), plmn("208-93"));
+    for amfi in 0..1u32 << 24 {
+        let tmsi = numbers.next() as u32;
+        let (region, set, pointer) = (
+            (amfi >> 16) as u8,
+            (amfi >> 6) as u16 & 0x3ff,
+            amfi as u8 & 0x3f,
+        );
+        let guti = Guti5g::new(home, region, set, pointer, tmsi).unwrap();
+        let eps = guti.to_mapped_eps();
+        let parts = (eps.plmn(), eps.mme_group_id(), eps.mme_code(), eps.m_tmsi());
+        assert_eq!(parts, (home, (amfi >> 8) as u16, amfi as u8, tmsi));
+        assert_eq!(eps.to_mapped_5g(), guti);
+    }
+}
+
 /// TS 24.501 figures 9.11.3.4.1 and 9.11.3.4.5: bits 8 to 5 of the first octet are 1111
 /// and bit 4 is spare. TS 24.007 clause 11.1.4: a spare bit is sent as 0 and "can be
 /// accepted as a 0 or a 1 by the receiver".
