@@ -119,7 +119,7 @@ jobs:
       - run: "! cargo package --list | grep -E '^(fuzz|benches|readme|\\.github)/'"
 
   fuzz:
-    name: Fuzz the identities and the paths (2 minutes)
+    name: Fuzz the identities, the paths and the forms of a tree (3 minutes)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -130,6 +130,7 @@ jobs:
       - run: cargo install cargo-fuzz --locked
       - run: cargo fuzz run identity -- -max_total_time=60 -max_len=64 -dict=fuzz/identity.dict
       - run: cargo fuzz run paths -- -max_total_time=60 -max_len=512 -dict=fuzz/paths.dict
+      - run: cargo fuzz run forms -- -max_total_time=60 -max_len=512
 
   fmt:
     name: Format

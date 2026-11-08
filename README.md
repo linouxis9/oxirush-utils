@@ -388,10 +388,11 @@ free5GC and PacketRusher sent in lab runs, and against themselves: every
 value is read back from the octets it writes, and any octets are either a
 value that writes them back or no value. The tests of oxirush-nas and
 oxirush-ngap on paths run here too, on trees written out without a codec,
-and so do trees of 65,536 entries, within a time bound. `fuzz/` has two
+and so do trees of 65,536 entries, within a time bound. `fuzz/` has three
 [cargo-fuzz](https://crates.io/crates/cargo-fuzz) targets: `identity` reads
-octets and text as each identity, and `paths` takes any path and any edit on
-any tree.
+octets and text as each identity, `paths` takes any path and any edit on any
+tree, and `forms` reads any JSON with each reader of a tree and holds the
+forms of a tree and the segments of its paths to what they write.
 
 ```sh
 cargo test --all-features

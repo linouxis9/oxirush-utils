@@ -26,6 +26,11 @@
 //! `paths` takes a path, a tree and a value out of the octets, and selects, lists and
 //! edits: each path that is listed selects its value, an edit that is refused leaves
 //! the tree as it was, and a value that is set is the one that is selected.
+//!
+//! `forms` holds the forms of a tree, the names and the segments of its paths to what
+//! they are written to be, and reads any JSON with each reader of `Reading`: what is
+//! read writes a tree that reads back as itself, and a refusal of a secret says nothing
+//! of it.
 
 use oxirush_utils::identity::{
     Guti5g, GutiEps, Imei, Imeisv, Imsi, ImsiSuci, NaiSuci, Plmn, RoutingIndicator, STmsi5g, Supi,
@@ -314,6 +319,254 @@ pub fn paths(octets: &[u8]) {
         };
         if done.is_err() {
             assert_eq!(edited, tree);
+        }
+    }
+}
+
+/// A type with a member of each reader of [`tree::Reading`], which the target `forms`
+/// reads from any JSON.
+#[derive(Debug, PartialEq)]
+struct Every {
+    flag: bool,
+    nothing: Option<()>,
+    text: String,
+    choice: usize,
+    small: u64,
+    signed: i64,
+    octets: Vec<u8>,
+    array: Option<[u8; 3]>,
+    bits: Option<(Vec<u8>, usize)>,
+    list: Vec<u64>,
+    alternative: (usize, u64),
+    key: Option<Vec<u8>>,
+}
+
+/// A string of bits, as [`tree::Reading::bits`] reads one.
+struct Bits(Vec<u8>, usize);
+
+impl tree::Tree for Bits {
+    const NAME: &'static str = "Bits";
+
+    fn to_tree(&self) -> Value {
+        tree::bits(&self.0, self.1)
+    }
+
+    fn from_tree(value: &Value, reading: &mut tree::Reading) -> Result<Self, tree::Refused> {
+        let (octets, length) = reading.bits(value)?;
+        Ok(Self(octets, length))
+    }
+}
+
+const CHOICES: &[&str] = &["first", "second-one", "3rd"];
+const ALTERNATIVES: &[&str] = &["a-number", "another"];
+const MEMBERS: &[&str] = &[
+    "flag",
+    "nothing",
+    "text",
+    "choice",
+    "small",
+    "signed",
+    "octets",
+    "array",
+    "bits",
+    "list",
+    "alternative",
+    "key",
+];
+
+impl tree::Tree for Every {
+    const NAME: &'static str = "Every";
+
+    fn to_tree(&self) -> Value {
+        let mut members = tree::Members::new();
+        members.put("flag", Value::Bool(self.flag));
+        members.put_optional("nothing", self.nothing.map(|()| Value::Null));
+        members.put("text", tree::text(&self.text));
+        members.put("choice", tree::text(CHOICES[self.choice]));
+        members.put("small", tree::unsigned(self.small));
+        members.put("signed", tree::signed(self.signed));
+        members.put("octets", tree::octets(&self.octets));
+        members.put_optional("array", self.array.map(|array| tree::octets(&array)));
+        members.put_optional(
+            "bits",
+            self.bits
+                .as_ref()
+                .map(|(octets, length)| tree::bits(octets, *length)),
+        );
+        members.put(
+            "list",
+            Value::Array(
+                self.list
+                    .iter()
+                    .map(|entry| tree::unsigned(*entry))
+                    .collect(),
+            ),
+        );
+        let (alternative, inner) = self.alternative;
+        members.put(
+            "alternative",
+            tree::alternative(ALTERNATIVES[alternative], tree::unsigned(inner)),
+        );
+        members.put_optional("key", self.key.as_ref().map(|key| tree::octets(key)));
+        members.finish()
+    }
+
+    fn from_tree(value: &Value, reading: &mut tree::Reading) -> Result<Self, tree::Refused> {
+        let read = reading.members(value, MEMBERS)?;
+        Ok(Self {
+            flag: reading.member(&read, "flag", |value, reading| reading.boolean(value))?,
+            nothing: reading.optional(&read, "nothing", |value, reading| reading.null(value))?,
+            text: reading.member(&read, "text", |value, reading| {
+                reading.text(value).map(str::to_owned)
+            })?,
+            choice: reading.member(&read, "choice", |value, reading| {
+                reading.named(value, CHOICES)
+            })?,
+            small: reading.member(&read, "small", |value, reading| {
+                reading.unsigned(value, 3, 300)
+            })?,
+            signed: reading.member(&read, "signed", |value, reading| {
+                reading.signed(value, -5, 5)
+            })?,
+            octets: reading.member(&read, "octets", |value, reading| reading.octets(value))?,
+            array: reading.optional(&read, "array", |value, reading| reading.octet_array(value))?,
+            bits: reading.optional(&read, "bits", |value, reading| reading.bits(value))?,
+            list: reading.member(&read, "list", |value, reading| {
+                reading.list(value, |entry, reading| reading.unsigned(entry, 0, u64::MAX))
+            })?,
+            alternative: reading.member(&read, "alternative", |value, reading| {
+                let (alternative, inner) = reading.alternative(value, ALTERNATIVES)?;
+                let inner =
+                    reading.within(ALTERNATIVES[alternative], inner, |inner, reading| {
+                        reading.unsigned(inner, 0, 9)
+                    })?;
+                Ok((alternative, inner))
+            })?,
+            key: reading.optional(&read, "key", |value, reading| {
+                reading.secret(|reading| reading.octets(value))
+            })?,
+        })
+    }
+}
+
+/// The forms of a tree, the names and the segments of its paths, on the text that the
+/// octets start with, up to a zero octet, and its readers on the JSON after it.
+///
+/// Hexadecimal reads back what it writes, and reads what is two digits for each octet
+/// alone, which it writes back in lower case. A segment that [`tree::escape`] writes is
+/// one that [`tree::segments`] reads back, alone and among others, and a position is a
+/// number written plainly. [`tree::same_name`] is symmetric, and [`tree::named`] finds
+/// the name itself, then one written alike but for its case and its separators, then the
+/// first of the same name. Bits written by [`tree::bits`] read back.
+///
+/// A type with a member of each reader reads any JSON without a panic; a value that it
+/// reads writes a tree that reads back as itself, and whose own tree is that tree. A
+/// refusal of a secret member says nothing of what is written there.
+pub fn forms(octets: &[u8]) {
+    let (text, json) = match octets.iter().position(|octet| *octet == 0) {
+        Some(at) => (&octets[..at], &octets[at + 1..]),
+        None => (octets, &[][..]),
+    };
+    let text = String::from_utf8_lossy(text);
+
+    // Hexadecimal
+    assert_eq!(
+        tree::unhex(&tree::hex(text.as_bytes())).as_deref(),
+        Some(text.as_bytes())
+    );
+    match tree::unhex(&text) {
+        Some(read) => {
+            assert_eq!(tree::hex(&read), text.to_ascii_lowercase(), "{text:?}");
+        }
+        None => assert!(
+            text.len() % 2 == 1 || !text.bytes().all(|digit| digit.is_ascii_hexdigit()),
+            "{text:?}"
+        ),
+    }
+
+    // Segments, escapes and positions
+    let pieces: Vec<&str> = text.split('\u{1}').take(8).collect();
+    let path: String = pieces
+        .iter()
+        .map(|piece| format!("/{}", tree::escape(piece)))
+        .collect();
+    if path.len() <= 4096 {
+        let read = tree::segments(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
+        assert_eq!(read, pieces, "{path:?}");
+    }
+    let plain = text == "0"
+        || (!text.is_empty()
+            && !text.starts_with('0')
+            && text.bytes().all(|digit| digit.is_ascii_digit()));
+    match tree::position(&text) {
+        Some(number) => assert!(plain && number.to_string() == *text, "{text:?}"),
+        None => assert!(!plain || text.parse::<usize>().is_err(), "{text:?}"),
+    }
+
+    // Names
+    let names: Vec<&str> = pieces.iter().copied().skip(1).collect();
+    if let Some(name) = pieces.first() {
+        for other in &names {
+            assert_eq!(
+                tree::same_name(name, other),
+                tree::same_name(other, name),
+                "{name:?} {other:?}"
+            );
+        }
+        // The name itself wins, then one written alike but for its case and its
+        // separators, then the first of the same name
+        let separator = |c: u8| matches!(c, b'-' | b'_' | b' ');
+        let alike = |a: &str, b: &str| {
+            a.len() == b.len()
+                && (a.bytes().zip(b.bytes()))
+                    .all(|(a, b)| a.eq_ignore_ascii_case(&b) || (separator(a) && separator(b)))
+        };
+        let first = |is: &dyn Fn(&str) -> bool| names.iter().position(|known| is(known));
+        let expected = first(&|known| known == *name)
+            .or_else(|| first(&|known| alike(known, name)))
+            .or_else(|| first(&|known| tree::same_name(known, name)));
+        assert_eq!(tree::named(&names, name), expected, "{name:?} {names:?}");
+    }
+
+    // Bits: the octets of the text with the bits after the length cleared
+    let bytes = text.as_bytes();
+    if !bytes.is_empty() {
+        let length = 8 * bytes.len() - usize::from(bytes[0] % 8);
+        let mut cleared = bytes.to_vec();
+        if !length.is_multiple_of(8) {
+            *cleared.last_mut().expect("an octet") &= 0xffu8 << (8 - length % 8);
+        }
+        let read = tree::from_value::<Bits>(&tree::bits(&cleared, length));
+        assert!(
+            read.as_ref()
+                .is_ok_and(|Bits(octets, bits)| *octets == cleared && *bits == length),
+            "{cleared:02x?} {length}"
+        );
+    }
+
+    // The readers on any JSON
+    let Ok(value) = serde_json::from_slice::<Value>(json) else {
+        return;
+    };
+    match tree::from_value::<Every>(&value) {
+        Ok(every) => {
+            let written = tree::Tree::to_tree(&every);
+            let again: Every =
+                tree::from_value(&written).unwrap_or_else(|error| panic!("{written}: {error}"));
+            assert_eq!(again, every, "{written}");
+            assert_eq!(tree::Tree::to_tree(&again), written);
+        }
+        Err(error) => {
+            let said = error.to_string();
+            if let Some(Value::String(key)) = value.get("key")
+                && key.len() >= 6
+                && error.at().contains("key")
+            {
+                assert!(
+                    !said.contains(key.as_str()),
+                    "a refusal of a secret says it: {said}"
+                );
+            }
         }
     }
 }
