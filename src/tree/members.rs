@@ -131,21 +131,34 @@ fn written(value: &Value) -> String {
     }
 }
 
-/// What a refusal says of the names of a type that `name` is none of: each of them, or of
-/// a type of many the nearest to it, or the first.
-fn some_of(names: &[&str], name: &str) -> String {
+/// What a refusal says of the names of a type that `name` is none of: each of them after
+/// `each`, or of a type of many the nearest to it, or the first after `each`.
+fn some_of(names: &[&str], name: &str, each: &str) -> String {
     /// The names that a refusal lists all of.
     const ALL: usize = 12;
     if names.len() <= ALL {
-        return names.join(", ");
+        return format!("{each}{}", names.join(", "));
     }
     let count = names.len();
     match nearest(names, name, 3)[..] {
-        [] => format!("{}, and {} more", names[..8].join(", "), count - 8),
+        [] => format!("{each}{}, and {} more", names[..8].join(", "), count - 8),
         [one] => format!("the nearest of its {count} is {one}"),
         [ref near @ .., last] => format!(
             "the nearest of its {count} are {} and {last}",
             near.join(", ")
+        ),
+    }
+}
+
+/// Why `name` is not a member of a value that has the members `names`, or whose type
+/// has them: `of` says which, `that its type has` or `of this value`. The one wording of
+/// [`Reading::members`] and of the paths.
+pub(crate) fn not_a_member(name: &str, of: &str, names: &[&str]) -> String {
+    match names {
+        [] => format!("{name:?} is not a member {of}: it has none"),
+        _ => format!(
+            "{name:?} is not a member {of}: {}",
+            some_of(names, name, "it has ")
         ),
     }
 }
@@ -299,7 +312,9 @@ impl Reading {
 
     /// The members of a value whose type has the members `names`, in their order. A
     /// member is found by its name [however it is written](super::same_name); a member
-    /// of another name is refused, and so is a name that is there twice.
+    /// of another name is refused with the names, or of many the nearest to it, as a path
+    /// is where its family knows them ([`Family::names`](super::Family::names)), and so
+    /// is a name that is there twice.
     pub fn members<'v>(
         &mut self,
         value: &'v Value,
@@ -314,10 +329,7 @@ impl Reading {
             // The name as its type writes it is the usual case.
             let exact = names.iter().position(|name| *name == written);
             let Some(position) = exact.or_else(|| named(names, written)) else {
-                let why = format!(
-                    "{written:?} is not a member that its type has: it has {}",
-                    names.join(", ")
-                );
+                let why = not_a_member(written, "that its type has", names);
                 return Err(self.refuse(ErrorKind::NoSuchMember, why));
             };
             if found[position] {
@@ -467,7 +479,10 @@ impl Reading {
             },
         };
         named(names, text).ok_or_else(|| {
-            let why = format!("{text:?} is none of its names: {}", some_of(names, text));
+            let why = format!(
+                "{text:?} is none of its names: {}",
+                some_of(names, text, "")
+            );
             self.refuse(ErrorKind::Value, why)
         })
     }

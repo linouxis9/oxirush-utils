@@ -8,6 +8,18 @@ All notable changes to `oxirush-utils` are recorded here.
 
 - `Tai5gs::from_tac_octets`, the tracking area identity of a PLMN and the three
   octets of a tracking area code, which cannot fail (3GPP TS 38.413 clause 9.3.3.10).
+- `Family::names`, the names that the type of a value has, where the family knows
+  them: a path refuses a name that the value does not have with them, as
+  `Reading::members` refuses it, without an `Absent::Refused` of the family's own.
+
+### Changed
+
+- A name that a value does not have is refused in one wording by the paths and by
+  `Reading::members`: `"sts" is not a member that its type has: it has sst, sd`, or
+  `of this value` and the members that it has where the family does not know its
+  type. Of more than twelve names, both say the nearest to it, or the first eight
+  and how many more, as `Reading::named` does: `Reading::members` listed every name,
+  and the paths the first twelve and `…`.
 
 ## 0.2.1 - 2026-11-08
 

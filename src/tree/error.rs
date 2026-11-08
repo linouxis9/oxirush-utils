@@ -56,7 +56,7 @@ pub enum ErrorKind {
 /// assert_eq!(error.at(), "/cause/valeu");
 /// assert_eq!(
 ///     error.to_string(),
-///     "\"valeu\" is not a member of this value, which has value, at /cause/valeu"
+///     "\"valeu\" is not a member of this value: it has value, at /cause/valeu"
 /// );
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]

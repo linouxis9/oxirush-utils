@@ -198,7 +198,7 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
         (
             "/nas/requested-nssai/value/0/misspelled",
             ErrorKind::NoSuchMember,
-            "\"misspelled\" is not a member of this value, which has sst",
+            "\"misspelled\" is not a member of this value: it has sst",
         ),
         (
             "/nas/requested-nssai/value/first",
@@ -1650,8 +1650,8 @@ fn an_edit_of_a_place_that_is_gone_is_refused_and_undone() {
     assert_eq!(tree.to_string(), before.to_string());
 }
 
-/// A name that an object does not have is refused with its names: twelve at most, and
-/// `…` for more.
+/// A name that an object does not have is refused with its names: twelve at most, and of
+/// more the nearest to it, or the first eight.
 #[test]
 fn a_missing_name_is_refused_with_twelve_names_at_most() {
     let object = |count: usize| {
@@ -1661,14 +1661,27 @@ fn a_missing_name_is_refused_with_twelve_names_at_most() {
         }
         Value::Object(members)
     };
-    let reason = |count| {
-        tree::select(&object(count), "/x")
+    let reason = |count, name: &str| {
+        tree::select(&object(count), &format!("/{name}"))
             .unwrap_err()
             .reason()
             .to_string()
     };
-    assert!(!reason(12).contains('…'), "{}", reason(12));
-    assert!(reason(13).contains('…'), "{}", reason(13));
+    assert!(
+        reason(12, "zzzz").ends_with(": it has m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11"),
+        "{}",
+        reason(12, "zzzz")
+    );
+    assert!(
+        reason(13, "zzzz").ends_with(": it has m0, m1, m2, m3, m4, m5, m6, m7, and 5 more"),
+        "{}",
+        reason(13, "zzzz")
+    );
+    assert!(
+        reason(13, "m111").ends_with(": the nearest of its 13 are m11, m1 and m10"),
+        "{}",
+        reason(13, "m111")
+    );
 }
 
 /// A family that takes a segment through members without an end is refused.
@@ -1784,5 +1797,140 @@ fn a_segment_goes_through_an_entry_to_the_value_that_it_holds_by_a_name() {
     assert_eq!(
         message,
         tree!({"ies": [{"AMF-UE-NGAP-ID": 7}, {"criticality": "ignore"}, {}]})
+    );
+}
+
+// ── A family that knows the names of a type ─────────────────────────────────
+
+/// The members of a slice, as its type has them.
+const SLICE: &[&str] = &["sst", "sd", "mapped-hplmn-sst", "mapped-hplmn-sd"];
+
+/// The timers of a type of many members.
+const TIMERS: &[&str] = &[
+    "t3324",
+    "t3346",
+    "t3348",
+    "t3396",
+    "t3402",
+    "t3412",
+    "t3412-extended",
+    "t3442",
+    "t3447",
+    "t3448",
+    "t3502",
+    "t3512",
+    "t3540",
+];
+
+/// A family whose entries of a list are slices, whose names it knows.
+struct Slices;
+
+impl Family for Slices {
+    /// Whether the place is a slice.
+    type Shape = bool;
+
+    fn entry(&self, _: &bool, _: Option<&Value>) -> bool {
+        true
+    }
+
+    fn names(&self, slice: &bool) -> Option<Vec<&str>> {
+        slice.then(|| SLICE.to_vec())
+    }
+}
+
+/// A slice as a type, which reads the members of `SLICE`.
+#[derive(Debug)]
+struct Slice;
+
+impl tree::Tree for Slice {
+    const NAME: &'static str = "S-NSSAI";
+
+    fn to_tree(&self) -> Value {
+        tree!({})
+    }
+
+    fn from_tree(value: &Value, reading: &mut tree::Reading) -> Result<Self, tree::Refused> {
+        reading.members(value, SLICE)?;
+        Ok(Self)
+    }
+}
+
+/// A type of the members of `TIMERS`.
+#[derive(Debug)]
+struct Timers;
+
+impl tree::Tree for Timers {
+    const NAME: &'static str = "Timers";
+
+    fn to_tree(&self) -> Value {
+        tree!({})
+    }
+
+    fn from_tree(value: &Value, reading: &mut tree::Reading) -> Result<Self, tree::Refused> {
+        reading.members(value, TIMERS)?;
+        Ok(Self)
+    }
+}
+
+/// The refusal of a name that a value does not have says the same in a path and in
+/// `from_tree`, where the family knows the names of the type, and says the members of the
+/// value where it does not; of many names, it says the nearest.
+#[test]
+fn a_name_that_a_value_has_not_is_refused_in_one_wording() {
+    let read = |tree: Value| {
+        let error = tree::from_value::<Slice>(&tree).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::NoSuchMember);
+        error
+            .reason()
+            .replace("this is not a value of S-NSSAI: ", "")
+    };
+    let slices = tree!({"slices": [{"sst": 1}]});
+    let path = tree::select_in(&Slices, &slices, "/slices/0/sts").unwrap_err();
+    assert_eq!(path.kind(), ErrorKind::NoSuchMember);
+    assert_eq!(path.reason(), read(tree!({"sst": 1, "sts": 2})));
+    assert_eq!(
+        path.reason(),
+        "\"sts\" is not a member that its type has: it has sst, sd, mapped-hplmn-sst, \
+         mapped-hplmn-sd"
+    );
+    // So does one that `set` cannot add below an entry that it adds.
+    let mut edited = slices.clone();
+    let added = tree::set_in(&Slices, &mut edited, "/slices/1/sts/value", tree!(1));
+    assert_eq!(added.unwrap_err().reason(), path.reason());
+    // The plain family knows no type: the members that the value has.
+    let plain = tree::select(&slices, "/slices/0/sts").unwrap_err();
+    assert_eq!(
+        plain.reason(),
+        "\"sts\" is not a member of this value: it has sst"
+    );
+    assert_eq!(
+        tree::select(&tree!({"slices": {}}), "/slices/sst")
+            .unwrap_err()
+            .reason(),
+        "\"sst\" is not a member of this value: it has none"
+    );
+
+    // Of many names, the nearest, or the first eight when none is near.
+    let timers = tree::from_value::<Timers>(&tree!({"t35122": 1})).unwrap_err();
+    assert_eq!(
+        timers.reason(),
+        "this is not a value of Timers: \"t35122\" is not a member that its type has: the \
+         nearest of its 13 are t3512, t3412 and t3502"
+    );
+    let object = Value::Object(
+        TIMERS
+            .iter()
+            .map(|name| (name.to_string(), tree!(1)))
+            .collect(),
+    );
+    assert_eq!(
+        tree::select(&object, "/t35122").unwrap_err().reason(),
+        "\"t35122\" is not a member of this value: the nearest of its 13 are t3512, t3412 and \
+         t3502"
+    );
+    assert_eq!(
+        tree::select(&object, "/cause").unwrap_err().reason(),
+        "\"cause\" is not a member of this value: it has t3324, t3346, t3348, t3396, t3402, \
+         t3412, t3412-extended, t3442, and 5 more"
     );
 }

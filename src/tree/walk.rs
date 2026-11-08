@@ -19,6 +19,7 @@
 //! messages adds to them where its trees are more than objects and lists.
 
 use super::forms::{key, same_name};
+use super::members::not_a_member;
 use super::path::{MAX_SEGMENTS, MAX_SELECTED, escape, position, segments};
 use super::value::{Map, Value};
 use super::{Error, ErrorKind};
@@ -487,6 +488,15 @@ pub trait Family {
         Absent::Unknown
     }
 
+    /// The names that the type of a value of `shape` has, where the family knows them: a
+    /// name that [`absent`](Self::absent) knows nothing of is refused with them, in the
+    /// words of [`Reading::members`](super::Reading::members). `None` refuses it with the
+    /// members that the value has.
+    fn names(&self, shape: &Self::Shape) -> Option<Vec<&str>> {
+        let _ = shape;
+        None
+    }
+
     /// How [`paths`] lists the member `name` of a value of `shape`. `*` leaves out the
     /// members that are hidden.
     fn listed(&self, shape: &Self::Shape, name: &str) -> Listed {
@@ -566,19 +576,21 @@ fn resolve(root: Root<'_>, path: &str) -> Result<(Vec<String>, bool), Error> {
     Ok((parts, rooted))
 }
 
-/// Why a name selects nothing in an object: the names that it has.
-fn no_member(members: &Map, part: &str, path: &str) -> Error {
-    const SHOWN: usize = 12;
-    let mut names: Vec<&str> = members.keys().take(SHOWN).map(String::as_str).collect();
-    if members.len() > SHOWN {
-        names.push("…");
-    }
-    let reason = match names.is_empty() {
-        true => format!("{part:?} is not a member of this value, which has none"),
-        false => format!(
-            "{part:?} is not a member of this value, which has {}",
-            names.join(", ")
-        ),
+/// Why a name selects nothing in an object of `shape`: the names that its type has,
+/// where the family knows them, or those of its members.
+fn no_member<F: Family>(
+    family: &F,
+    shape: &F::Shape,
+    members: &Map,
+    part: &str,
+    path: &str,
+) -> Error {
+    let reason = match family.names(shape) {
+        Some(names) => not_a_member(part, "that its type has", &names),
+        None => {
+            let names: Vec<&str> = members.keys().map(String::as_str).collect();
+            not_a_member(part, "of this value", &names)
+        }
     };
     Error::new(ErrorKind::NoSuchMember, path, reason)
 }
@@ -622,7 +634,7 @@ fn plain<'v, F: Family>(
                 Absent::Unknown if next.last => {
                     next.absent(part, family.member(shape, part, None));
                 }
-                Absent::Unknown => return Err(no_member(&Map::new(), part, path)),
+                Absent::Unknown => return Err(no_member(family, shape, &Map::new(), part, path)),
             }
             Ok(())
         }
@@ -650,7 +662,7 @@ fn plain<'v, F: Family>(
                 Absent::Unknown if next.last && next.edit == Some(Edit::Set) => {
                     next.absent(part, family.member(shape, part, None));
                 }
-                Absent::Unknown => return Err(no_member(members, part, path)),
+                Absent::Unknown => return Err(no_member(family, shape, members, part, path)),
             }
             Ok(())
         }

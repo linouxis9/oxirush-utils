@@ -286,7 +286,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```text
 [Number(1), Number(2)]
 []
-"sts" is not a member of this value, which has sst, at /requested-nssai/0/sts
+"sts" is not a member of this value: it has sst, at /requested-nssai/0/sts
 /message-type = "registration-request"
 /requested-nssai/0/sst = 1
 /requested-nssai/1/sst = 2
