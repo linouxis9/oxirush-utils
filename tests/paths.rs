@@ -1664,3 +1664,100 @@ fn a_family_that_goes_through_members_without_an_end_is_refused() {
     let error = tree::select_in(&Endless, &tree!({"a": 1}), "/a").unwrap_err();
     assert_eq!(error.kind(), ErrorKind::Refused);
 }
+
+/// A family whose list holds each value under a name, as the information elements of a
+/// message, `[{"Cause": …, "criticality": …}]`: a name selects the value of each entry
+/// that holds one under it, in one segment, and an edit there edits the value and keeps
+/// the entry, whose other members stay; after the value, `criticality` is the member
+/// beside it.
+#[test]
+fn a_segment_goes_through_an_entry_to_the_value_that_it_holds_by_a_name() {
+    struct Elements;
+    impl Family for Elements {
+        /// Whether the place is the value of an element.
+        type Shape = bool;
+        fn step<'v>(
+            &self,
+            place: &Place<'v, bool>,
+            segment: &str,
+            next: &mut Next<'v, bool>,
+        ) -> Result<Step<bool>, Error> {
+            if *place.shape() && segment == "criticality" {
+                next.beside(place, segment, false);
+                return Ok(Step::Taken);
+            }
+            let Some(Value::Array(entries)) = place.value() else {
+                return Ok(Step::Plain);
+            };
+            if segment.parse::<usize>().is_ok() || segment == "*" || segment == "-" {
+                return Ok(Step::Plain);
+            }
+            for (position, entry) in entries.iter().enumerate() {
+                let Some(members) = entry.as_object() else {
+                    continue;
+                };
+                if let Some(name) = members.keys().find(|name| tree::same_name(name, segment)) {
+                    next.entry_member(position, members, name, true);
+                }
+            }
+            Ok(Step::Taken)
+        }
+    }
+    let mut message = tree!({"ies": [
+        {"AMF-UE-NGAP-ID": 42},
+        {"Cause": {"radioNetwork": "user-inactivity"}, "criticality": "ignore"},
+        {"Cause": {"nas": "normal-release"}},
+    ]});
+    fn select<'v>(message: &'v Value, path: &str) -> Vec<&'v Value> {
+        tree::select_in(&Elements, message, path).unwrap()
+    }
+    assert_eq!(select(&message, "/ies/amf-ue-ngap-id"), [&tree!(42)]);
+    assert_eq!(
+        select(&message, "/ies/Cause"),
+        [
+            &tree!({"radioNetwork": "user-inactivity"}),
+            &tree!({"nas": "normal-release"})
+        ]
+    );
+    assert_eq!(
+        select(&message, "/ies/Cause/nas"),
+        [&tree!("normal-release")]
+    );
+    assert!(select(&message, "/ies/TimeToWait").is_empty());
+    // Beside the value, a member of its entry, which the entry may not have.
+    assert_eq!(
+        select(&message, "/ies/Cause/criticality"),
+        [&tree!("ignore")]
+    );
+    let mut beside = message.clone();
+    let path = "/ies/AMF-UE-NGAP-ID/criticality";
+    tree::set_in(&Elements, &mut beside, path, tree!("reject")).unwrap();
+    assert_eq!(
+        beside["ies"][0],
+        tree!({"AMF-UE-NGAP-ID": 42, "criticality": "reject"})
+    );
+    tree::remove_in(&Elements, &mut beside, "/ies/Cause/criticality").unwrap();
+    assert_eq!(
+        beside["ies"][1],
+        tree!({"Cause": {"radioNetwork": "user-inactivity"}})
+    );
+
+    // An edit of the value keeps the entry and its criticality.
+    let cause = tree!({"radioNetwork": "unspecified"});
+    tree::set_in(&Elements, &mut message, "/ies/Cause", cause).unwrap();
+    tree::set_in(&Elements, &mut message, "/ies/AMF-UE-NGAP-ID", tree!(7)).unwrap();
+    assert_eq!(
+        message,
+        tree!({"ies": [
+            {"AMF-UE-NGAP-ID": 7},
+            {"Cause": {"radioNetwork": "unspecified"}, "criticality": "ignore"},
+            {"Cause": {"radioNetwork": "unspecified"}},
+        ]})
+    );
+    // Taken out, the value leaves the other members of the entry.
+    tree::remove_in(&Elements, &mut message, "/ies/Cause").unwrap();
+    assert_eq!(
+        message,
+        tree!({"ies": [{"AMF-UE-NGAP-ID": 7}, {"criticality": "ignore"}, {}]})
+    );
+}

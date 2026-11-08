@@ -107,6 +107,9 @@ pub struct Place<'v, S> {
     shape: S,
     /// The keys to the place, when the walk is that of an edit.
     at: Option<Rc<Link>>,
+    /// The entry of a list that holds the value by a name, where
+    /// [`entry_member`](Next::entry_member) took it.
+    entry: Option<&'v Map>,
 }
 
 impl<'v, S> Place<'v, S> {
@@ -150,14 +153,70 @@ impl<'v, S> Next<'v, S> {
     pub fn member(&mut self, name: &str, value: &'v Value, shape: S) {
         let at = self.link(|| Key::Name(name.to_string()));
         let value = Some(value);
-        self.found.push(Place { value, shape, at });
+        self.found.push(Place {
+            value,
+            shape,
+            at,
+            entry: None,
+        });
     }
 
     /// The entry at `position` of the place, which is a list.
     pub fn entry(&mut self, position: usize, value: &'v Value, shape: S) {
         let at = self.link(|| Key::Position(position));
         let value = Some(value);
-        self.found.push(Place { value, shape, at });
+        self.found.push(Place {
+            value,
+            shape,
+            at,
+            entry: None,
+        });
+    }
+
+    /// The member `name` of `entry`, the entry at `position` of the place, which is a
+    /// list: one segment that goes through an entry to the value that it holds by a name,
+    /// as an information element in a list of them, `[{"Cause": …}]`. `name` is the name
+    /// as the entry has it. An edit of the place edits the member, and the entry stays;
+    /// [`beside`](Self::beside) goes from the place to another member of the entry.
+    pub fn entry_member(&mut self, position: usize, entry: &'v Map, name: &str, shape: S) {
+        let link = self.link(|| Key::Position(position));
+        let at = link.map(|link| {
+            Rc::new(Link {
+                key: Key::Name(name.to_string()),
+                before: Some(link),
+            })
+        });
+        self.found.push(Place {
+            value: entry.get(name),
+            shape,
+            at,
+            entry: Some(entry),
+        });
+    }
+
+    /// The member `name` of the entry that holds the value at `place`, as
+    /// [`entry_member`](Self::entry_member) took it: a segment from that value to a
+    /// member beside it, as the criticality beside an information element,
+    /// `[{"Cause": …, "criticality": "ignore"}]`. The member is a place without a value
+    /// when the entry does not have it, which `set` gives the entry. Nothing for a place
+    /// that `entry_member` did not add.
+    pub fn beside(&mut self, place: &Place<'v, S>, name: &str, shape: S) {
+        let Some(entry) = place.entry else {
+            return;
+        };
+        let held = key(entry, name);
+        let at = self.tracking.then(|| {
+            Rc::new(Link {
+                key: Key::Name(held.unwrap_or(name).to_string()),
+                before: place.at.as_ref().and_then(|at| at.before.clone()),
+            })
+        });
+        self.found.push(Place {
+            value: held.map(|name| &entry[name]),
+            shape,
+            at,
+            entry: Some(entry),
+        });
     }
 
     /// A member `name` that the place does not have and could have. `select` finds
@@ -165,7 +224,12 @@ impl<'v, S> Next<'v, S> {
     pub fn absent(&mut self, name: &str, shape: S) {
         let at = self.link(|| Key::Name(name.to_string()));
         let value = None;
-        self.found.push(Place { value, shape, at });
+        self.found.push(Place {
+            value,
+            shape,
+            at,
+            entry: None,
+        });
     }
 
     /// The end of the list at the place, where [`insert_in`] adds an entry: what `-`
@@ -176,6 +240,7 @@ impl<'v, S> Next<'v, S> {
             value: None,
             shape,
             at,
+            entry: None,
         });
     }
 
@@ -195,8 +260,13 @@ impl<'v, S> Next<'v, S> {
     /// The same place again, as `place`, with what the family now knows of it: for a
     /// segment that says what the place is and does not go into it.
     pub fn stay(&mut self, place: &Place<'v, S>, shape: S) {
-        let (value, at) = (place.value, place.at.clone());
-        self.found.push(Place { value, shape, at });
+        let (value, at, entry) = (place.value, place.at.clone(), place.entry);
+        self.found.push(Place {
+            value,
+            shape,
+            at,
+            entry,
+        });
     }
 
     /// Show the value at `place` as `value`, which the family opens from it, where the
@@ -230,6 +300,7 @@ impl<'v, S> Next<'v, S> {
             value: held.map(|(_, value)| value),
             shape,
             at,
+            entry: None,
         };
         let from = core::mem::replace(&mut self.from, inside.at.clone());
         let taken = step(&inside, self);
@@ -601,6 +672,7 @@ fn advance<'v, F: Family>(
                 value: held.map(|(_, value)| value),
                 shape,
                 at,
+                entry: None,
             };
             advance(family, &inside, part, path, next, through + 1)
         }
@@ -645,6 +717,7 @@ fn walk_to_open<'v, F: Family>(
         value: Some(tree),
         shape: family.start(tree, rooted),
         at: None,
+        entry: None,
     }];
     for (index, part) in parts.iter().enumerate() {
         let mut next = Next {

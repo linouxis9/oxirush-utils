@@ -2,6 +2,16 @@
 
 All notable changes to `oxirush-utils` are recorded here.
 
+## 0.2.1 - unreleased
+
+### Added
+
+- `Next::entry_member`, for a family whose list holds each value under a name, as
+  the information elements of a message, `[{"Cause": …}]`: one segment selects the
+  value that an entry holds under that name, and an edit there edits the value and
+  keeps the entry and its other members. `Next::beside` goes from that value to
+  another member of its entry, as the criticality beside an information element.
+
 ## 0.2.0 - 2026-11-07
 
 ### Added
