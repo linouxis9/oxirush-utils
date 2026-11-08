@@ -12,6 +12,13 @@ All notable changes to `oxirush-utils` are recorded here.
   keeps the entry and its other members. `Next::beside` goes from that value to
   another member of its entry, as the criticality beside an information element.
 
+### Changed
+
+- `set` adds an entry at the position of the length of a list, and makes a list of a
+  place that is `null` for the entry at position 0; below an entry that it adds, it
+  takes a member as of an empty object, or the entry at position 0. A position past the
+  length still selects nothing.
+
 ## 0.2.0 - 2026-11-07
 
 ### Added

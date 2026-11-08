@@ -232,6 +232,18 @@ impl<'v, S> Next<'v, S> {
         });
     }
 
+    /// The entry at `position` of a list that has as many entries, or of a list that is not
+    /// there yet, at position 0: where `set` adds an entry.
+    fn added(&mut self, position: usize, shape: S) {
+        let at = self.link(|| Key::Position(position));
+        self.found.push(Place {
+            value: None,
+            shape,
+            at,
+            entry: None,
+        });
+    }
+
     /// The end of the list at the place, where [`insert_in`] adds an entry: what `-`
     /// selects, as the last segment of an insertion.
     pub fn end(&mut self, shape: S) {
@@ -580,7 +592,40 @@ fn plain<'v, F: Family>(
     next: &mut Next<'v, F::Shape>,
 ) -> Result<(), Error> {
     let shape = &place.shape;
+    let setting = next.edit == Some(Edit::Set);
+    // An entry that `set` adds, which is empty: of a list or of an object, as the path
+    // goes on.
+    let added = place.value.is_none()
+        && matches!(
+            place.at.as_deref(),
+            Some(Link {
+                key: Key::Position(_),
+                ..
+            })
+        );
     match place.value {
+        // A list that `set` makes, of the entry at position 0, of a place that is null or
+        // of an entry that it adds.
+        Some(Value::Null) | None
+            if setting
+                && position(part) == Some(0)
+                && (added || place.value.is_some() && !family.null_is_value(shape)) =>
+        {
+            next.added(0, family.entry(shape, None));
+            Ok(())
+        }
+        // The member of an entry that `set` adds, as of an empty object.
+        None if added && part != "*" && position(part).is_none() => {
+            match family.absent(shape, part) {
+                Absent::Optional(shape) => next.absent(part, shape),
+                Absent::Refused(error) => return Err(error),
+                Absent::Unknown if next.last => {
+                    next.absent(part, family.member(shape, part, None));
+                }
+                Absent::Unknown => return Err(no_member(&Map::new(), part, path)),
+            }
+            Ok(())
+        }
         // Nothing is there, and nothing is selected in it.
         None => Ok(()),
         Some(Value::Null) if !family.null_is_value(shape) => Ok(()),
@@ -617,9 +662,12 @@ fn plain<'v, F: Family>(
             } else if part == "-" && next.last && next.edit == Some(Edit::Insert) {
                 next.end(family.entry(shape, None));
             } else if let Some(position) = position(part) {
-                // An entry past the end is one that is not there.
+                // An entry past the end is one that is not there, but for `set` at the
+                // position of the length, which adds it.
                 if let Some(entry) = entries.get(position) {
                     next.entry(position, entry, family.entry(shape, Some(entry)));
+                } else if setting && position == entries.len() {
+                    next.added(position, family.entry(shape, None));
                 }
             } else {
                 let reason = format!(
@@ -974,12 +1022,14 @@ fn list<F: Family>(
 /// `family`. `null` takes it out, as [`remove_in`] does.
 ///
 /// A member that an object does not have is added to it, at its end, unless the family
-/// says that the value cannot have it.
+/// says that the value cannot have it; so is an entry at the position of the length of a
+/// list, and a place that is `null`, or not there, becomes the object or the list that
+/// the path goes into.
 ///
 /// # Errors
 ///
 /// Those of [`select_in`], and the kind `NothingSelected` for a path that selects
-/// nothing. After an error the tree is as it was: an edit is done in the place of the
+/// nothing, as an entry past the length of a list. After an error the tree is as it was: an edit is done in the place of the
 /// tree, which keeps what it changes and puts it back when a place cannot take the
 /// edit, so that it is done whole or not at all, and nothing of the tree is copied.
 pub fn set_in<F: Family>(
@@ -1309,6 +1359,17 @@ fn take_back(tree: &mut Value, undo: Vec<Undo>) {
     }
 }
 
+/// Make `holder`, at `keys`, an object for a member or a list for an entry, where it is
+/// `null`, and keep in `undo` that it was.
+fn open(holder: &mut Value, key: &Key, keys: &[Key], undo: &mut Vec<Undo>) {
+    let opened = match key {
+        Key::Name(_) if holder.is_null() => Value::Object(Map::new()),
+        Key::Position(_) if holder.is_null() => Value::Array(Vec::new()),
+        _ => return,
+    };
+    undo.push(Undo::Was(keys.to_vec(), core::mem::replace(holder, opened)));
+}
+
 /// Do `operation` at `keys` in `tree`, and keep in `undo` what it changes.
 fn apply(
     tree: &mut Value,
@@ -1325,12 +1386,9 @@ fn apply(
     };
     let mut holder = tree;
     for (depth, key) in before.iter().enumerate() {
-        // A member that is added goes into an object, which a place that is null
-        // becomes.
-        if holder.is_null() && matches!(key, Key::Name(_)) {
-            undo.push(Undo::Was(before[..depth].to_vec(), Value::Null));
-            *holder = Value::Object(Map::new());
-        }
+        // A member that is added goes into an object, and an entry into a list, which a
+        // place that is null becomes.
+        open(holder, key, &before[..depth], undo);
         holder = match (key, holder) {
             (Key::Name(name), Value::Object(members)) => {
                 if !members.contains_key(name.as_str()) {
@@ -1338,15 +1396,19 @@ fn apply(
                 }
                 members.entry(name.as_str()).or_insert(Value::Null)
             }
+            // An entry at the position of the length is added, which the path goes into.
             (Key::Position(position), Value::Array(entries)) => {
+                if *position == entries.len() {
+                    undo.push(Undo::Inserted(before[..depth].to_vec(), *position));
+                    entries.push(Value::Null);
+                }
                 entries.get_mut(*position).ok_or_else(gone)?
             }
             _ => return Err(gone()),
         };
     }
-    if holder.is_null() && matches!(last, Key::Name(_)) && operation == Edit::Set {
-        undo.push(Undo::Was(before.to_vec(), Value::Null));
-        *holder = Value::Object(Map::new());
+    if operation == Edit::Set {
+        open(holder, last, before, undo);
     }
     let not_a_list = || {
         let reason = "insert adds to a list, and the path ends at a member";
@@ -1373,6 +1435,12 @@ fn apply(
             }
         },
         (Key::Name(_), _, Edit::Insert) => return Err(not_a_list()),
+        (Key::Position(position), Value::Array(entries), Edit::Set)
+            if *position == entries.len() =>
+        {
+            undo.push(Undo::Inserted(before.to_vec(), *position));
+            entries.push(written());
+        }
         (Key::Position(position), Value::Array(entries), _) if *position < entries.len() => {
             match operation {
                 Edit::Set => {

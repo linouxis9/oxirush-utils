@@ -883,7 +883,7 @@ fn an_edit_is_done_whole_or_not_at_all() {
     let mut tree = before.clone();
     for (edit, kind) in [
         (
-            tree::set(&mut tree, "/list/3/a", tree!(1)),
+            tree::set(&mut tree, "/list/4/a", tree!(1)),
             ErrorKind::NothingSelected,
         ),
         (
@@ -915,6 +915,31 @@ fn an_edit_is_done_whole_or_not_at_all() {
         assert_eq!(edit.unwrap_err().kind(), kind);
         assert_eq!(tree, before);
     }
+}
+
+/// `set` adds an entry at the position of the length of a list, and makes a list of a place
+/// that is `null` for the entry at position 0, also on the way of its path; past the length
+/// it selects nothing, and the tree is as it was.
+#[test]
+fn set_adds_an_entry_at_the_length_of_a_list() {
+    let mut tree = tree!({"list": [1, 2], "objects": [{"a": 1}], "empty": null, "slices": null});
+    tree::set(&mut tree, "/list/2", tree!(3)).unwrap();
+    tree::set(&mut tree, "/objects/1/a", tree!(2)).unwrap();
+    tree::set(&mut tree, "/empty/0", tree!("x")).unwrap();
+    tree::set(&mut tree, "/slices/0/sst", tree!(1)).unwrap();
+    assert_eq!(
+        tree,
+        tree!({"list": [1, 2, 3], "objects": [{"a": 1}, {"a": 2}], "empty": ["x"], "slices": [{"sst": 1}]})
+    );
+    let before = tree.clone();
+    for path in ["/list/4", "/objects/3/a", "/empty/2", "/list/*/x/0"] {
+        assert!(tree::set(&mut tree, path, tree!(0)).is_err(), "{path}");
+        assert_eq!(tree, before, "{path}");
+    }
+    // Each place of `*`: an entry added to the empty list, the first entry of the other
+    let mut tree = tree!({"lists": [{"a": []}, {"a": [7]}]});
+    tree::set(&mut tree, "/lists/*/a/0", tree!(1)).unwrap();
+    assert_eq!(tree, tree!({"lists": [{"a": [1]}, {"a": [1]}]}));
 }
 
 /// A family that refuses an edit of an entry whose `locked` is true, in its step,
