@@ -2,7 +2,7 @@
 
 All notable changes to `oxirush-utils` are recorded here.
 
-## 0.2.1 - unreleased
+## 0.2.1 - 2026-11-08
 
 ### Added
 
