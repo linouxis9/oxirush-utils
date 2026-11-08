@@ -2,6 +2,13 @@
 
 All notable changes to `oxirush-utils` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `Tai5gs::from_tac_octets`, the tracking area identity of a PLMN and the three
+  octets of a tracking area code, which cannot fail (3GPP TS 38.413 clause 9.3.3.10).
+
 ## 0.2.1 - 2026-11-08
 
 ### Added

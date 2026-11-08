@@ -714,6 +714,17 @@ fn a_tracking_area_identity_is_a_plmn_and_a_code() {
     assert!(TaiEps::from_nas_octets([0x02, 0xf8, 0xf9, 0, 1]).is_err());
 }
 
+/// TS 38.413 §9.3.3.10: a TAC of 5GS is three octets, which make a TAI without a check.
+#[test]
+fn a_5gs_tracking_area_identity_takes_the_three_octets_of_its_code() {
+    let tai = Tai5gs::from_tac_octets(plmn("310-410"), [0x00, 0x12, 0x34]);
+    assert_eq!(tai, Tai5gs::new(plmn("310-410"), 0x00_1234).unwrap());
+    assert_eq!(tai.to_nas_octets(), [0x13, 0x00, 0x14, 0x00, 0x12, 0x34]);
+    let tai = Tai5gs::from_tac_octets(plmn("208-93"), [0xff, 0xfe, 0xfd]);
+    assert_eq!(tai.tac(), 0xff_fefd);
+    assert_eq!(tai.to_string(), "208-93-fffefd");
+}
+
 /// TS 24.501 table 9.11.3.4.1, TS 24.301 table 9.9.3.12.1, TS 24.008 table 10.5.4.
 #[test]
 fn a_type_of_identity_has_the_number_of_its_clause() {

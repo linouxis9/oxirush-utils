@@ -54,6 +54,25 @@ impl Tai5gs {
         Ok(Self { plmn, tac })
     }
 
+    /// The tracking area identity of a PLMN and the three octets of a tracking area code,
+    /// the most significant first, as NAS and NGAP carry it (3GPP TS 38.413 clause
+    /// 9.3.3.10).
+    ///
+    /// ```
+    /// use oxirush_utils::identity::{Plmn, Tai5gs};
+    ///
+    /// let tai = Tai5gs::from_tac_octets(Plmn::new("208", "93")?, [0x00, 0x00, 0x01]);
+    /// assert_eq!(tai.to_string(), "208-93-000001");
+    /// # Ok::<(), oxirush_utils::identity::Error>(())
+    /// ```
+    pub fn from_tac_octets(plmn: Plmn, tac: [u8; 3]) -> Self {
+        let [t1, t2, t3] = tac;
+        Self {
+            plmn,
+            tac: u32::from_be_bytes([0, t1, t2, t3]),
+        }
+    }
+
     /// The PLMN.
     pub fn plmn(&self) -> Plmn {
         self.plmn
@@ -81,10 +100,7 @@ impl Tai5gs {
     pub fn from_nas_octets(octets: [u8; 6]) -> Result<Self, Error> {
         let [p1, p2, p3, t1, t2, t3] = octets;
         let plmn = Plmn::from_nas_octets([p1, p2, p3])?;
-        Ok(Self {
-            plmn,
-            tac: u32::from_be_bytes([0, t1, t2, t3]),
-        })
+        Ok(Self::from_tac_octets(plmn, [t1, t2, t3]))
     }
 }
 
