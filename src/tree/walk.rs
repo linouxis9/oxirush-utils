@@ -135,6 +135,8 @@ pub struct Next<'v, S> {
     tracking: bool,
     edit: Option<Edit>,
     last: bool,
+    /// The position of the segment in the path as it is written.
+    index: Option<usize>,
     /// The keys of each place that the family opens, and the value that it opens there.
     opened: Vec<(Option<Rc<Link>>, Value)>,
 }
@@ -329,6 +331,14 @@ impl<'v, S> Next<'v, S> {
     /// Whether the segment is the last of its path.
     pub fn is_last(&self) -> bool {
         self.last
+    }
+
+    /// The position of the segment in the path as it is written, which
+    /// [`segments`](super::segments) of the path has at that position: a family that
+    /// refuses a segment can say which path the tree has without it. `None` for a
+    /// segment that the root stands for.
+    pub fn index(&self) -> Option<usize> {
+        self.index
     }
 }
 
@@ -773,6 +783,13 @@ fn walk_to_open<'v, F: Family>(
     edit: Option<Edit>,
 ) -> Result<Walked<'v, F::Shape>, Error> {
     let (parts, rooted) = resolve(family.root(), path)?;
+    // The segments that the root stands for are in the place of the root, the first
+    // segment as the path is written.
+    let stands_for = family.root().stands_for.len();
+    let written = |index: usize| match rooted {
+        true => index.checked_sub(stands_for).map(|after| after + 1),
+        false => Some(index),
+    };
     let mut places = vec![Place {
         value: Some(tree),
         shape: family.start(tree, rooted),
@@ -786,6 +803,7 @@ fn walk_to_open<'v, F: Family>(
             tracking: edit.is_some(),
             edit,
             last: index + 1 == parts.len(),
+            index: written(index),
             opened: Vec::new(),
         };
         let mut refusal = None;
@@ -879,7 +897,7 @@ pub fn places_in<'v, F: Family>(
 ///
 /// // What is not there selects nothing, and a name that the value has not is an error
 /// assert!(tree::select(&tree, "/slices/5/sst")?.is_empty());
-/// assert!(tree::select(&tree, "/t3512/value")?.is_empty());
+/// assert!(tree::select(&tree, "/t3512/unit")?.is_empty());
 /// assert!(tree::select(&tree, "/slices/0/sts").is_err());
 /// # Ok::<(), tree::Error>(())
 /// ```

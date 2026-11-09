@@ -1610,6 +1610,74 @@ fn a_family_knows_the_last_segment_and_a_null_value_has_no_member() {
     assert_eq!(tree::select_in(&Typed, &tree, "/t3512/x"), Ok(vec![]));
 }
 
+/// A family knows where each segment is in the path as it is written, so that it can say
+/// which path the tree has without one that it refuses: the root is the first segment,
+/// and what it stands for has no place.
+#[test]
+fn a_family_knows_where_a_segment_is_in_the_path_as_it_is_written() {
+    struct Indices(
+        Root<'static>,
+        std::cell::RefCell<Vec<(String, Option<usize>)>>,
+    );
+    impl Family for Indices {
+        type Shape = ();
+        fn root(&self) -> Root<'_> {
+            self.0
+        }
+        fn step<'v>(
+            &self,
+            place: &Place<'v, ()>,
+            segment: &str,
+            next: &mut Next<'v, ()>,
+        ) -> Result<Step<()>, Error> {
+            self.1
+                .borrow_mut()
+                .push((segment.to_string(), next.index()));
+            // A segment that the tree has under `ies` is taken in it: the same segment, at
+            // the same place of the path.
+            let ies = place.value().and_then(|value| value.get("ies"));
+            match ies.and_then(|ies| ies.get(segment)) {
+                Some(_) => Ok(Step::Through("ies".into(), ())),
+                None => Ok(Step::Plain),
+            }
+        }
+    }
+    let indices = |root, tree: &Value, path| {
+        let family = Indices(root, Default::default());
+        tree::select_in(&family, tree, path).unwrap();
+        family.1.into_inner()
+    };
+    let at = |segment: &str, index| (segment.to_string(), index);
+    let ap = Root::new("ap", &["message", "ies"], false);
+    let tree = tree!({"message": {"ies": {"cause": {"nas": 3}}}});
+    assert_eq!(
+        indices(ap, &tree, "/ap/cause/nas"),
+        [
+            at("message", None),
+            at("ies", None),
+            at("cause", Some(1)),
+            at("nas", Some(2))
+        ]
+    );
+    // From the tree itself, each segment is where the path writes it.
+    assert_eq!(
+        indices(ap, &tree, "/message/cause/nas"),
+        [
+            at("message", Some(0)),
+            at("cause", Some(1)),
+            at("cause", Some(1)),
+            at("nas", Some(2))
+        ]
+    );
+    // A root that stands for the tree itself is the first segment.
+    let nas = Root::new("nas", &[], true);
+    let tree = tree!({"cause": {"nas": 3}});
+    assert_eq!(
+        indices(nas, &tree, "/nas/cause/nas"),
+        [at("cause", Some(1)), at("nas", Some(2))]
+    );
+}
+
 /// An edit of a place that the edit of another place took out first is refused, and the
 /// tree is as it was.
 #[test]

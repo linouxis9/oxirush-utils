@@ -11,6 +11,10 @@ All notable changes to `oxirush-utils` are recorded here.
 - `Family::names`, the names that the type of a value has, where the family knows
   them: a path refuses a name that the value does not have with them, as
   `Reading::members` refuses it, without an `Absent::Refused` of the family's own.
+- `Next::index`, the position of a segment in the path as it is written: a family
+  that refuses a segment can say which path the tree has without it, as the paths
+  of a NAS message and of an NGAP or S1AP PDU say for `value` after the name of an
+  information element.
 
 ### Changed
 
