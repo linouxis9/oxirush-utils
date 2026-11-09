@@ -47,7 +47,7 @@ pub(crate) const MAX_SELECTED: usize = 65_536;
 /// ```
 /// use oxirush_utils::tree;
 ///
-/// assert_eq!(tree::segments("/nas/5gmm-cause/value")?, ["nas", "5gmm-cause", "value"]);
+/// assert_eq!(tree::segments("/nas/5g-guti/guti/tmsi")?, ["nas", "5g-guti", "guti", "tmsi"]);
 /// assert_eq!(tree::segments("/a~1b/~0")?, ["a/b", "~"]);
 /// assert!(tree::segments("nas/5gmm-cause").is_err());
 /// # Ok::<(), oxirush_utils::tree::Error>(())
