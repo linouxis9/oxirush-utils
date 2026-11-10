@@ -49,6 +49,7 @@ exclude_re = [
     # The defaults of the methods of `Family` are what their mutants give: the default
     # shape, no names, a null that is no value, nothing done.
     "src/tree/walk\\.rs:.*: replace Family::(start|entry|member) -> Self::Shape with Default::default\\(\\)$",
+    "src/tree/walk\\.rs:.*: replace Family::names -> Option<Vec<&str>> with None$",
     "src/tree/walk\\.rs:.*: replace Family::null_is_value -> bool with false$",
     "src/tree/walk\\.rs:.*: replace Family::edited with \\(\\)$",
     # And no names, a list of none or a list of one `None`: `paths` names an entry by
