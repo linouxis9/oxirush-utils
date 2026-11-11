@@ -57,6 +57,10 @@ exclude_re = [
     "src/tree/walk\\.rs:.*: replace Family::entry_names -> Option<Vec<Option<String>>> with (None|Some\\(vec!\\[(None)?\\]\\))$",
     # Room made for no member rather than for some: the members are the same.
     "src/tree/value\\.rs:.*: replace Map::with_capacity -> Self with Default::default\\(\\)$",
+    # With this mutant no run of list entries is ever found, so entries are removed or
+    # inserted one at a time. The resulting tree is the same; only the time differs
+    # (quadratic instead of linear in the length of the list).
+    "src/tree/walk\\.rs:.*: replace match guard position < least && of == list with false in entries_of_one_list$",
     # A family that opens a value where the edit is not to open one is refused by `walk`
     # too, with the same kind and the same reason, before anything changes.
     "src/tree/walk\\.rs:.*: replace match guard !next.opened.is_empty\\(\\) && next.edit != Some\\(Edit::Open\\) with false in advance$",

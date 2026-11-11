@@ -6,10 +6,16 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ### Fixed
 
-- Fix quadratic time in `Next::absent_once`: it no longer scans every place found
-  so far on each call, and keeps an index of the valueless places, one per shape.
-  Selecting a member that half of the 65,535 entries of a list lack went from
-  315 ms to 1.5 ms. What it adds is unchanged.
+- Fix quadratic time in paths that select many entries of one list. Results, errors
+  and the state of the tree after a refused edit are unchanged.
+  - `Next::absent_once` no longer scans every place found so far on each call. It
+    keeps an index of the valueless places, one per shape. Selecting a member that
+    half of the 65,535 entries of a list lack went from 315 ms to 1.5 ms.
+  - `remove` and `insert` (and `set` with `null`) remove or insert a run of entries
+    of the same list in a single pass, instead of one `Vec::remove` or
+    `Vec::insert` per entry. Copying a 65,535-entry list and removing every other
+    entry went from 200 ms to 11 ms; copying it and inserting an entry before each
+    one went from 1.7 s to 15 ms.
 
 ## 0.2.2 - 2026-11-09
 

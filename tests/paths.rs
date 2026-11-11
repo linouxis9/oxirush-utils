@@ -2103,3 +2103,230 @@ fn a_place_without_a_value_is_added_once_for_a_shape() {
     assert_eq!((0..MOST).filter(|at| set(*at)).count(), MOST / 2 + 1);
     assert!(set(MOST / 2) && !set(MOST / 2 + 1));
 }
+
+/// A family that selects the entries of a list by their `tag` member: a segment selects
+/// every entry whose tag it names.
+struct Tagged;
+
+impl Family for Tagged {
+    type Shape = ();
+
+    fn step<'v>(
+        &self,
+        place: &Place<'v, ()>,
+        segment: &str,
+        next: &mut Next<'v, ()>,
+    ) -> Result<Step<()>, Error> {
+        let Some(Value::Array(entries)) = place.value() else {
+            return Ok(Step::Plain);
+        };
+        if matches!(segment, "*" | "-") || tree::position(segment).is_some() {
+            return Ok(Step::Plain);
+        }
+        for (position, entry) in entries.iter().enumerate() {
+            if entry["tag"].as_str() == Some(segment) {
+                next.entry(position, entry, ());
+            }
+        }
+        Ok(Step::Taken)
+    }
+}
+
+/// A list with one entry per letter of `tags`, tagged with that letter.
+fn tagged(tags: &str) -> Value {
+    let entry = |(n, tag): (usize, char)| tree!({"tag": tag.to_string(), "n": n});
+    Value::Array(tags.chars().enumerate().map(entry).collect())
+}
+
+/// Removing or inserting at many entries of a list gives the same tree as editing each
+/// selected entry separately, from the last to the first, whichever entries the path
+/// selects and in every list it selects entries from.
+#[test]
+fn an_edit_of_many_entries_of_a_list_is_the_edit_of_each_from_the_last() {
+    let mut patterns: Vec<String> = ["", "a", "b", "aa", "ab", "ba", "aab", "abb", "bab", "aba"]
+        .iter()
+        .map(|pattern| pattern.to_string())
+        .collect();
+    patterns.extend(["a".repeat(33), "ab".repeat(17), "b".repeat(9) + "a"]);
+    patterns.push("a".to_string() + &"b".repeat(9));
+    patterns.push("a".repeat(8) + &"b".repeat(8));
+    patterns.push("b".repeat(8) + &"a".repeat(8));
+    // Pseudo-random patterns of three tags.
+    let mut state = 0x2545_f491_4f6c_dd1d_u64;
+    for length in 3..40 {
+        let mut tags = String::new();
+        for _ in 0..length {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            tags.push(['a', 'b', 'c'][(state >> 33) as usize % 3]);
+        }
+        patterns.push(tags);
+    }
+    let added = tree!({"added": true});
+    for (first, second) in patterns.iter().zip(patterns.iter().rev()) {
+        let before = tree!({
+            "kept": true,
+            "lists": [{"list": tagged(first)}, {"list": tagged(second), "kept": [1, 2]}],
+        });
+        let positions = |tags: &str| -> Vec<usize> {
+            let tagged = tags.chars().enumerate().filter(|(_, tag)| *tag == 'a');
+            tagged.map(|(position, _)| position).collect()
+        };
+        let (in_first, in_second) = (positions(first), positions(second));
+        let any = !in_first.is_empty() || !in_second.is_empty();
+        // The reference: each selected entry edited separately by position, last first.
+        let each = |edit: &dyn Fn(&mut Value, &str)| {
+            let mut tree = before.clone();
+            for (list, positions) in [(1, &in_second), (0, &in_first)] {
+                for position in positions.iter().rev() {
+                    edit(&mut tree, &format!("/lists/{list}/list/{position}"));
+                }
+            }
+            tree
+        };
+        let name = format!("{first} and {second}");
+
+        let mut removed = before.clone();
+        let done = tree::remove_in(&Tagged, &mut removed, "/lists/*/list/a");
+        let alone = each(&|tree, path| tree::remove(tree, path).unwrap());
+        assert_eq!(done.is_ok(), any, "{name}");
+        assert_eq!(removed.to_string(), alone.to_string(), "{name}");
+
+        let mut inserted = before.clone();
+        let done = tree::insert_in(&Tagged, &mut inserted, "/lists/*/list/a", added.clone());
+        let alone = each(&|tree, path| tree::insert(tree, path, added.clone()).unwrap());
+        assert_eq!(done.is_ok(), any, "{name}");
+        assert_eq!(inserted.to_string(), alone.to_string(), "{name}");
+        if !any {
+            let kind = done.unwrap_err().kind();
+            assert_eq!(kind, ErrorKind::NothingSelected, "{name}");
+        }
+
+        // Every entry of one list, selected with `*` by the plain rule.
+        let all: Vec<usize> = (0..first.len()).collect();
+        let each = |edit: &dyn Fn(&mut Value, &str)| {
+            let mut tree = before.clone();
+            for position in all.iter().rev() {
+                edit(&mut tree, &format!("/lists/0/list/{position}"));
+            }
+            tree
+        };
+        let mut removed = before.clone();
+        let done = tree::remove(&mut removed, "/lists/0/list/*");
+        let alone = each(&|tree, path| tree::remove(tree, path).unwrap());
+        assert_eq!(done.is_ok(), !all.is_empty(), "{name}");
+        assert_eq!(removed.to_string(), alone.to_string(), "{name}");
+        let mut inserted = before.clone();
+        let done = tree::insert(&mut inserted, "/lists/0/list/*", added.clone());
+        let alone = each(&|tree, path| tree::insert(tree, path, added.clone()).unwrap());
+        assert_eq!(done.is_ok(), !all.is_empty(), "{name}");
+        assert_eq!(inserted.to_string(), alone.to_string(), "{name}");
+    }
+}
+
+/// When a later step of an edit fails, entries removed or inserted in a single pass are
+/// restored. Entries that a family reports in descending order, or twice, are still
+/// edited one at a time.
+#[test]
+fn an_edit_of_many_entries_is_put_back_whole() {
+    // Inserting at the member fails after the insertions in the two lists succeeded.
+    let before = tree!({"member": {"m": 1}, "list": [1, 2, 3], "after": [4]});
+    let mut tree = before.clone();
+    let error = tree::insert(&mut tree, "/*/*", tree!(0)).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::NotAList);
+    assert_eq!(tree.to_string(), before.to_string());
+
+    /// A family whose `*` selects the single entry of a one-entry list twice, and the
+    /// entries of a four-entry list in descending order.
+    struct Again;
+    impl Family for Again {
+        type Shape = ();
+        fn step<'v>(
+            &self,
+            place: &Place<'v, ()>,
+            segment: &str,
+            next: &mut Next<'v, ()>,
+        ) -> Result<Step<()>, Error> {
+            match (place.value(), segment) {
+                (Some(Value::Array(entries)), "*") if entries.len() == 1 => {
+                    next.entry(0, &entries[0], ());
+                    next.entry(0, &entries[0], ());
+                }
+                (Some(Value::Array(entries)), "*") if entries.len() == 4 => {
+                    for (position, entry) in entries.iter().enumerate().rev() {
+                        next.entry(position, entry, ());
+                    }
+                }
+                _ => return Ok(Step::Plain),
+            }
+            Ok(Step::Taken)
+        }
+    }
+    // The entry selected twice no longer exists the second time, after the three
+    // entries of the other list were removed: everything is restored.
+    let before = tree!({"one": ["x"], "list": [{"a": 1}, {"b": 2}, {"c": 3}]});
+    let mut tree = before.clone();
+    let error = tree::remove_in(&Again, &mut tree, "/*/*").unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::NothingSelected);
+    assert_eq!(tree.to_string(), before.to_string());
+    let mut tree = before.clone();
+    tree::insert_in(&Again, &mut tree, "/*/*", tree!(0)).unwrap();
+    assert_eq!(
+        tree,
+        tree!({"one": [0, 0, "x"], "list": [0, {"a": 1}, 0, {"b": 2}, 0, {"c": 3}]})
+    );
+
+    // In descending order, each position is resolved against the list as the previous
+    // edits left it. Removal: entry 0 goes, then entry 1 of the remaining three, then
+    // position 2 does not exist in the remaining two. Insertion: an entry is inserted at
+    // positions 0, 1, 2 and 3 in turn.
+    let before = tree!({"list": ["a", "b", "c", "d"]});
+    let mut tree = before.clone();
+    let error = tree::remove_in(&Again, &mut tree, "/list/*").unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::NothingSelected);
+    assert_eq!(tree, before);
+    let mut tree = before.clone();
+    tree::insert_in(&Again, &mut tree, "/list/*", tree!(0)).unwrap();
+    assert_eq!(tree["list"], tree!([0, 0, 0, 0, "a", "b", "c", "d"]));
+}
+
+/// Edits of many entries of a 65,535-entry list: remove every other entry, insert
+/// before every other entry, insert before every entry, and remove every entry.
+#[test]
+fn an_edit_of_many_entries_of_a_long_list() {
+    const MOST: usize = 65_535;
+    let tags: String = (0..MOST).map(|at| ['a', 'b'][at % 2]).collect();
+    let before = tree!({"list": tagged(&tags)});
+    let mut tree = before.clone();
+    tree::remove_in(&Tagged, &mut tree, "/list/a").unwrap();
+    let left = tree["list"].as_array().unwrap();
+    assert_eq!(left.len(), MOST / 2);
+    for (at, entry) in left.iter().enumerate() {
+        assert_eq!(*entry, before["list"][2 * at + 1]);
+    }
+
+    let mut tree = before.clone();
+    tree::insert_in(&Tagged, &mut tree, "/list/a", tree!("new")).unwrap();
+    let grown = tree["list"].as_array().unwrap();
+    assert_eq!(grown.len(), MOST + MOST / 2 + 1);
+    assert_eq!(grown[0], tree!("new"));
+    assert_eq!(grown[1], before["list"][0]);
+    assert_eq!(grown[2], before["list"][1]);
+    assert_eq!(grown[grown.len() - 2], tree!("new"));
+    assert_eq!(grown[grown.len() - 1], before["list"][MOST - 1]);
+
+    let mut tree = before.clone();
+    tree::insert(&mut tree, "/list/*", tree!("new")).unwrap();
+    let grown = tree["list"].as_array().unwrap();
+    assert_eq!(grown.len(), 2 * MOST);
+    for (at, entry) in grown.iter().enumerate() {
+        match at % 2 {
+            0 => assert_eq!(*entry, tree!("new")),
+            _ => assert_eq!(*entry, before["list"][at / 2]),
+        }
+    }
+    let mut tree = before.clone();
+    tree::remove(&mut tree, "/list/*").unwrap();
+    assert_eq!(tree, tree!({"list": []}));
+}

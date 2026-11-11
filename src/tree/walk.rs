@@ -1249,21 +1249,28 @@ fn edit<F: Family>(
         return Err(Error::new(ErrorKind::Path, path, reason));
     }
     // The last place first: an entry that goes, or comes, moves those after it alone.
+    // A run of entries of the same list is removed or inserted in a single pass.
     let mut undo = Vec::new();
-    for (keys, removal, _) in places.iter().rev() {
-        let done = apply(
-            tree,
-            keys,
-            operation,
-            value.as_ref(),
-            *removal,
-            path,
-            &mut undo,
-        );
+    let mut left = &places[..];
+    while let Some(((keys, removal, _), _)) = left.split_last() {
+        let value = value.as_ref();
+        let (done, edited) = match entries_of_one_list(left, operation) {
+            Some((list, positions)) => {
+                let edited = positions.len();
+                let done =
+                    apply_to_entries(tree, list, positions, operation, value, path, &mut undo);
+                (done, edited)
+            }
+            None => {
+                let done = apply(tree, keys, operation, value, *removal, path, &mut undo);
+                (done, 1)
+            }
+        };
         if let Err(error) = done {
             take_back(tree, undo);
             return Err(error);
         }
+        left = &left[..left.len() - edited];
     }
     for (keys, _, shape) in &places {
         family.edited(tree, keys, shape, operation);
@@ -1359,6 +1366,12 @@ enum Undo {
     Removed(Vec<Key>, usize, Value),
     /// The list at these keys took an entry at this position.
     Inserted(Vec<Key>, usize),
+    /// Several entries were removed from the list at these keys: their positions in
+    /// the list before the removal, ascending, and their values.
+    RemovedEach(Vec<Key>, Vec<usize>, Vec<Value>),
+    /// Several entries were inserted into the list at these keys: their positions in
+    /// the list after the insertion, ascending.
+    InsertedEach(Vec<Key>, Vec<usize>),
 }
 
 /// The value at `keys` in `tree`.
@@ -1406,8 +1419,141 @@ fn take_back(tree: &mut Value, undo: Vec<Undo>) {
                     entries.remove(position);
                 }
             }
+            Undo::RemovedEach(keys, positions, were) => {
+                if let Some(Value::Array(entries)) = at_mut(tree, &keys) {
+                    put_entries(entries, &positions, were.into_iter());
+                }
+            }
+            Undo::InsertedEach(keys, positions) => {
+                if let Some(Value::Array(entries)) = at_mut(tree, &keys) {
+                    take_entries(entries, &positions);
+                }
+            }
         }
     }
+}
+
+/// Removes the entries at `positions` (ascending) from `entries` in a single pass, and
+/// returns them in order.
+fn take_entries(entries: &mut Vec<Value>, positions: &[usize]) -> Vec<Value> {
+    let mut taken = Vec::with_capacity(positions.len());
+    let mut positions = positions.iter().copied().peekable();
+    let mut position = 0;
+    entries.retain_mut(|entry| {
+        let goes = positions.next_if_eq(&position).is_some();
+        if goes {
+            taken.push(core::mem::take(entry));
+        }
+        position += 1;
+        !goes
+    });
+    taken
+}
+
+/// Inserts `values` into `entries` in a single pass. `positions` (ascending) are the
+/// positions that the values have in the resulting list.
+fn put_entries(
+    entries: &mut Vec<Value>,
+    positions: &[usize],
+    mut values: impl Iterator<Item = Value>,
+) {
+    let mut were = core::mem::take(entries).into_iter();
+    let mut positions = positions.iter().copied().peekable();
+    entries.reserve(were.len() + positions.len());
+    loop {
+        let put = match positions.next_if_eq(&entries.len()) {
+            Some(_) => values.next(),
+            None => were.next(),
+        };
+        match put {
+            Some(entry) => entries.push(entry),
+            None => break,
+        }
+    }
+}
+
+/// Finds the run of places at the end of `places` that can be edited in a single pass:
+/// entries of the same list, at strictly ascending positions, for a removal or an
+/// insertion. Returns the keys of the list and the positions in ascending order, or
+/// `None` if the edit is not a removal or an insertion, or the last place is not a list
+/// entry.
+///
+/// Editing these entries one at a time, from the last, gives the same list, but each
+/// `Vec::remove` or `Vec::insert` shifts the tail of the list: quadratic in the length
+/// of the list when a path selects many of its entries.
+fn entries_of_one_list<S>(
+    places: &[(Vec<Key>, Removal, S)],
+    operation: Edit,
+) -> Option<(&[Key], Vec<usize>)> {
+    /// Splits the keys of a list entry into its position and the keys of its list.
+    fn entry(keys: &[Key]) -> Option<(usize, &[Key])> {
+        match keys.split_last() {
+            Some((Key::Position(position), list)) => Some((*position, list)),
+            _ => None,
+        }
+    }
+    if !matches!(operation, Edit::Remove | Edit::Insert) {
+        return None;
+    }
+    let mut entries = places.iter().rev().map(|(keys, ..)| entry(keys));
+    let (mut least, list) = entries.next()??;
+    let mut positions = vec![least];
+    for entry in entries {
+        match entry {
+            Some((position, of)) if position < least && of == list => least = position,
+            _ => break,
+        }
+        positions.push(least);
+    }
+    positions.reverse();
+    Some((list, positions))
+}
+
+/// Removes the entries at `positions` from the list at `list`, or inserts `value`
+/// before each of them, depending on `operation`. `positions` must be ascending, as
+/// [`entries_of_one_list`] returns them. The result is the same as editing each entry
+/// separately, from the last to the first. Records what it changes in `undo`.
+fn apply_to_entries(
+    tree: &mut Value,
+    list: &[Key],
+    positions: Vec<usize>,
+    operation: Edit,
+    value: Option<&Value>,
+    path: &str,
+    undo: &mut Vec<Undo>,
+) -> Result<(), Error> {
+    let gone = || Error::new(ErrorKind::NothingSelected, path, "the path selects nothing");
+    let Value::Array(entries) = holder(tree, list, path, undo)? else {
+        return Err(gone());
+    };
+    // One at a time, the last entry would be edited first: if it does not exist, fail
+    // before changing anything.
+    if positions.last().is_none_or(|last| *last >= entries.len()) {
+        return Err(gone());
+    }
+    let written = || value.cloned().unwrap_or_default();
+    match (operation, &positions[..]) {
+        (Edit::Remove, [position]) => {
+            let was = entries.remove(*position);
+            undo.push(Undo::Removed(list.to_vec(), *position, was));
+        }
+        (Edit::Remove, _) => {
+            let were = take_entries(entries, &positions);
+            undo.push(Undo::RemovedEach(list.to_vec(), positions, were));
+        }
+        (_, [position]) => {
+            entries.insert(*position, written());
+            undo.push(Undo::Inserted(list.to_vec(), *position));
+        }
+        (_, _) => {
+            // Each inserted entry shifts the following ones by one.
+            let moved = positions.iter().enumerate();
+            let added: Vec<usize> = moved.map(|(before, position)| position + before).collect();
+            put_entries(entries, &added, core::iter::repeat_with(written));
+            undo.push(Undo::InsertedEach(list.to_vec(), added));
+        }
+    }
+    Ok(())
 }
 
 /// Make `holder`, at `keys`, an object for a member or a list for an entry, where it is
@@ -1421,7 +1567,44 @@ fn open(holder: &mut Value, key: &Key, keys: &[Key], undo: &mut Vec<Undo>) {
     undo.push(Undo::Was(keys.to_vec(), core::mem::replace(holder, opened)));
 }
 
-/// Do `operation` at `keys` in `tree`, and keep in `undo` what it changes.
+/// Walks `keys` from the root of `tree` and returns the value that they lead to, under
+/// which an edit is applied. On the way it creates a missing member, and an entry at the
+/// end of a list, as `set` allows, and records these changes in `undo`.
+fn holder<'t>(
+    tree: &'t mut Value,
+    keys: &[Key],
+    path: &str,
+    undo: &mut Vec<Undo>,
+) -> Result<&'t mut Value, Error> {
+    let gone = || Error::new(ErrorKind::NothingSelected, path, "the path selects nothing");
+    let mut holder = tree;
+    for (depth, key) in keys.iter().enumerate() {
+        // A member that is added goes into an object, and an entry into a list, which a
+        // place that is null becomes.
+        open(holder, key, &keys[..depth], undo);
+        holder = match (key, holder) {
+            (Key::Name(name), Value::Object(members)) => {
+                if !members.contains_key(name.as_str()) {
+                    undo.push(Undo::Added(keys[..=depth].to_vec()));
+                }
+                members.entry(name.as_str()).or_insert(Value::Null)
+            }
+            // An entry at the position of the length is added, which the path goes into.
+            (Key::Position(position), Value::Array(entries)) => {
+                if *position == entries.len() {
+                    undo.push(Undo::Inserted(keys[..depth].to_vec(), *position));
+                    entries.push(Value::Null);
+                }
+                entries.get_mut(*position).ok_or_else(gone)?
+            }
+            _ => return Err(gone()),
+        };
+    }
+    Ok(holder)
+}
+
+/// Do `operation` at `keys` in `tree`, and keep in `undo` what it changes. Removing a
+/// list entry, or inserting one before it, is handled by [`apply_to_entries`].
 fn apply(
     tree: &mut Value,
     keys: &[Key],
@@ -1435,29 +1618,7 @@ fn apply(
     let Some((last, before)) = keys.split_last() else {
         return Err(gone());
     };
-    let mut holder = tree;
-    for (depth, key) in before.iter().enumerate() {
-        // A member that is added goes into an object, and an entry into a list, which a
-        // place that is null becomes.
-        open(holder, key, &before[..depth], undo);
-        holder = match (key, holder) {
-            (Key::Name(name), Value::Object(members)) => {
-                if !members.contains_key(name.as_str()) {
-                    undo.push(Undo::Added(before[..=depth].to_vec()));
-                }
-                members.entry(name.as_str()).or_insert(Value::Null)
-            }
-            // An entry at the position of the length is added, which the path goes into.
-            (Key::Position(position), Value::Array(entries)) => {
-                if *position == entries.len() {
-                    undo.push(Undo::Inserted(before[..depth].to_vec(), *position));
-                    entries.push(Value::Null);
-                }
-                entries.get_mut(*position).ok_or_else(gone)?
-            }
-            _ => return Err(gone()),
-        };
-    }
+    let holder = holder(tree, before, path, undo)?;
     if operation == Edit::Set {
         open(holder, last, before, undo);
     }
@@ -1492,22 +1653,11 @@ fn apply(
             undo.push(Undo::Inserted(before.to_vec(), *position));
             entries.push(written());
         }
-        (Key::Position(position), Value::Array(entries), _) if *position < entries.len() => {
-            match operation {
-                Edit::Set => {
-                    let was = core::mem::replace(&mut entries[*position], written());
-                    undo.push(Undo::Was(keys.to_vec(), was));
-                }
-                Edit::Remove => {
-                    let was = entries.remove(*position);
-                    undo.push(Undo::Removed(before.to_vec(), *position, was));
-                }
-                Edit::Insert => {
-                    entries.insert(*position, written());
-                    undo.push(Undo::Inserted(before.to_vec(), *position));
-                }
-                Edit::Open => return Err(gone()),
-            }
+        (Key::Position(position), Value::Array(entries), Edit::Set)
+            if *position < entries.len() =>
+        {
+            let was = core::mem::replace(&mut entries[*position], written());
+            undo.push(Undo::Was(keys.to_vec(), was));
         }
         (Key::End, Value::Array(entries), Edit::Insert) => {
             undo.push(Undo::Inserted(before.to_vec(), entries.len()));
