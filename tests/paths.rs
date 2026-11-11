@@ -2002,3 +2002,104 @@ fn a_name_that_a_value_has_not_is_refused_in_one_wording() {
          t3412, t3412-extended, t3442, and 5 more"
     );
 }
+
+// ── Many places of one list ─────────────────────────────────────────────────
+
+/// `absent_once` adds a valueless place only if no valueless place of the same shape
+/// exists yet, whichever method added the existing one, and however many places with a
+/// value come before it.
+#[test]
+fn a_place_without_a_value_is_added_once_for_a_shape() {
+    /// Selects a member of an entry by name, with the shape given by the entry's
+    /// `shape` member. A missing member is a valueless place, added with `absent` if
+    /// the entry has an `each` member and with `absent_once` otherwise.
+    struct Typed;
+    impl Family for Typed {
+        type Shape = u64;
+        fn step<'v>(
+            &self,
+            place: &Place<'v, u64>,
+            segment: &str,
+            next: &mut Next<'v, u64>,
+        ) -> Result<Step<u64>, Error> {
+            let Some(Value::Object(entry)) = place.value() else {
+                return Ok(Step::Plain);
+            };
+            let Some(shape) = entry.get("shape").and_then(Value::as_u64) else {
+                return Ok(Step::Plain);
+            };
+            match (entry.get(segment), entry.get("each")) {
+                (Some(value), _) => next.member(segment, value, shape),
+                (None, Some(_)) => next.absent(segment, shape),
+                (None, None) => next.absent_once(segment, shape),
+            }
+            Ok(Step::Taken)
+        }
+    }
+    let places = |tree: &Value| -> Vec<(Option<Value>, u64)> {
+        let places = tree::places_in(&Typed, tree, "/*/x").unwrap();
+        let place = |place: &Place<'_, u64>| (place.value().cloned(), *place.shape());
+        places.iter().map(place).collect()
+    };
+    let before = tree!([
+        {"shape": 1, "x": "a"},
+        {"shape": 1},
+        {"shape": 1},
+        {"shape": 2},
+        {"shape": 1, "x": "b"},
+        {"shape": 2, "each": true},
+        {"shape": 2},
+        {"shape": 3, "each": true},
+        {"shape": 3},
+        {"shape": 1},
+    ]);
+    assert_eq!(
+        places(&before),
+        [
+            (Some(tree!("a")), 1),
+            (None, 1),
+            (None, 2),
+            (Some(tree!("b")), 1),
+            (None, 2),
+            (None, 3),
+        ]
+    );
+    assert_eq!(
+        tree::select_in(&Typed, &before, "/*/x").unwrap(),
+        [&tree!("a"), &tree!("b")]
+    );
+    // An edit applies to exactly these places.
+    let mut tree = before.clone();
+    tree::set_in(&Typed, &mut tree, "/*/x", tree!("new")).unwrap();
+    let set: Vec<bool> = (0..10).map(|at| tree[at]["x"] == tree!("new")).collect();
+    assert_eq!(
+        set,
+        [
+            true, true, false, true, true, true, false, true, false, false
+        ]
+    );
+    for at in [2, 6, 8, 9] {
+        assert_eq!(tree[at], before[at]);
+    }
+
+    // The same on a list of 65,535 entries whose first half has the member. This is the
+    // worst case for a linear scan of the places found so far.
+    const MOST: usize = 65_535;
+    let entry = |at: usize| match at < MOST / 2 {
+        true => tree!({"shape": 1, "x": at}),
+        false => tree!({"shape": 1}),
+    };
+    let mut long = Value::Array((0..MOST).map(entry).collect());
+    let found = places(&long);
+    assert_eq!(found.len(), MOST / 2 + 1);
+    assert_eq!(found[MOST / 2 - 1], (Some(tree!(MOST / 2 - 1)), 1));
+    assert_eq!(found[MOST / 2], (None, 1));
+    assert_eq!(
+        tree::select_in(&Typed, &long, "/*/x").map(|values| values.len()),
+        Ok(MOST / 2)
+    );
+    tree::set_in(&Typed, &mut long, "/*/x", tree!("new")).unwrap();
+    let set = |at: usize| long[at]["x"] == tree!("new");
+    assert_eq!((0..MOST).filter(|at| set(*at)).count(), MOST / 2 + 1);
+    assert!(set(MOST / 2) && !set(MOST / 2 + 1));
+}

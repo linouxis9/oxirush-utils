@@ -139,6 +139,11 @@ pub struct Next<'v, S> {
     index: Option<usize>,
     /// The keys of each place that the family opens, and the value that it opens there.
     opened: Vec<(Option<Rc<Link>>, Value)>,
+    /// Index used by [`absent_once`](Self::absent_once): how many entries of `found` it
+    /// has already scanned, and the positions in `found` of the valueless places seen so
+    /// far, one per distinct shape. It avoids rescanning `found` on every call.
+    scanned: usize,
+    valueless: Vec<usize>,
 }
 
 impl<'v, S> Next<'v, S> {
@@ -262,12 +267,26 @@ impl<'v, S> Next<'v, S> {
     /// [`absent`](Self::absent), unless a place without a value of the same shape is
     /// there already: a family that selects by its types, where a tree has no value,
     /// adds each type once.
+    ///
+    /// A call costs time proportional to the number of distinct shapes among the
+    /// valueless places, not to the number of places found: calling it once per entry
+    /// of a long list is linear in the length of the list.
     pub fn absent_once(&mut self, name: &str, shape: S)
     where
         S: PartialEq,
     {
-        let known = |place: &Place<'v, S>| place.value.is_none() && place.shape == shape;
-        if !self.found.iter().any(known) {
+        // Index the places added since the last call, by any method: keep the first
+        // valueless place of each shape.
+        for at in self.scanned..self.found.len() {
+            let place = &self.found[at];
+            let known = |kept: &usize| self.found[*kept].shape == place.shape;
+            if place.value.is_none() && !self.valueless.iter().any(known) {
+                self.valueless.push(at);
+            }
+        }
+        self.scanned = self.found.len();
+        let known = |kept: &usize| self.found[*kept].shape == shape;
+        if !self.valueless.iter().any(known) {
             self.absent(name, shape);
         }
     }
@@ -805,6 +824,8 @@ fn walk_to_open<'v, F: Family>(
             last: index + 1 == parts.len(),
             index: written(index),
             opened: Vec::new(),
+            scanned: 0,
+            valueless: Vec::new(),
         };
         let mut refusal = None;
         for place in &places {
