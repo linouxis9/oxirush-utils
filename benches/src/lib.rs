@@ -230,9 +230,10 @@ pub fn operations() -> Vec<Operation> {
         }),
     );
 
-    // A list of 65,535 entries: select a member that half of the entries lack, remove
-    // every other entry, and insert an entry before each one. The two edits work on a
-    // copy of the list made inside the call, so the copy alone is measured too.
+    // A list of 65,535 entries: select a member that half of the entries lack, set it in
+    // every entry, remove every other entry, and insert an entry before each one. The
+    // three edits work on a copy of the list made inside the call, so the copy alone is
+    // measured too.
     let list = long_list();
     let selected = list.clone();
     add(
@@ -251,6 +252,17 @@ pub fn operations() -> Vec<Operation> {
         true,
         Box::new(move || {
             black_box(black_box(&copied).clone());
+        }),
+    );
+    let set = list.clone();
+    add(
+        "set-in-65535-entries",
+        "oxirush-utils",
+        true,
+        Box::new(move || {
+            let mut list = black_box(&set).clone();
+            tree::set_in(&Tags, &mut list, "/*/sd", "000001").unwrap();
+            assert_eq!(black_box(list)[ENTRIES - 1]["sd"], Value::from("000001"));
         }),
     );
     let removed = list.clone();
