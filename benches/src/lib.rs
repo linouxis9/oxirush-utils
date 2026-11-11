@@ -38,7 +38,7 @@
 //! in the environment it writes `flamegraph.svg` beside it instead.
 
 use oxirush_utils::identity::{Guti5g, Imsi, ImsiSuci, Plmn};
-use oxirush_utils::tree::{self, Map, Value};
+use oxirush_utils::tree::{self, Family, Map, Next, Place, Step, Value};
 use std::hint::black_box;
 
 /// One operation of one implementation: the row of benches/README.md is its
@@ -57,6 +57,56 @@ pub const MESSAGE: &str = r#"{"message":"InitialContextSetupRequest","ies":[{"AM
 /// The members of the wide object: 4096 names, the most that an object of a tree that is
 /// read has.
 pub const MEMBERS: usize = 4096;
+
+/// The number of entries of the long list. A path selects at most 65,536 values.
+pub const ENTRIES: usize = 65_535;
+
+/// A family that behaves like those of the protocol crates: a segment selects the list
+/// entries whose `tag` it names (as an information element is selected by name), and a
+/// member that an object lacks is a valueless place added with `absent_once` (as an
+/// optional member of a type).
+struct Tags;
+
+impl Family for Tags {
+    type Shape = ();
+
+    fn step<'v>(
+        &self,
+        place: &Place<'v, ()>,
+        segment: &str,
+        next: &mut Next<'v, ()>,
+    ) -> Result<Step<()>, tree::Error> {
+        match place.value() {
+            Some(Value::Array(entries)) if segment != "*" => {
+                for (position, entry) in entries.iter().enumerate() {
+                    if entry["tag"].as_str() == Some(segment) {
+                        next.entry(position, entry, ());
+                    }
+                }
+            }
+            Some(Value::Object(members)) => match members.get(segment) {
+                Some(value) => next.member(segment, value, ()),
+                None => next.absent_once(segment, ()),
+            },
+            _ => return Ok(Step::Plain),
+        }
+        Ok(Step::Taken)
+    }
+}
+
+/// A list of [`ENTRIES`] entries tagged `a` and `b` alternately. The first half of the
+/// entries has a member `sd`, the second half does not.
+pub fn long_list() -> Value {
+    let entry = |at: usize| {
+        let mut entry = Map::new();
+        entry.insert("tag".into(), ["a", "b"][at % 2].into());
+        if at < ENTRIES / 2 {
+            entry.insert("sd".into(), "0000ff".into());
+        }
+        Value::Object(entry)
+    };
+    Value::Array((0..ENTRIES).map(entry).collect())
+}
 
 /// What `REGISTRATION ACCEPT` of Open5GS had as its 5G-GUTI.
 pub const GUTI: [u8; 11] = [
@@ -177,6 +227,51 @@ pub fn operations() -> Vec<Operation> {
         true,
         Box::new(move || {
             black_box(serde_json::from_str::<serde_json::Value>(black_box(&wide)).unwrap());
+        }),
+    );
+
+    // A list of 65,535 entries: select a member that half of the entries lack, remove
+    // every other entry, and insert an entry before each one. The two edits work on a
+    // copy of the list made inside the call, so the copy alone is measured too.
+    let list = long_list();
+    let selected = list.clone();
+    add(
+        "select-in-65535-entries",
+        "oxirush-utils",
+        true,
+        Box::new(move || {
+            let values = tree::select_in(&Tags, black_box(&selected), "/*/sd").unwrap();
+            assert_eq!(black_box(values).len(), ENTRIES / 2);
+        }),
+    );
+    let copied = list.clone();
+    add(
+        "copy-65535-entries",
+        "oxirush-utils",
+        true,
+        Box::new(move || {
+            black_box(black_box(&copied).clone());
+        }),
+    );
+    let removed = list.clone();
+    add(
+        "remove-half-of-65535-entries",
+        "oxirush-utils",
+        true,
+        Box::new(move || {
+            let mut list = black_box(&removed).clone();
+            tree::remove_in(&Tags, &mut list, "/a").unwrap();
+            assert_eq!(black_box(list).as_array().unwrap().len(), ENTRIES / 2);
+        }),
+    );
+    add(
+        "insert-before-65535-entries",
+        "oxirush-utils",
+        true,
+        Box::new(move || {
+            let mut list = black_box(&list).clone();
+            tree::insert(&mut list, "/*", Value::Null).unwrap();
+            assert_eq!(black_box(list).as_array().unwrap().len(), 2 * ENTRIES);
         }),
     );
 

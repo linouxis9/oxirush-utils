@@ -26,6 +26,10 @@ the allocations are those of one call.
 | Select a value of it | 219 ns, 10 allocations of 385 octets | 238 ns, 8 allocations of 64 octets | about the same |
 | Put 4096 members into an object, one after the other | 15.9 ms, 4,107 allocations of 477,898 octets | 0.65 ms, 4,731 allocations of 429,138 octets | 0.04x |
 | Read an object of 4096 members, 39,851 octets | 380 µs, 4,108 allocations of 543,434 octets | 774 µs, 4,731 allocations of 429,138 octets | 2.0x |
+| Select a member that half of the 65,535 entries of a list lack | 1.48 ms, 34 allocations of 4,718,555 octets | | |
+| Copy a list of 65,535 entries | 7.75 ms, 262,140 allocations of 8,126,308 octets | | |
+| Copy it and remove every other entry | 11.3 ms, 327,724 allocations of 18,088,005 octets | | |
+| Copy it and insert an entry before each one | 15.2 ms, 393,262 allocations of 30,670,701 octets | | |
 | Read a PLMN from text | 14 ns, 0 allocations of 0 octets | | |
 | Read an IMSI from text | 9 ns, 0 allocations of 0 octets | | |
 | Read a 5G-GUTI from a 5GS mobile identity | 14 ns, 0 allocations of 0 octets | | |
@@ -42,3 +46,11 @@ value of a protocol never show, and an object that is read has 4096 members
 at most. The two rows of 4096 members were measured on 2026-11-07, when an
 object became a list; the others at 8865ad4. The identities allocate nothing but the SUCI, which holds its scheme
 output.
+
+The four rows of 65,535 entries use a path family that behaves like those of
+the protocol crates: list entries are selected by a name they hold, and a
+member that an entry lacks is a valueless place added once per type. They were
+measured on 2026-11-11 on the same machine, while it was running other work,
+after two quadratic steps of the path engine were made linear. Before that
+change the selection took 315 ms, the copy with every other entry removed
+200 ms, and the copy with an entry inserted before each one 1.70 s.
