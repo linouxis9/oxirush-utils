@@ -139,9 +139,10 @@ pub struct Next<'v, S> {
     index: Option<usize>,
     /// The keys of each place that the family opens, and the value that it opens there.
     opened: Vec<(Option<Rc<Link>>, Value)>,
-    /// Index used by [`absent_once`](Self::absent_once): how many entries of `found` it
-    /// has already scanned, and the positions in `found` of the valueless places seen so
-    /// far, one per distinct shape. It avoids rescanning `found` on every call.
+    /// Index used by [`absent_once`](Self::absent_once) in a walk that selects: how many
+    /// entries of `found` it has already scanned, and the positions in `found` of the
+    /// valueless places seen so far, one per distinct shape. It avoids rescanning
+    /// `found` on every call.
     scanned: usize,
     valueless: Vec<usize>,
 }
@@ -268,6 +269,11 @@ impl<'v, S> Next<'v, S> {
     /// there already: a family that selects by its types, where a tree has no value,
     /// adds each type once.
     ///
+    /// In the walk of an edit it is [`absent`](Self::absent). A place is then where the
+    /// edit goes, and the member that one object lacks is another place than the member
+    /// that another object lacks: through `*`, `set` gives the member to every entry that
+    /// lacks it, as a path to one entry gives it to that entry.
+    ///
     /// A call costs time proportional to the number of distinct shapes among the
     /// valueless places, not to the number of places found: calling it once per entry
     /// of a long list is linear in the length of the list.
@@ -275,6 +281,10 @@ impl<'v, S> Next<'v, S> {
     where
         S: PartialEq,
     {
+        if self.tracking {
+            self.absent(name, shape);
+            return;
+        }
         // Index the places added since the last call, by any method: keep the first
         // valueless place of each shape.
         for at in self.scanned..self.found.len() {
@@ -1075,7 +1085,8 @@ fn list<F: Family>(
 /// A member that an object does not have is added to it, at its end, unless the family
 /// says that the value cannot have it; so is an entry at the position of the length of a
 /// list, and a place that is `null`, or not there, becomes the object or the list that
-/// the path goes into.
+/// the path goes into. Through `*`, each entry is edited as a path to that entry alone
+/// edits it: every entry that lacks the member is given it.
 ///
 /// # Errors
 ///

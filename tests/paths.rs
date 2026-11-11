@@ -2068,18 +2068,12 @@ fn a_place_without_a_value_is_added_once_for_a_shape() {
         tree::select_in(&Typed, &before, "/*/x").unwrap(),
         [&tree!("a"), &tree!("b")]
     );
-    // An edit applies to exactly these places.
+    // An edit keeps the keys of each place: the member that one entry lacks is not the
+    // member that another lacks, and `set` gives it to each of them.
     let mut tree = before.clone();
     tree::set_in(&Typed, &mut tree, "/*/x", tree!("new")).unwrap();
-    let set: Vec<bool> = (0..10).map(|at| tree[at]["x"] == tree!("new")).collect();
-    assert_eq!(
-        set,
-        [
-            true, true, false, true, true, true, false, true, false, false
-        ]
-    );
-    for at in [2, 6, 8, 9] {
-        assert_eq!(tree[at], before[at]);
+    for at in 0..10 {
+        assert_eq!(tree[at]["x"], tree!("new"), "entry {at}");
     }
 
     // The same on a list of 65,535 entries whose first half has the member. This is the
@@ -2100,8 +2094,107 @@ fn a_place_without_a_value_is_added_once_for_a_shape() {
     );
     tree::set_in(&Typed, &mut long, "/*/x", tree!("new")).unwrap();
     let set = |at: usize| long[at]["x"] == tree!("new");
-    assert_eq!((0..MOST).filter(|at| set(*at)).count(), MOST / 2 + 1);
-    assert!(set(MOST / 2) && !set(MOST / 2 + 1));
+    assert_eq!((0..MOST).filter(|at| set(*at)).count(), MOST);
+}
+
+/// A family whose objects take any member, and where a member that an object lacks is a
+/// place without a value added with `absent_once`, as the protocol crates add an
+/// optional member of a type.
+struct Optional;
+
+impl Family for Optional {
+    type Shape = ();
+
+    fn step<'v>(
+        &self,
+        place: &Place<'v, ()>,
+        segment: &str,
+        next: &mut Next<'v, ()>,
+    ) -> Result<Step<()>, Error> {
+        match place.value() {
+            Some(Value::Object(members)) if segment != "*" => {
+                match tree::member(members, segment) {
+                    Some((name, value)) => next.member(name, value, ()),
+                    None => next.absent_once(segment, ()),
+                }
+                Ok(Step::Taken)
+            }
+            _ => Ok(Step::Plain),
+        }
+    }
+}
+
+/// `select`, `set`, `remove` and `insert` through `*` at a member that some entries lack:
+/// what is not there selects nothing and is neither taken out nor inserted into, and
+/// `set` gives the member to every entry that lacks it, as to one.
+#[test]
+fn an_edit_through_each_entry_edits_every_entry_that_lacks_the_member() {
+    let slices = tree!({"slices": [
+        {"sst": 1, "sd": "000001", "tacs": [1]},
+        {"sst": 2},
+        {"sst": 3, "sd": "000003"},
+        {"sst": 4, "tacs": [4]},
+        {"sst": 5},
+        {"sst": 6, "sd": "000006"},
+        {"sst": 7},
+    ]});
+    let select = |tree: &Value, path: &str| -> Vec<Value> {
+        let values = tree::select_in(&Optional, tree, path).unwrap();
+        values.into_iter().cloned().collect()
+    };
+    assert_eq!(
+        select(&slices, "/slices/*/sd"),
+        [tree!("000001"), tree!("000003"), tree!("000006")]
+    );
+
+    let mut set = slices.clone();
+    tree::set_in(&Optional, &mut set, "/slices/*/sd", tree!("0000ff")).unwrap();
+    assert_eq!(select(&set, "/slices/*/sd"), vec![tree!("0000ff"); 7]);
+    assert_eq!(
+        select(&set, "/slices/*/sst"),
+        select(&slices, "/slices/*/sst")
+    );
+    // Each entry is as `set` at its own position leaves it.
+    for at in 0..7 {
+        let mut one = slices.clone();
+        let path = format!("/slices/{at}/sd");
+        tree::set_in(&Optional, &mut one, &path, tree!("0000ff")).unwrap();
+        assert_eq!(set["slices"][at], one["slices"][at], "{path}");
+    }
+
+    // Taken out of the entries that have it; the others are left alone.
+    let mut removed = slices.clone();
+    tree::remove_in(&Optional, &mut removed, "/slices/*/sd").unwrap();
+    assert_eq!(select(&removed, "/slices/*/sd"), Vec::<Value>::new());
+    for at in [1, 3, 4, 6] {
+        assert_eq!(removed["slices"][at], slices["slices"][at]);
+    }
+    // `set` with `null` takes it out as `remove` does.
+    let mut nulled = slices.clone();
+    tree::set_in(&Optional, &mut nulled, "/slices/*/sd", Value::Null).unwrap();
+    assert_eq!(nulled, removed);
+
+    // Inserted into the lists that are there, and into no list that is not.
+    let mut inserted = slices.clone();
+    tree::insert_in(&Optional, &mut inserted, "/slices/*/tacs/-", tree!(9)).unwrap();
+    tree::insert_in(&Optional, &mut inserted, "/slices/*/tacs/0", tree!(0)).unwrap();
+    assert_eq!(
+        select(&inserted, "/slices/*/tacs"),
+        [tree!([0, 1, 9]), tree!([0, 4, 9])]
+    );
+    for at in [1, 2, 4, 5, 6] {
+        assert_eq!(inserted["slices"][at], slices["slices"][at]);
+    }
+
+    // Through every entry of a long list, of which only the first half has the member.
+    const MOST: usize = 65_535;
+    let entry = |at: usize| match at < MOST / 2 {
+        true => tree!({"sst": 1, "sd": at}),
+        false => tree!({"sst": 1}),
+    };
+    let mut long = tree!({"slices": Value::Array((0..MOST).map(entry).collect())});
+    tree::set_in(&Optional, &mut long, "/slices/*/sd", tree!("0000ff")).unwrap();
+    assert_eq!(select(&long, "/slices/*/sd"), vec![tree!("0000ff"); MOST]);
 }
 
 /// A family that selects the entries of a list by their `tag` member: a segment selects

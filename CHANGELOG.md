@@ -16,6 +16,13 @@ All notable changes to `oxirush-utils` are recorded here.
     `Vec::insert` per entry. Copying a 65,535-entry list and removing every other
     entry went from 200 ms to 11 ms; copying it and inserting an entry before each
     one went from 1.7 s to 15 ms.
+- `set` through `*` gives a member to every entry that lacks it. In the walk of an
+  edit, `Next::absent_once` added one valueless place for all the objects that lack
+  the member, so `set` gave it to the first of them only: with 7 entries of which 3
+  have `sd`, `set` at `/slices/*/sd` changed 4. It now adds a place at each call in
+  an edit, as `Next::absent` does; in a walk that selects (`select_in`, `places_in`)
+  it still adds a valueless place once per shape. `remove` and `insert` are
+  unchanged: they act only where the member is there.
 
 ## 0.2.2 - 2026-11-09
 
