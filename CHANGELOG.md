@@ -13,6 +13,12 @@ All notable changes to `oxirush-utils` are recorded here.
   REGISTRATION ACCEPT of 23 members, pushing them instead of inserting them takes 3 %
   off the time to build it.
 
+### Removed
+
+- `readme/`, the package that compared what each block of the README and of the
+  front page of the documentation printed with the text under it: the blocks check
+  what they give with `assert_eq!`, and run as documentation tests.
+
 ### Fixed
 
 - Fix quadratic time in paths that select many entries of one list. Results, errors

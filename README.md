@@ -16,20 +16,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
 
     // The three octets of a PLMN in a NAS message, and in an NGAP or S1AP message
-    println!("{plmn}: {:02x?} in NAS, {:02x?} in NGAP", plmn.to_nas_octets(), plmn.to_ap_octets());
+    assert_eq!(plmn.to_string(), "310-410");
+    assert_eq!(plmn.to_nas_octets(), [0x13, 0x00, 0x14]);
+    assert_eq!(plmn.to_ap_octets(), [0x13, 0x40, 0x01]);
 
     // A 5G-GUTI as text, and as a 5GS mobile identity
-    println!("{guti}: {:02x?}", guti.to_nas_octets());
+    assert_eq!(guti.to_string(), "5g-guti-310410caff81deadbeef");
+    assert_eq!(guti.to_nas_octets(), [0xf2, 0x13, 0x00, 0x14, 0xca, 0xff, 0x81, 0xde, 0xad, 0xbe, 0xef]);
     Ok(())
 }
 ```
 
-```text
-310-410: [13, 00, 14] in NAS, [13, 40, 01] in NGAP
-5g-guti-310410caff81deadbeef: [f2, 13, 00, 14, ca, ff, 81, de, ad, be, ef]
-```
-
-Each example is followed by its output.
+Each example shows what it gives with `assert_eq!`, and runs as a test of the crate.
 
 ## Installation
 
@@ -67,31 +65,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // An IMSI whose MNC has three digits: its PLMN and its MSIN
     let imsi = Imsi::new("310410123456789")?;
     let (plmn, msin) = (imsi.plmn(3)?, imsi.msin(3)?);
-    println!("IMSI {imsi}: PLMN {plmn}, MSIN {msin}");
+    assert_eq!((plmn.to_string(), msin.to_string()), ("310-410".into(), "123456789".into()));
 
     // Its SUCI under the null scheme, as text and as a 5GS mobile identity,
     // and the SUPI that the SUCI gives
     let suci = ImsiSuci::null(plmn, RoutingIndicator::default(), msin)?;
-    println!("{suci}: {:02x?}", suci.to_nas_octets());
-    println!("{}", Supi::from(suci.imsi().ok_or("a concealed MSIN")?));
+    assert_eq!(suci.to_string(), "suci-0-310-410-0-0-0-123456789");
+    assert_eq!(
+        suci.to_nas_octets(),
+        [0x01, 0x13, 0x00, 0x14, 0xf0, 0xff, 0x00, 0x00, 0x21, 0x43, 0x65, 0x87, 0xf9],
+    );
+    let supi = Supi::from(suci.imsi().ok_or("a concealed MSIN")?);
+    assert_eq!(supi.to_string(), "imsi-310410123456789");
 
     // The 5G-GUTI that an AMF assigns: AMF region, set and pointer, and the
     // 5G-TMSI. It is read back from its octets, and has a 5G-S-TMSI
     let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
-    println!("{}", Guti5g::from_nas_octets(&guti.to_nas_octets())?.s_tmsi());
+    let read = Guti5g::from_nas_octets(&guti.to_nas_octets())?;
+    assert_eq!(read.s_tmsi().to_string(), "5g-s-tmsi-ff81deadbeef");
 
     // A PLMN that is not one says which member is wrong, and why
-    println!("{}", Plmn::new("208", "9").unwrap_err());
+    let error = Plmn::new("208", "9").unwrap_err();
+    assert_eq!(error.to_string(), "`mnc` has 1 digit, and must have 2 or 3");
     Ok(())
 }
-```
-
-```text
-IMSI 310410123456789: PLMN 310-410, MSIN 123456789
-suci-0-310-410-0-0-0-123456789: [01, 13, 00, 14, f0, ff, 00, 00, 21, 43, 65, 87, f9]
-imsi-310410123456789
-5g-s-tmsi-ff81deadbeef
-`mnc` has 1 digit, and must have 2 or 3
 ```
 
 ## Where each form goes
@@ -112,28 +109,21 @@ use oxirush_utils::identity::{GutiEps, Imei, Imeisv, Imsi, Plmn, Tai5gs, TaiEps}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The identity digits of an IMSI in a mobile identity, after its type of identity
     let imsi = Imsi::new("208930000000001")?;
-    println!("{:02x?}", imsi.to_nas_octets(1));
+    assert_eq!(imsi.to_nas_octets(1), [0x29, 0x80, 0x39, 0x00, 0x00, 0x00, 0x00, 0x10]);
 
     // An IMEI as a mobile sends it, and with its check digit; the SVN of an IMEISV
-    println!("{}", Imei::with_spare_digit("49015420323751")?);
-    println!("{}", Imei::with_check_digit("49015420323751")?);
-    println!("{}", Imeisv::new("4901542032375101")?.svn());
+    assert_eq!(Imei::with_spare_digit("49015420323751")?.to_string(), "490154203237510");
+    assert_eq!(Imei::with_check_digit("49015420323751")?.to_string(), "490154203237518");
+    assert_eq!(Imeisv::new("4901542032375101")?.svn().to_string(), "01");
 
     // The GUTI of EPS: its MME group, MME code and M-TMSI; a tracking area of each system
     let plmn = Plmn::new("208", "93")?;
-    println!("{}", GutiEps::new(plmn, 0x0002, 0x01, 0xc000_04f4));
-    println!("{} {}", Tai5gs::new(plmn, 1)?, TaiEps::new(plmn, 1));
+    let guti = GutiEps::new(plmn, 0x0002, 0x01, 0xc000_04f4);
+    assert_eq!(guti.to_string(), "4g-guti-20893000201c00004f4");
+    assert_eq!(Tai5gs::new(plmn, 1)?.to_string(), "208-93-000001");
+    assert_eq!(TaiEps::new(plmn, 1).to_string(), "208-93-0001");
     Ok(())
 }
-```
-
-```text
-[29, 80, 39, 00, 00, 00, 00, 10]
-490154203237510
-490154203237518
-01
-4g-guti-20893000201c00004f4
-208-93-000001 208-93-0001
 ```
 
 ## The SUCI in the form of a NAI
@@ -148,21 +138,20 @@ use oxirush_utils::identity::{NaiSuci, nai};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The example of TS 23.003 clause 28.7.3: a network specific identifier in clear
     let suci: NaiSuci = "type1.rid678.schid0.useriduser17@example.com".parse()?;
-    println!("{:?} {:?} {}", suci.supi_type(), suci.clear(), suci.realm());
+    assert_eq!(format!("{:?}", suci.supi_type()), "NetworkSpecific");
+    assert_eq!((suci.clear(), suci.realm()), (Some("user17"), "example.com"));
 
     // In a 5GS mobile identity, after the SUPI format of a network specific identifier
-    println!("{:#04x}", suci.to_nas_octets()?[0]);
+    assert_eq!(suci.to_nas_octets()?[0], 0x11);
 
     // A realm has two labels at least
-    println!("{}", nai::check_realm("example").unwrap_err());
+    assert_eq!(
+        nai::check_realm("example").unwrap_err().to_string(),
+        "`realm` is written as a domain name of two labels at least, of letters, digits and \
+         hyphens, with no hyphen at either end and 63 octets at most each, as example.com",
+    );
     Ok(())
 }
-```
-
-```text
-NetworkSpecific Some("user17") example.com
-0x11
-`realm` is written as a domain name of two labels at least, of letters, digits and hyphens, with no hyphen at either end and 63 octets at most each, as example.com
 ```
 
 ## What other implementations send
@@ -179,17 +168,14 @@ use oxirush_utils::identity::Imeisv;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // PacketRusher sends an IMEISV with 0000 where its end mark 1111 belongs
     let sent = [0x15, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    println!("{}", Imeisv::from_nas_octets(5, &sent).unwrap_err());
+    let fault = "`imeisv` has the half octet 0x0 where its end mark is, and the end mark is 0xf";
+    assert_eq!(Imeisv::from_nas_octets(5, &sent).unwrap_err().to_string(), fault);
 
     let (imeisv, faults) = Imeisv::from_nas_octets_tolerant(5, &sent)?;
-    println!("{imeisv}, read with: {}", faults[0]);
+    assert_eq!(imeisv.to_string(), "1110000000000000");
+    assert_eq!(faults[0].to_string(), fault);
     Ok(())
 }
-```
-
-```text
-`imeisv` has the half octet 0x0 where its end mark is, and the end mark is 0xf
-1110000000000000, read with: `imeisv` has the half octet 0x0 where its end mark is, and the end mark is 0xf
 ```
 
 ## A type as a tree
@@ -203,7 +189,7 @@ keeps that order.
 ```rust
 use oxirush_utils::{tree, tree::{Members, Reading, Refused, Tree, Value}};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Slice {
     sst: u8,
     sd: Option<[u8; 3]>,
@@ -229,22 +215,20 @@ impl Tree for Slice {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("{}", Slice { sst: 1, sd: Some([0, 0, 0xff]) }.to_tree());
+    let slice = Slice { sst: 1, sd: Some([0, 0, 0xff]) };
+    assert_eq!(slice.to_tree().to_string(), r#"{"sst":1,"sd":"0000ff"}"#);
 
     // A name is read however it is written, and octets in either case
     let read: Slice = tree::from_value(&tree!({"SST": 2, "sd": "0000FF"}))?;
-    println!("{read:?}");
+    assert_eq!(read, Slice { sst: 2, sd: Some([0, 0, 0xff]) });
 
     // A refusal says where and why
-    println!("{}", tree::from_value::<Slice>(&tree!({"sst": 256})).unwrap_err());
+    assert_eq!(
+        tree::from_value::<Slice>(&tree!({"sst": 256})).unwrap_err().to_string(),
+        "this is not a value of S-NSSAI: a number from 0 to 255 is expected, and 256 is written, at sst",
+    );
     Ok(())
 }
-```
-
-```text
-{"sst":1,"sd":"0000ff"}
-Slice { sst: 2, sd: Some([0, 0, 255]) }
-this is not a value of S-NSSAI: a number from 0 to 255 is expected, and 256 is written, at sst
 ```
 
 ## Paths
@@ -263,35 +247,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Select, by names however they are written; what is not there selects nothing
-    println!("{:?}", tree::select(&message, "/Requested NSSAI/*/sst")?);
-    println!("{:?}", tree::select(&message, "/t3512-value/unit")?);
+    assert_eq!(tree::select(&message, "/Requested NSSAI/*/sst")?, [&tree!(1), &tree!(2)]);
+    assert!(tree::select(&message, "/t3512-value/unit")?.is_empty());
 
     // A name that the value does not have is an error
-    println!("{}", tree::select(&message, "/requested-nssai/0/sts").unwrap_err());
+    assert_eq!(
+        tree::select(&message, "/requested-nssai/0/sts").unwrap_err().to_string(),
+        r#""sts" is not a member of this value: it has sst, at /requested-nssai/0/sts"#,
+    );
 
     // Each value with the path that selects it
-    for (path, value) in tree::paths(&message) {
-        println!("{path} = {value}");
-    }
+    let paths: Vec<String> =
+        tree::paths(&message).into_iter().map(|(path, value)| format!("{path} = {value}")).collect();
+    assert_eq!(
+        paths,
+        [
+            r#"/message-type = "registration-request""#,
+            "/requested-nssai/0/sst = 1",
+            "/requested-nssai/1/sst = 2",
+            r#"/requested-nssai/1/sd = "0000ff""#,
+        ],
+    );
 
     // An edit is done whole, or not at all
     tree::set(&mut message, "/requested-nssai/0/sd", tree!("000001"))?;
     tree::insert(&mut message, "/requested-nssai/-", tree!({"sst": 3}))?;
     tree::remove(&mut message, "/requested-nssai/1")?;
-    println!("{}", message["requested-nssai"]);
+    assert_eq!(message["requested-nssai"], tree!([{"sst": 1, "sd": "000001"}, {"sst": 3}]));
     Ok(())
 }
-```
-
-```text
-[Number(1), Number(2)]
-[]
-"sts" is not a member of this value: it has sst, at /requested-nssai/0/sts
-/message-type = "registration-request"
-/requested-nssai/0/sst = 1
-/requested-nssai/1/sst = 2
-/requested-nssai/1/sd = "0000ff"
-[{"sst":1,"sd":"000001"},{"sst":3}]
 ```
 
 ## Any format of serde
@@ -328,17 +312,11 @@ oxirush_utils::impl_serde!(Timer);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let timer = Timer { seconds: 3600 };
-    println!("{}", serde_json::to_string(&timer)?);
-    print!("{}", serde_norway::to_string(&timer)?);
-    println!("{:?}", serde_norway::from_str::<Timer>("Seconds: 3600")?);
+    assert_eq!(serde_json::to_string(&timer)?, r#"{"seconds":3600}"#);
+    assert_eq!(serde_norway::to_string(&timer)?, "seconds: 3600\n");
+    assert_eq!(serde_norway::from_str::<Timer>("Seconds: 3600")?, timer);
     Ok(())
 }
-```
-
-```text
-{"seconds":3600}
-seconds: 3600
-Timer { seconds: 3600 }
 ```
 
 ## Limits
@@ -403,8 +381,8 @@ cargo +nightly fuzz run identity -- -max_total_time=60 -max_len=64
 cargo +nightly fuzz run paths -- -max_total_time=60 -max_len=512
 ```
 
-Each Rust block of this page is checked with what it prints
-([`readme/`](readme/build.rs) says how).
+Each Rust block of this page checks what it gives with `assert_eq!`, and runs
+as a documentation test of the crate.
 
 A pull request comes with a test for what it changes. Sign off your commits
 (`git commit -s`): by contributing you agree to the [Developer Certificate

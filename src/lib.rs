@@ -27,23 +27,21 @@
 //!     let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0x01, 0xdead_beef)?;
 //!
 //!     // The three octets of a PLMN in a NAS message, and in an NGAP or S1AP message
-//!     println!("{plmn}: {:02x?} in NAS, {:02x?} in NGAP", plmn.to_nas_octets(), plmn.to_ap_octets());
+//!     assert_eq!(plmn.to_string(), "310-410");
+//!     assert_eq!(plmn.to_nas_octets(), [0x13, 0x00, 0x14]);
+//!     assert_eq!(plmn.to_ap_octets(), [0x13, 0x40, 0x01]);
 //!
 //!     // A 5G-GUTI as text, and as a 5GS mobile identity
-//!     println!("{guti}: {:02x?}", guti.to_nas_octets());
+//!     assert_eq!(guti.to_string(), "5g-guti-310410caff81deadbeef");
+//!     assert_eq!(guti.to_nas_octets(), [0xf2, 0x13, 0x00, 0x14, 0xca, 0xff, 0x81, 0xde, 0xad, 0xbe, 0xef]);
 //!     Ok(())
 //! }
-//! ```
-//!
-//! ```text
-//! 310-410: [13, 00, 14] in NAS, [13, 40, 01] in NGAP
-//! 5g-guti-310410caff81deadbeef: [f2, 13, 00, 14, ca, ff, 81, de, ad, be, ef]
 //! ```
 //!
 //! # Tasks
 //!
 //! The [README](https://github.com/linouxis9/oxirush-utils#readme) has an example of
-//! each, with what it prints, except the rules of a family of messages: the
+//! each, with what it gives, except the rules of a family of messages: the
 //! documentation of [`tree::Family`] has theirs.
 //!
 //! | Task | Items |
