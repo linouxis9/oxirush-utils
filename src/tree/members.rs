@@ -551,18 +551,26 @@ impl Reading {
 
     /// `N` octets.
     pub fn octet_array<const N: usize>(&mut self, value: &Value) -> Result<[u8; N], Refused> {
+        let octets = self.octets_sized(value, N)?;
+        Ok(<[u8; N]>::try_from(octets).expect("N octets"))
+    }
+
+    /// `size` octets, for a size that a table gives and no type says: what
+    /// [`octet_array`](Self::octet_array) reads.
+    pub fn octets_sized(&mut self, value: &Value, size: usize) -> Result<Vec<u8>, Refused> {
         let octets = self.octets(value)?;
-        <[u8; N]>::try_from(octets).map_err(|octets| {
-            let written = match self.secret {
-                true => "what is written".to_string(),
-                false => hex(&octets),
-            };
-            let why = format!(
-                "{N} octets are expected, and {written} has {}",
-                octets.len()
-            );
-            self.refuse(ErrorKind::Value, why)
-        })
+        if octets.len() == size {
+            return Ok(octets);
+        }
+        let written = match self.secret {
+            true => "what is written".to_string(),
+            false => hex(&octets),
+        };
+        let why = format!(
+            "{size} octets are expected, and {written} has {}",
+            octets.len()
+        );
+        Err(self.refuse(ErrorKind::Value, why))
     }
 
     /// A string of bits: its octets and how many bits it has. It is written as its

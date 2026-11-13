@@ -14,6 +14,8 @@ All notable changes to `oxirush-utils` are recorded here.
   off the time to build it.
 - `tree::read` reads a tree with a function as a value of a type of a name, and refuses it
   as `from_value` does: for a type that a table describes and that has no `Tree`.
+- `Reading::octets_sized` reads octets of a size given as a number, as `octet_array` reads
+  them for a size given as a type parameter, with the same refusal.
 
 ### Removed
 

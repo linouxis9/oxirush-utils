@@ -548,3 +548,24 @@ impl Tree for Seconds {
         Ok(Self)
     }
 }
+
+#[test]
+fn octets_of_a_size_that_no_type_says_are_read_as_an_array_of_it() {
+    let read = |value: &Value, size| {
+        tree::read(value, "Octets", |value, reading| {
+            reading.octets_sized(value, size)
+        })
+    };
+    assert_eq!(read(&tree!("02f839"), 3), Ok(vec![0x02, 0xf8, 0x39]));
+    let refused = read(&tree!("02f8"), 3).unwrap_err();
+    assert_eq!(refused.kind(), ErrorKind::Value);
+    assert_eq!(
+        refused.to_string(),
+        "this is not a value of Octets: 3 octets are expected, and 02f8 has 2"
+    );
+    // As an array of three octets refuses them.
+    let array = tree::read(&tree!("02f8"), "Octets", |value, reading| {
+        reading.octet_array::<3>(value)
+    });
+    assert_eq!(array.unwrap_err(), refused);
+}
