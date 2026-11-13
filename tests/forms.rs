@@ -508,3 +508,43 @@ fn a_type_that_reads_a_member_that_it_does_not_list_is_told_so() {
     }
     let _ = tree::from_value::<Misread>(&tree!({"sst": 1}));
 }
+
+#[test]
+fn a_tree_is_read_with_a_function_as_a_value_of_a_type_of_a_name() {
+    let read = |value: &Value| {
+        tree::read(value, "Timer", |value, reading| {
+            let of = reading.members(value, &["seconds"])?;
+            reading.member(&of, "seconds", |value, reading| {
+                reading.unsigned(value, 0, 59)
+            })
+        })
+    };
+    assert_eq!(read(&tree!({"seconds": 7})), Ok(7));
+    let refused = read(&tree!({"seconds": 60})).unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        tree::from_value::<Seconds>(&tree!({"seconds": 60}))
+            .unwrap_err()
+            .to_string()
+    );
+}
+
+/// A type that reads what the function of the test above reads.
+#[derive(Debug)]
+struct Seconds;
+
+impl Tree for Seconds {
+    const NAME: &'static str = "Timer";
+
+    fn to_tree(&self) -> Value {
+        Value::Null
+    }
+
+    fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
+        let of = reading.members(value, &["seconds"])?;
+        reading.member(&of, "seconds", |value, reading| {
+            reading.unsigned(value, 0, 59)
+        })?;
+        Ok(Self)
+    }
+}

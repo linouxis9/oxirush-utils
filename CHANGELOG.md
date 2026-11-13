@@ -12,6 +12,8 @@ All notable changes to `oxirush-utils` are recorded here.
   4096 members takes 145 µs, where `insert` takes 18 ms; in the tree of a NAS
   REGISTRATION ACCEPT of 23 members, pushing them instead of inserting them takes 3 %
   off the time to build it.
+- `tree::read` reads a tree with a function as a value of a type of a name, and refuses it
+  as `from_value` does: for a type that a table describes and that has no `Tree`.
 
 ### Removed
 

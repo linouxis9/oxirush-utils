@@ -122,6 +122,21 @@ pub fn from_value<T: Tree>(value: &Value) -> Result<T, Error> {
     }
 }
 
+/// The value that `read` reads from `value`, a tree of the type that is called `name`:
+/// what [`from_value`] does for a type that is described by a table, and not by an
+/// implementation of [`Tree`].
+pub fn read<T>(
+    value: &Value,
+    name: &str,
+    read: impl FnOnce(&Value, &mut Reading) -> Result<T, Refused>,
+) -> Result<T, Error> {
+    let mut reading = Reading::new();
+    match read(value, &mut reading) {
+        Ok(value) => Ok(value),
+        Err(Refused) => Err(reading.refused(name)),
+    }
+}
+
 /// The start of what is written, which says which value it is.
 fn written(value: &Value) -> String {
     let text = value.to_string();

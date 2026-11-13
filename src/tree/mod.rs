@@ -102,7 +102,7 @@ pub use error::{Error, ErrorKind};
 pub use forms::{
     alternative, bits, hex, named, nearest, octets, same_name, signed, text, unhex, unsigned,
 };
-pub use members::{Members, Read, Reading, Refused, Tree, from_value, member};
+pub use members::{Members, Read, Reading, Refused, Tree, from_value, member, read};
 pub use path::{escape, position, segments};
 pub use value::{Entry, Map, Number, Value};
 
