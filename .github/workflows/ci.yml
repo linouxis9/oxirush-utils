@@ -137,7 +137,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      # The rustfmt of the MSRV: a new stable release must not change what is formatted.
+      - uses: dtolnay/rust-toolchain@1.88
         with:
           components: rustfmt
       - run: cargo fmt --check
