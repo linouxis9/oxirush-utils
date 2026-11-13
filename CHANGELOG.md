@@ -4,6 +4,15 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## Unreleased
 
+### Added
+
+- `Map::push` adds a member at the end without searching the object for its name,
+  for a name that the object does not have, as the members that the tree of a type
+  writes one after the other. A debug build panics on a name that is there. Pushing
+  4096 members takes 145 µs, where `insert` takes 18 ms; in the tree of a NAS
+  REGISTRATION ACCEPT of 23 members, pushing them instead of inserting them takes 3 %
+  off the time to build it.
+
 ### Fixed
 
 - Fix quadratic time in paths that select many entries of one list. Results, errors

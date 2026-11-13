@@ -198,6 +198,19 @@ pub fn operations() -> Vec<Operation> {
             black_box(map);
         }),
     );
+    let pushed = names.clone();
+    add(
+        "push-4096-members",
+        "oxirush-utils",
+        true,
+        Box::new(move || {
+            let mut map = Map::new();
+            for name in &pushed {
+                map.push(name.clone(), Value::Null);
+            }
+            black_box(map);
+        }),
+    );
     let theirs = names.clone();
     add(
         "put-4096-members",

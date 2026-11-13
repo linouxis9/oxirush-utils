@@ -219,8 +219,8 @@ pub fn text(text: &str) -> Value {
 /// ```
 pub fn bits(octets: &[u8], length: usize) -> Value {
     let mut members = Map::new();
-    members.insert("value".into(), Value::String(hex(octets)));
-    members.insert("length".into(), Value::Number(Number::from(length)));
+    members.push("value".into(), Value::String(hex(octets)));
+    members.push("length".into(), Value::Number(Number::from(length)));
     Value::Object(members)
 }
 
@@ -229,6 +229,6 @@ pub fn bits(octets: &[u8], length: usize) -> Value {
 /// content is its name alone, as [`text`].
 pub fn alternative(name: &str, value: Value) -> Value {
     let mut members = Map::new();
-    members.insert(name.to_string(), value);
+    members.push(name.to_string(), value);
     Value::Object(members)
 }

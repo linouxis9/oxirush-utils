@@ -147,6 +147,19 @@ impl Map {
         }
     }
 
+    /// Add the member `name` at the end without searching for it, for a name that the
+    /// object does not have: the members of a value that a type writes one after the
+    /// other. A name that the object has is a logic error: a debug build panics, and
+    /// otherwise the object has the name twice, of which `get` and `insert` see the
+    /// first.
+    pub fn push(&mut self, name: String, value: Value) {
+        debug_assert!(
+            self.position(&name).is_none(),
+            "the object has a member {name:?} already"
+        );
+        self.members.push((name, value));
+    }
+
     /// Put back at `position` a member that was taken out of it, for the undo of an edit.
     pub(crate) fn insert_at(&mut self, position: usize, name: String, value: Value) {
         let position = position.min(self.members.len());

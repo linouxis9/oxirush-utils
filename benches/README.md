@@ -25,6 +25,7 @@ the allocations are those of one call.
 | Write it | 923 ns ±15% between builds, 5 allocations of 2,845 octets | 2,140 ns, 8 allocations of 2,040 octets | 2.3x |
 | Select a value of it | 219 ns, 10 allocations of 385 octets | 238 ns, 8 allocations of 64 octets | about the same |
 | Put 4096 members into an object, one after the other | 15.9 ms, 4,107 allocations of 477,898 octets | 0.65 ms, 4,731 allocations of 429,138 octets | 0.04x |
+| Push 4096 new members into an object, one after the other | 145 µs, 4,107 allocations of 477,898 octets | | |
 | Read an object of 4096 members, 39,851 octets | 380 µs, 4,108 allocations of 543,434 octets | 774 µs, 4,731 allocations of 429,138 octets | 2.0x |
 | Select a member that half of the 65,535 entries of a list lack | 1.48 ms, 34 allocations of 4,718,555 octets | | |
 | Copy a list of 65,535 entries | 7.75 ms, 262,140 allocations of 8,126,308 octets | | |
@@ -44,8 +45,11 @@ members of an object in their order, where a `serde_json::Value` sorts them.
 An object is a list that is searched for a name: putting n members one after
 the other takes a time that grows as n², which the few dozen members of a
 value of a protocol never show, and an object that is read has 4096 members
-at most. The two rows of 4096 members were measured on 2026-11-07, when an
-object became a list; the others at 8865ad4. The identities allocate nothing but the SUCI, which holds its scheme
+at most. `Map::push` adds a member whose name is new without the search, in a
+time that grows as n. The rows of 4096 members that are put and read were
+measured on 2026-11-07, when an object became a list, the row that pushes
+them on 2026-11-13 (with Rust 1.88.0, while the machine ran other work: put took
+18.0 ms there); the others at 8865ad4. The identities allocate nothing but the SUCI, which holds its scheme
 output.
 
 The five rows of 65,535 entries use a path family that behaves like those of

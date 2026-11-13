@@ -94,6 +94,25 @@ fn an_object_keeps_its_members_where_they_are() {
 }
 
 #[test]
+fn a_pushed_member_goes_at_the_end() {
+    let mut map = Map::new();
+    map.push("z".into(), tree!(1));
+    map.push("a".into(), tree!(2));
+    assert_eq!(map.insert("z".into(), tree!(3)), Some(tree!(1)));
+    map.push("m".into(), tree!(4));
+    assert_eq!(Value::Object(map).to_string(), r#"{"z":3,"a":2,"m":4}"#);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "the object has a member \"a\" already")]
+fn a_debug_build_refuses_to_push_a_member_that_is_there() {
+    let mut map = Map::new();
+    map.push("a".into(), tree!(1));
+    map.push("a".into(), tree!(2));
+}
+
+#[test]
 fn an_object_of_many_members_keeps_them_where_they_are() {
     // The calls of the test above, on an object of more members than a value of a
     // protocol has: each member is where it was put, and is found by its name.
