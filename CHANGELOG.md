@@ -16,6 +16,11 @@ All notable changes to `oxirush-utils` are recorded here.
   as `from_value` does: for a type that a table describes and that has no `Tree`.
 - `Reading::octets_sized` reads octets of a size given as a number, as `octet_array` reads
   them for a size given as a type parameter, with the same refusal.
+- `tree::Takes` says what the tree of a value takes, as the type that reads it says it: a
+  flag, a number, names, octets, a text, a name, digits, an address, a PLMN, the tree of a
+  message, a list, an object of members each with what it takes, or one of several forms.
+  A type describes its tree with it once, for someone who writes a value and for a path
+  that is checked without a value at hand.
 
 ### Changed
 

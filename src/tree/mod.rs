@@ -95,6 +95,7 @@ mod macros;
 mod members;
 mod path;
 pub mod serde;
+mod takes;
 mod value;
 mod walk;
 
@@ -104,6 +105,7 @@ pub use forms::{
 };
 pub use members::{Members, Read, Reading, Refused, Tree, from_value, member, read};
 pub use path::{escape, position, segments};
+pub use takes::Takes;
 pub use value::{Entry, Map, Number, Value};
 
 // The `vec!` of `alloc`, which `tree!` writes a list with in a crate without `std`.
