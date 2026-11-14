@@ -17,6 +17,12 @@ All notable changes to `oxirush-utils` are recorded here.
 - `Reading::octets_sized` reads octets of a size given as a number, as `octet_array` reads
   them for a size given as a type parameter, with the same refusal.
 
+### Changed
+
+- `tree::unhex` reads eight digits at a time in a `u64`: 32 octets in 26 ns, where
+  it took 37 ns, 285 octets in 138 ns (246 ns) and 1500 octets in 564 ns (1130 ns).
+  What it reads and refuses is unchanged.
+
 ### Removed
 
 - `readme/`, the package that compared what each block of the README and of the

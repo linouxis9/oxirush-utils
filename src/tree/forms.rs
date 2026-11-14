@@ -49,31 +49,72 @@ pub fn hex(octets: &[u8]) -> String {
 /// The octets that `text` writes in hexadecimal: two digits for each, in either case,
 /// and nothing else. `None` for a prefix, a separator, or an odd number of digits.
 pub fn unhex(text: &str) -> Option<Vec<u8>> {
-    /// What is no digit: a value that no half octet has.
-    const NONE: u8 = 0x80;
-    // The value of a digit, without a branch that leaves the loop: what is no digit is
-    // told after it. A letter is taken in lower case, which differs from upper case by
-    // one bit.
-    let digit = |digit: u8| {
-        let (number, letter) = (digit.wrapping_sub(b'0'), (digit | 0x20).wrapping_sub(b'a'));
-        match (number < 10, letter < 6) {
-            (true, _) => number,
-            (false, true) => letter + 10,
-            (false, false) => NONE,
-        }
-    };
     let (pairs, rest) = text.as_bytes().as_chunks::<2>();
     if !rest.is_empty() {
         return None;
     }
     let mut octets = vec![0; pairs.len()];
+    // Eight digits at a time in a u64, then the last pairs one by one.
+    let (eights, _) = text.as_bytes().as_chunks::<8>();
+    let (fours, _) = octets.as_chunks_mut::<4>();
+    let mut valid = true;
+    for (four, eight) in fours.iter_mut().zip(eights) {
+        let (octets, digits) = four_octets(u64::from_le_bytes(*eight));
+        valid &= digits;
+        *four = octets.to_le_bytes();
+    }
+    let done = eights.len() * 4;
     let mut other = 0;
-    for (octet, [high, low]) in octets.iter_mut().zip(pairs) {
+    for (octet, [high, low]) in octets[done..].iter_mut().zip(&pairs[done..]) {
         let (high, low) = (digit(*high), digit(*low));
         other |= high | low;
         *octet = high << 4 | low & 15;
     }
-    (other & NONE == 0).then_some(octets)
+    (valid && other & NO_DIGIT == 0).then_some(octets)
+}
+
+/// What [`digit`] gives for a character that is no digit: a value that no half octet
+/// has.
+const NO_DIGIT: u8 = 0x80;
+
+/// The value of a hexadecimal digit, or [`NO_DIGIT`], without a branch that leaves the
+/// loop. A letter is taken in lower case, which differs from upper case by one bit.
+fn digit(digit: u8) -> u8 {
+    let (number, letter) = (digit.wrapping_sub(b'0'), (digit | 0x20).wrapping_sub(b'a'));
+    match (number < 10, letter < 6) {
+        (true, _) => number,
+        (false, true) => letter + 10,
+        (false, false) => NO_DIGIT,
+    }
+}
+
+/// The four octets that eight characters, the octets of a `u64` in little-endian
+/// order, write in hexadecimal, and whether all eight are digits. Each byte is
+/// compared at once as a lane of the `u64`: with its high bit set, a lane minus a
+/// number below 0x80 keeps that bit when the lane was at least the number, and borrows
+/// nothing from the next lane.
+fn four_octets(characters: u64) -> (u32, bool) {
+    const ONES: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = ONES * 0x80;
+    const EVEN: u64 = 0x00ff_00ff_00ff_00ff;
+    const CASE: u64 = ONES * 0x20;
+    const HALF: u64 = ONES * 0x0f;
+    const NINE: u64 = ONES * 9;
+    let at_least = |lanes: u64, lowest: u8| ((lanes | HIGH) - u64::from(lowest) * ONES) & HIGH;
+    let lower = characters | CASE;
+    let number = at_least(characters, b'0') & !at_least(characters, b'9' + 1);
+    let letter = at_least(lower, b'a') & !at_least(lower, b'f' + 1);
+    // A character outside ASCII has its high bit set and is no digit.
+    let digits = characters & HIGH == 0 && (number | letter) == HIGH;
+    // The value of a digit is its low four bits, and of a letter those plus 9; the high
+    // bit of a lane becomes a mask of the whole lane.
+    let (number, letter) = ((number >> 7) * 0xff, (letter >> 7) * 0xff);
+    let halves = (characters & HALF & number) | ((lower & HALF) + NINE) & letter;
+    // The first character of each pair is the high half of its octet.
+    let pairs = (halves & EVEN) << 4 | (halves >> 8) & EVEN;
+    // One octet in each 16-bit lane, moved next to each other.
+    let pairs = (pairs | pairs >> 8) & 0x0000_ffff_0000_ffff;
+    ((pairs | pairs >> 16) as u32, digits)
 }
 
 // ── Names ───────────────────────────────────────────────────────────────────

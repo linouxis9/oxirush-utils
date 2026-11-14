@@ -300,6 +300,32 @@ pub fn operations() -> Vec<Operation> {
         }),
     );
 
+    // Octets in hexadecimal, of a key, of a NAS message and of a frame.
+    for (length, write, read) in [
+        (32, "hex-32", "unhex-32"),
+        (285, "hex-285", "unhex-285"),
+        (1500, "hex-1500", "unhex-1500"),
+    ] {
+        let octets: Vec<u8> = (0..length).map(|place| (place * 37) as u8).collect();
+        let text = tree::hex(&octets);
+        add(
+            write,
+            "oxirush-utils",
+            false,
+            Box::new(move || {
+                black_box(tree::hex(black_box(&octets)));
+            }),
+        );
+        add(
+            read,
+            "oxirush-utils",
+            false,
+            Box::new(move || {
+                black_box(tree::unhex(black_box(&text)).unwrap());
+            }),
+        );
+    }
+
     // The identities.
     add(
         "plmn-from-text",

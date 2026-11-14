@@ -56,6 +56,85 @@ fn octets_are_hexadecimal_in_lower_case_and_are_read_in_either() {
     }
 }
 
+/// The octets of `text` read one character at a time, as `unhex` reads them eight at a
+/// time.
+fn unhex_by_character(text: &str) -> Option<Vec<u8>> {
+    let digits: Vec<u8> = text
+        .chars()
+        .map(|character| character.to_digit(16).map(|digit| digit as u8))
+        .collect::<Option<_>>()?;
+    let (pairs, rest) = digits.as_chunks::<2>();
+    rest.is_empty()
+        .then(|| pairs.iter().map(|[high, low]| high << 4 | low).collect())
+}
+
+/// `count` digits, in either case.
+fn digits_of(count: usize) -> String {
+    "0123456789abcdefABCDEF"
+        .chars()
+        .cycle()
+        .take(count)
+        .collect()
+}
+
+#[test]
+fn octets_are_read_as_one_character_at_a_time_reads_them() {
+    // Every string of two characters of ASCII, and of each with a character outside it.
+    let others = ['\u{80}', 'é', '０', '€', '\u{10ffff}'];
+    let characters: Vec<char> = (0..128u8).map(char::from).chain(others).collect();
+    for first in &characters {
+        for second in &characters {
+            let text = String::from_iter([first, second]);
+            assert_eq!(tree::unhex(&text), unhex_by_character(&text), "{text:?}");
+        }
+    }
+    // Each length up to five times eight digits, with one character that is no digit, or
+    // one outside ASCII, at each place.
+    let mut numbers = Numbers(2);
+    for length in 0..40 {
+        let digits: String = (0..length)
+            .map(|_| b"0123456789abcdefABCDEF"[numbers.next() as usize % 22] as char)
+            .collect();
+        assert_eq!(
+            tree::unhex(&digits),
+            unhex_by_character(&digits),
+            "{digits}"
+        );
+        for place in 0..length {
+            for other in ['g', 'G', ':', '/', '@', '`', '\0', 'é', '€'] {
+                let mut text: Vec<char> = digits.chars().collect();
+                text[place] = other;
+                let text = String::from_iter(text);
+                assert_eq!(tree::unhex(&text), None, "{text:?}");
+            }
+        }
+    }
+    // Characters outside ASCII whose octets the comparisons of eight characters at once
+    // take for digits or letters, but for their high bit: 'ð' is c3 b0, 'ù' c3 b9, 'Ű'
+    // c5 b0 and 'ᰰ' e1 b0 b0. After and before digits, at each place.
+    for other in ['ð', 'ù', 'Ű', 'ᰰ'] {
+        for before in 0..12 {
+            for after in 0..12 {
+                let text = format!("{}{other}{}", digits_of(before), digits_of(after));
+                assert_eq!(tree::unhex(&text), None, "{text:?}");
+            }
+        }
+    }
+    // Strings that look random, of digits with now and then another character.
+    for _ in 0..200_000 {
+        let length = numbers.next() as usize % 48;
+        let text: String = (0..length)
+            .map(|_| match numbers.next() % 64 {
+                0 => {
+                    ['g', 'Z', ' ', '~', '\u{7f}', 'é', '０', 'ð', 'ᰰ'][numbers.next() as usize % 9]
+                }
+                _ => b"0123456789abcdefABCDEF"[numbers.next() as usize % 22] as char,
+            })
+            .collect();
+        assert_eq!(tree::unhex(&text), unhex_by_character(&text), "{text:?}");
+    }
+}
+
 /// oxirush-ngap `a_name_is_the_same_whatever_its_case_and_what_is_between_its_letters`,
 /// and the names of oxirush-nas without its spelling of `5g` as `fg`.
 #[test]
