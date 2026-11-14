@@ -52,11 +52,11 @@ fn two_trees_are_equal_whatever_the_order_of_their_members() {
     }
     // Wide objects in two orders, compared by the order of their names.
     let forward: Map = (0..4096)
-        .map(|index| (format!("m{index}"), tree!(index)))
+        .map(|index| (format!("m{index}").into(), tree!(index)))
         .collect();
     let backward: Map = (0..4096)
         .rev()
-        .map(|index| (format!("m{index}"), tree!(index)))
+        .map(|index| (format!("m{index}").into(), tree!(index)))
         .collect();
     let started = Instant::now();
     assert_eq!(forward, backward);
@@ -86,7 +86,7 @@ fn an_object_keeps_its_members_where_they_are() {
         Value::Object(map.clone()).to_string(),
         r#"{"m":5,"n":3,"b":4}"#
     );
-    map.extend([("m".to_string(), tree!(6)), ("c".to_string(), tree!(7))]);
+    map.extend([("m".into(), tree!(6)), ("c".into(), tree!(7))]);
     assert_eq!(
         Value::Object(map).to_string(),
         r#"{"m":6,"n":3,"b":4,"c":7}"#
@@ -104,6 +104,31 @@ fn a_pushed_member_goes_at_the_end() {
 }
 
 #[test]
+fn a_name_that_the_program_holds_is_not_copied() {
+    use std::borrow::Cow;
+    const NAME: &str = "registration-request";
+    let Value::String(Cow::Borrowed(name)) = Value::from(NAME) else {
+        panic!("a copy of a &'static str");
+    };
+    assert!(std::ptr::eq(name, NAME));
+    assert!(matches!(tree::text(NAME), Value::String(Cow::Borrowed(_))));
+    assert!(matches!(
+        tree::text(NAME.to_string()),
+        Value::String(Cow::Owned(_))
+    ));
+    let mut map = Map::new();
+    map.push(NAME.into(), tree!(1));
+    let (name, _) = map.iter().next().unwrap();
+    assert!(std::ptr::eq(name, NAME));
+    // A copy of the tree copies none of them, and is equal to a tree of its own text.
+    let tree = Value::Object(map);
+    let copy = tree.clone();
+    let name = copy.as_object().unwrap().keys().next().unwrap();
+    assert!(std::ptr::eq(name, NAME));
+    assert_eq!(copy, tree!({(NAME.to_string()): 1}));
+}
+
+#[test]
 #[cfg(debug_assertions)]
 #[should_panic(expected = "the object has a member \"a\" already")]
 fn a_debug_build_refuses_to_push_a_member_that_is_there() {
@@ -117,9 +142,9 @@ fn an_object_of_many_members_keeps_them_where_they_are() {
     // The calls of the test above, on an object of more members than a value of a
     // protocol has: each member is where it was put, and is found by its name.
     let mut map: Map = (0..100)
-        .map(|index| (format!("m{index}"), tree!(index)))
+        .map(|index| (format!("m{index}").into(), tree!(index)))
         .collect();
-    let names = |map: &Map| map.keys().cloned().collect::<Vec<_>>();
+    let names = |map: &Map| map.keys().map(str::to_string).collect::<Vec<_>>();
     let mut expected = names(&map);
     assert_eq!(map.insert("m7".into(), tree!("seven")), Some(tree!(7)));
     assert_eq!(map["m7"], tree!("seven"));
@@ -134,14 +159,14 @@ fn an_object_of_many_members_keeps_them_where_they_are() {
     map.retain(|name, _| name.len() == 2 || name == "new");
     expected.retain(|name| name.len() == 2 || name == "new");
     assert_eq!(names(&map), expected);
-    map.extend([
-        ("m5".to_string(), tree!(5.5)),
-        ("last".to_string(), tree!(1)),
-    ]);
+    map.extend([("m5".into(), tree!(5.5)), ("last".into(), tree!(1))]);
     expected.push("last".into());
     assert_eq!(names(&map), expected);
     for (position, name) in expected.iter().enumerate() {
-        assert_eq!(map.get_key_value(name).map(|(name, _)| name), Some(name));
+        assert_eq!(
+            map.get_key_value(name).map(|(name, _)| name),
+            Some(name.as_str())
+        );
         assert!(map.contains_key(name), "{position} {name}");
     }
     assert_eq!((map.get("m10"), map.get("m50")), (None, None));
@@ -296,8 +321,8 @@ fn a_value_says_what_it_is_and_gives_what_it_holds() {
 #[test]
 fn an_object_shows_its_members_in_their_order() {
     let mut map = Map::new();
-    map.insert("b".to_string(), tree!(1));
-    map.insert("a".to_string(), tree!([true]));
+    map.insert("b".into(), tree!(1));
+    map.insert("a".into(), tree!([true]));
     assert_eq!(
         format!("{map:?}"),
         r#"{"b": Number(1), "a": Array [Bool(true)]}"#
@@ -326,7 +351,7 @@ fn a_value_is_made_from_what_it_holds() {
         assert_eq!(made, expected);
     }
     let mut members = Map::new();
-    members.insert("a".to_string(), tree!(1));
+    members.insert("a".into(), tree!(1));
     assert_eq!(Value::from(members.clone()), tree!({"a": 1}));
     // Through a mutable object, each member changes
     for (_, value) in &mut members {

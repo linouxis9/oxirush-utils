@@ -43,7 +43,7 @@ impl Tree for Request {
         let mut members = Members::new();
         // Not the order of the alphabet: that of the type.
         members.put("slices", self.slices.iter().map(Tree::to_tree).collect());
-        members.put("cause", tree::text(&self.cause));
+        members.put("cause", tree::text(self.cause.clone()));
         members.finish()
     }
 
@@ -71,7 +71,7 @@ impl Tree for Name<'_> {
     const NAME: &'static str = "Name";
 
     fn to_tree(&self) -> Value {
-        tree::text(&self.0)
+        tree::text(self.0.to_string())
     }
 
     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
@@ -250,12 +250,12 @@ fn a_refusal_of_a_secret_shows_nothing_of_what_is_written() {
              written",
         ),
         (
-            Value::String(format!("{key}5")),
+            Value::String(format!("{key}5").into()),
             "octets in hexadecimal, two digits for each, are expected, and a secret value is \
              written",
         ),
         (
-            Value::String("5a".repeat(31)),
+            Value::String("5a".repeat(31).into()),
             "32 octets are expected, and what is written has 31",
         ),
     ] {
@@ -266,7 +266,9 @@ fn a_refusal_of_a_secret_shows_nothing_of_what_is_written() {
     let error = tree::from_value::<Slice>(&oxirush_utils::tree!({"sst": "5a5a"})).unwrap_err();
     assert!(error.to_string().contains("\"5a5a\" is written"), "{error}");
     assert_eq!(
-        tree::from_value::<Key>(&Value::String(key)).unwrap().0,
+        tree::from_value::<Key>(&Value::String(key.into()))
+            .unwrap()
+            .0,
         [0x5a; 32]
     );
 }

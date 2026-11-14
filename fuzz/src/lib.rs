@@ -381,7 +381,7 @@ impl tree::Tree for Every {
         let mut members = tree::Members::new();
         members.put("flag", Value::Bool(self.flag));
         members.put_optional("nothing", self.nothing.map(|()| Value::Null));
-        members.put("text", tree::text(&self.text));
+        members.put("text", tree::text(self.text.clone()));
         members.put("choice", tree::text(CHOICES[self.choice]));
         members.put("small", tree::unsigned(self.small));
         members.put("signed", tree::signed(self.signed));
@@ -563,7 +563,7 @@ pub fn forms(octets: &[u8]) {
                 && error.at().contains("key")
             {
                 assert!(
-                    !said.contains(key.as_str()),
+                    !said.contains(&**key),
                     "a refusal of a secret says it: {said}"
                 );
             }

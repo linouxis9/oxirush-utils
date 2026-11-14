@@ -193,7 +193,7 @@ pub fn operations() -> Vec<Operation> {
         Box::new(move || {
             let mut map = Map::new();
             for name in &ours {
-                map.insert(name.clone(), Value::Null);
+                map.insert(name.clone().into(), Value::Null);
             }
             black_box(map);
         }),
@@ -206,7 +206,7 @@ pub fn operations() -> Vec<Operation> {
         Box::new(move || {
             let mut map = Map::new();
             for name in &pushed {
-                map.push(name.clone(), Value::Null);
+                map.push(name.clone().into(), Value::Null);
             }
             black_box(map);
         }),

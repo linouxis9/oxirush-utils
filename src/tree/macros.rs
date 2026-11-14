@@ -22,7 +22,8 @@
 /// in it is a literal or any expression that converts into a tree, which it takes as a
 /// call takes its argument: a variable that holds a tree moves into it, and is given by
 /// reference to stay where it is (`&name`); a name is a string literal or an expression,
-/// as a variable, that converts into a `String`.
+/// as a variable, that converts into a `Cow<'static, str>`: a `&'static str`, which is
+/// not copied, or a `String`.
 ///
 /// ```
 /// use oxirush_utils::tree;

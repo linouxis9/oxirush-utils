@@ -18,7 +18,8 @@
 //! The value of a tree: JSON whose objects keep their members in the order in which they
 //! are written, whatever the features of `serde_json` in a build.
 
-use alloc::string::{String, ToString};
+use alloc::borrow::Cow;
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 use core::ops;
@@ -56,8 +57,9 @@ pub enum Value {
     Bool(bool),
     /// A number.
     Number(Number),
-    /// A string.
-    String(String),
+    /// A string: text of its own, or a name that the program holds, as the name of a
+    /// value of an enumeration, which is not copied.
+    String(Cow<'static, str>),
     /// A list.
     Array(Vec<Value>),
     /// An object, its members in the order in which they were written.
@@ -71,9 +73,11 @@ pub enum Value {
 /// It is a list, which is searched for a name: a value of a protocol has a few dozen
 /// members at most, as the 84 bits of a 5GMM capability, and a search of so few names
 /// takes less than a map. An object that is read from a format has 4096 members at most.
+/// A name is text of its own or one that the program holds, as the name of a member of
+/// a type, which is not copied.
 #[derive(Clone, Default)]
 pub struct Map {
-    members: Vec<(String, Value)>,
+    members: Vec<(Cow<'static, str>, Value)>,
 }
 
 /// The most members that an object that is read has: far more than a value of a protocol
@@ -125,9 +129,9 @@ impl Map {
     }
 
     /// The member of this name, with its name as the object has it.
-    pub fn get_key_value(&self, name: &str) -> Option<(&String, &Value)> {
+    pub fn get_key_value(&self, name: &str) -> Option<(&str, &Value)> {
         let member = self.members.iter().find(|(known, _)| known == name);
-        member.map(|(name, value)| (name, value))
+        member.map(|(name, value)| (&**name, value))
     }
 
     /// Whether it has a member of this name.
@@ -137,7 +141,7 @@ impl Map {
 
     /// Give the member `name` the value `value`: at its place when the object has it,
     /// and at the end otherwise. The value that it had, if any.
-    pub fn insert(&mut self, name: String, value: Value) -> Option<Value> {
+    pub fn insert(&mut self, name: Cow<'static, str>, value: Value) -> Option<Value> {
         match self.get_mut(&name) {
             Some(was) => Some(core::mem::replace(was, value)),
             None => {
@@ -152,7 +156,8 @@ impl Map {
     /// other. A name that the object has is a logic error: a debug build panics, and
     /// otherwise the object has the name twice, of which `get` and `insert` see the
     /// first.
-    pub fn push(&mut self, name: String, value: Value) {
+    #[inline]
+    pub fn push(&mut self, name: Cow<'static, str>, value: Value) {
         debug_assert!(
             self.position(&name).is_none(),
             "the object has a member {name:?} already"
@@ -161,7 +166,7 @@ impl Map {
     }
 
     /// Put back at `position` a member that was taken out of it, for the undo of an edit.
-    pub(crate) fn insert_at(&mut self, position: usize, name: String, value: Value) {
+    pub(crate) fn insert_at(&mut self, position: usize, name: Cow<'static, str>, value: Value) {
         let position = position.min(self.members.len());
         self.members.insert(position, (name, value));
     }
@@ -173,7 +178,7 @@ impl Map {
     }
 
     /// The member `name`, to give it a value when it has none.
-    pub fn entry(&mut self, name: impl Into<String>) -> Entry<'_> {
+    pub fn entry(&mut self, name: impl Into<Cow<'static, str>>) -> Entry<'_> {
         let name = name.into();
         match self.position(&name) {
             Some(position) => Entry::Occupied(&mut self.members[position].1),
@@ -182,25 +187,27 @@ impl Map {
     }
 
     /// Keep the members for which `keep` says so.
-    pub fn retain(&mut self, mut keep: impl FnMut(&String, &mut Value) -> bool) {
+    pub fn retain(&mut self, mut keep: impl FnMut(&str, &mut Value) -> bool) {
         self.members.retain_mut(|(name, value)| keep(name, value));
     }
 
     /// The members, in their order.
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&String, &Value)> + ExactSizeIterator {
-        self.members.iter().map(|(name, value)| (name, value))
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (&str, &Value)> + ExactSizeIterator {
+        self.members.iter().map(|(name, value)| (&**name, value))
     }
 
     /// The members, in their order, to change their values.
     pub fn iter_mut(
         &mut self,
-    ) -> impl DoubleEndedIterator<Item = (&String, &mut Value)> + ExactSizeIterator {
-        self.members.iter_mut().map(|(name, value)| (&*name, value))
+    ) -> impl DoubleEndedIterator<Item = (&str, &mut Value)> + ExactSizeIterator {
+        self.members
+            .iter_mut()
+            .map(|(name, value)| (&**name, value))
     }
 
     /// The names of the members, in their order.
-    pub fn keys(&self) -> impl DoubleEndedIterator<Item = &String> + ExactSizeIterator {
-        self.members.iter().map(|(name, _)| name)
+    pub fn keys(&self) -> impl DoubleEndedIterator<Item = &str> + ExactSizeIterator {
+        self.members.iter().map(|(name, _)| &**name)
     }
 
     /// The values of the members, in their order.
@@ -216,7 +223,7 @@ impl Map {
     }
 
     /// The members, from the first, which have each their own name.
-    pub(crate) fn from_members(members: Vec<(String, Value)>) -> Self {
+    pub(crate) fn from_members(members: Vec<(Cow<'static, str>, Value)>) -> Self {
         Self { members }
     }
 
@@ -234,7 +241,7 @@ pub enum Entry<'m> {
     /// The member has this value.
     Occupied(&'m mut Value),
     /// The object has no member of this name.
-    Vacant(&'m mut Map, String),
+    Vacant(&'m mut Map, Cow<'static, str>),
 }
 
 impl<'m> Entry<'m> {
@@ -286,43 +293,45 @@ impl fmt::Debug for Map {
     }
 }
 
+type Member = (Cow<'static, str>, Value);
+
 impl<'m> IntoIterator for &'m Map {
-    type Item = (&'m String, &'m Value);
-    type IntoIter = core::iter::Map<
-        core::slice::Iter<'m, (String, Value)>,
-        fn(&'m (String, Value)) -> (&'m String, &'m Value),
-    >;
+    type Item = (&'m str, &'m Value);
+    type IntoIter =
+        core::iter::Map<core::slice::Iter<'m, Member>, fn(&'m Member) -> (&'m str, &'m Value)>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.members.iter().map(|(name, value)| (name, value))
+        self.members.iter().map(|(name, value)| (&**name, value))
     }
 }
 
 impl<'m> IntoIterator for &'m mut Map {
-    type Item = (&'m String, &'m mut Value);
+    type Item = (&'m str, &'m mut Value);
     type IntoIter = core::iter::Map<
-        core::slice::IterMut<'m, (String, Value)>,
-        fn(&'m mut (String, Value)) -> (&'m String, &'m mut Value),
+        core::slice::IterMut<'m, Member>,
+        fn(&'m mut Member) -> (&'m str, &'m mut Value),
     >;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.members.iter_mut().map(|(name, value)| (&*name, value))
+        self.members
+            .iter_mut()
+            .map(|(name, value)| (&**name, value))
     }
 }
 
 impl IntoIterator for Map {
-    type Item = (String, Value);
-    type IntoIter = alloc::vec::IntoIter<(String, Value)>;
+    type Item = Member;
+    type IntoIter = alloc::vec::IntoIter<Member>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.members.into_iter()
     }
 }
 
-impl FromIterator<(String, Value)> for Map {
+impl FromIterator<Member> for Map {
     /// The members in the order of the iterator; a name that comes again gives its member
     /// the last value, at the place of the first.
-    fn from_iter<I: IntoIterator<Item = (String, Value)>>(members: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = Member>>(members: I) -> Self {
         let members = members.into_iter();
         let mut map = Map::with_capacity(members.size_hint().0);
         map.extend(members);
@@ -330,10 +339,10 @@ impl FromIterator<(String, Value)> for Map {
     }
 }
 
-impl Extend<(String, Value)> for Map {
+impl Extend<Member> for Map {
     /// The members after those of the object, as [`insert`](Map::insert) adds them one
     /// after the other.
-    fn extend<I: IntoIterator<Item = (String, Value)>>(&mut self, members: I) {
+    fn extend<I: IntoIterator<Item = Member>>(&mut self, members: I) {
         let members = members.into_iter();
         self.members.reserve(members.size_hint().0);
         for (name, value) in members {
@@ -500,7 +509,10 @@ impl ops::IndexMut<&str> for Value {
             *self = Value::Object(Map::new());
         }
         match self {
-            Value::Object(members) => members.entry(name).or_insert(Value::Null),
+            Value::Object(members) => match members.position(name) {
+                Some(position) => &mut members.members[position].1,
+                None => members.entry(String::from(name)).or_insert(Value::Null),
+            },
             _ => panic!("cannot access member {name:?} of a value that is no object"),
         }
     }
@@ -585,9 +597,10 @@ impl From<&bool> for Value {
     }
 }
 
-impl From<&&str> for Value {
-    fn from(text: &&str) -> Self {
-        Value::String((*text).into())
+impl From<&&'static str> for Value {
+    /// The text, which is not copied.
+    fn from(text: &&'static str) -> Self {
+        Value::String(Cow::Borrowed(text))
     }
 }
 
@@ -612,19 +625,27 @@ impl From<Number> for Value {
 
 impl From<String> for Value {
     fn from(text: String) -> Self {
-        Value::String(text)
+        Value::String(Cow::Owned(text))
     }
 }
 
-impl From<&str> for Value {
-    fn from(text: &str) -> Self {
-        Value::String(text.to_string())
+impl From<&'static str> for Value {
+    /// The text, which is not copied: a literal, or a name that the program holds. Text
+    /// that lives less long is a `String` first, or goes through [`text`](super::text).
+    fn from(text: &'static str) -> Self {
+        Value::String(Cow::Borrowed(text))
+    }
+}
+
+impl From<Cow<'static, str>> for Value {
+    fn from(text: Cow<'static, str>) -> Self {
+        Value::String(text)
     }
 }
 
 impl From<&String> for Value {
     fn from(text: &String) -> Self {
-        Value::String(text.clone())
+        Value::String(Cow::Owned(text.clone()))
     }
 }
 
@@ -687,14 +708,14 @@ impl From<serde_json::Value> for Value {
             serde_json::Value::Null => Value::Null,
             serde_json::Value::Bool(boolean) => Value::Bool(boolean),
             serde_json::Value::Number(number) => Value::Number(number),
-            serde_json::Value::String(text) => Value::String(text),
+            serde_json::Value::String(text) => Value::String(Cow::Owned(text)),
             serde_json::Value::Array(entries) => {
                 Value::Array(entries.into_iter().map(Value::from).collect())
             }
             serde_json::Value::Object(members) => Value::Object(Map::from_members(
                 members
                     .into_iter()
-                    .map(|(name, value)| (name, Value::from(value)))
+                    .map(|(name, value)| (Cow::Owned(name), Value::from(value)))
                     .collect(),
             )),
         }
@@ -716,14 +737,14 @@ impl From<Value> for serde_json::Value {
             Value::Null => serde_json::Value::Null,
             Value::Bool(boolean) => serde_json::Value::Bool(boolean),
             Value::Number(number) => serde_json::Value::Number(number),
-            Value::String(text) => serde_json::Value::String(text),
+            Value::String(text) => serde_json::Value::String(text.into_owned()),
             Value::Array(entries) => {
                 serde_json::Value::Array(entries.into_iter().map(Into::into).collect())
             }
             Value::Object(members) => serde_json::Value::Object(
                 members
                     .into_iter()
-                    .map(|(name, value)| (name, value.into()))
+                    .map(|(name, value)| (name.into_owned(), value.into()))
                     .collect(),
             ),
         }
@@ -857,11 +878,11 @@ impl<'de> serde_core::de::Visitor<'de> for Visitor {
     }
 
     fn visit_str<E>(self, text: &str) -> Result<Value, E> {
-        Ok(Value::String(text.to_string()))
+        Ok(Value::String(Cow::Owned(text.into())))
     }
 
     fn visit_string<E>(self, text: String) -> Result<Value, E> {
-        Ok(Value::String(text))
+        Ok(Value::String(Cow::Owned(text)))
     }
 
     fn visit_none<E>(self) -> Result<Value, E> {
@@ -889,7 +910,7 @@ impl<'de> serde_core::de::Visitor<'de> for Visitor {
         mut object: A,
     ) -> Result<Value, A::Error> {
         use serde_core::de::Error as _;
-        let mut members: Vec<(String, Value)> =
+        let mut members: Vec<Member> =
             Vec::with_capacity(object.size_hint().unwrap_or(0).min(4096));
         while let Some((name, value)) = object.next_entry::<String, Value>()? {
             if members.len() == MOST_MEMBERS {
@@ -897,10 +918,10 @@ impl<'de> serde_core::de::Visitor<'de> for Visitor {
                     "an object has {MOST_MEMBERS} members at most"
                 )));
             }
-            members.push((name, value));
+            members.push((Cow::Owned(name), value));
         }
         // A name that comes twice, found in the order of the names.
-        let mut names: Vec<&str> = members.iter().map(|(name, _)| name.as_str()).collect();
+        let mut names: Vec<&str> = members.iter().map(|(name, _)| &**name).collect();
         names.sort_unstable();
         if let Some(twice) = names.windows(2).find(|pair| pair[0] == pair[1]) {
             return Err(A::Error::custom(alloc::format!(

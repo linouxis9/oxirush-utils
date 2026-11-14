@@ -37,7 +37,7 @@
 //!
 //!     fn to_tree(&self) -> Value {
 //!         let mut members = Members::new();
-//!         members.put("plmn", tree::text(&self.plmn));
+//!         members.put("plmn", tree::text(self.plmn.clone()));
 //!         members.put("tac", tree::unsigned(self.tac.into()));
 //!         members.finish()
 //!     }

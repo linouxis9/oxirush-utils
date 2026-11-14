@@ -20,6 +20,7 @@
 use super::forms::{hex, key, named, nearest, unhex};
 use super::value::{Map, Value};
 use super::{Error, ErrorKind};
+use alloc::borrow::Cow;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -203,12 +204,12 @@ impl Members {
     }
 
     /// A member that is there.
-    pub fn put(&mut self, name: &str, value: Value) {
-        self.0.insert(name.to_string(), value);
+    pub fn put(&mut self, name: impl Into<Cow<'static, str>>, value: Value) {
+        self.0.insert(name.into(), value);
     }
 
     /// A member that may be absent: nothing is written for one that is.
-    pub fn put_optional(&mut self, name: &str, value: Option<Value>) {
+    pub fn put_optional(&mut self, name: impl Into<Cow<'static, str>>, value: Option<Value>) {
         if let Some(value) = value {
             self.put(name, value);
         }

@@ -627,7 +627,7 @@ fn no_member<F: Family>(
     let reason = match family.names(shape) {
         Some(names) => not_a_member(part, "that its type has", &names),
         None => {
-            let names: Vec<&str> = members.keys().map(String::as_str).collect();
+            let names: Vec<&str> = members.keys().collect();
             not_a_member(part, "of this value", &names)
         }
     };
@@ -1417,7 +1417,7 @@ fn take_back(tree: &mut Value, undo: Vec<Undo>) {
             }
             Undo::Taken(keys, position, name, was) => {
                 if let Some(Value::Object(members)) = at_mut(tree, &keys) {
-                    members.insert_at(position, name, was);
+                    members.insert_at(position, name.into(), was);
                 }
             }
             Undo::Removed(keys, position, was) => {
@@ -1598,7 +1598,7 @@ fn holder<'t>(
                 if !members.contains_key(name.as_str()) {
                     undo.push(Undo::Added(keys[..=depth].to_vec()));
                 }
-                members.entry(name.as_str()).or_insert(Value::Null)
+                members.entry(name.clone()).or_insert(Value::Null)
             }
             // An entry at the position of the length is added, which the path goes into.
             (Key::Position(position), Value::Array(entries)) => {
@@ -1640,7 +1640,7 @@ fn apply(
     let written = || value.cloned().unwrap_or_default();
     match (last, holder, operation) {
         (Key::Name(name), Value::Object(members), Edit::Set) => {
-            match members.insert(name.clone(), written()) {
+            match members.insert(name.clone().into(), written()) {
                 Some(was) => undo.push(Undo::Was(keys.to_vec(), was)),
                 None => undo.push(Undo::Added(keys.to_vec())),
             }

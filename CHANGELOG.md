@@ -28,6 +28,17 @@ All notable changes to `oxirush-utils` are recorded here.
   it took 37 ns, 285 octets in 138 ns (246 ns) and 1500 octets in 564 ns (1130 ns).
   What it reads and refuses is unchanged.
 
+- A name of a member of a `Map`, and the text of a `Value::String`, are a
+  `Cow<'static, str>`: a name or a value of an enumeration that the program holds as a
+  `&'static str` goes into a tree without being copied, and a copy of the tree copies
+  none of them. `Value::from(&'static str)`, `tree::text`, `tree::alternative`,
+  `Members::put` and `Map::entry` take one as it is, and a `String` as it is; text that
+  lives less long is made a `String` first. `Map::insert`, `Map::push`, `FromIterator`
+  and `Extend` take a `Cow<'static, str>`, which `"name".into()` and `string.into()`
+  give; `Map::iter`, `keys`, `get_key_value`, `retain` and the iterators of a `&Map`
+  give the names as `&str`. Copying a list of 65,535 entries written with `tree!`
+  takes 65,536 allocations instead of 262,140, and 2.6 ms instead of 8.4 ms.
+
 ### Removed
 
 - `readme/`, the package that compared what each block of the README and of the

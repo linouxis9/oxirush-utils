@@ -224,7 +224,7 @@ impl Tree for Sample {
         members.put("offset", tree::signed(self.offset));
         members.put("flag", tree!(self.flag));
         members.put("kind", tree::text(KINDS[self.kind]));
-        members.put("name", tree::text(&self.name));
+        members.put("name", tree::text(self.name.clone()));
         members.put("payload", tree::octets(&self.payload));
         members.put("fixed", tree::octets(&self.fixed));
         members.put("mask", tree::bits(&self.mask.0, self.mask.1));
@@ -513,7 +513,7 @@ fn a_name_that_a_type_has_not_is_refused_with_the_nearest_of_many() {
         }
     }
     let refused = |name: &str| {
-        oxirush_utils::tree::from_value::<Many>(&Value::String(name.into()))
+        oxirush_utils::tree::from_value::<Many>(&Value::String(name.to_string().into()))
             .err()
             .unwrap()
             .to_string()

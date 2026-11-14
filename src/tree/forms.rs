@@ -18,7 +18,8 @@
 //! The forms of the plain values of a tree: octets, numbers, names, bit strings.
 
 use super::value::{Map, Number, Value};
-use alloc::string::{String, ToString};
+use alloc::borrow::Cow;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -221,8 +222,7 @@ pub(crate) fn key<'m>(members: &'m Map, name: &str) -> Option<&'m str> {
         return Some(known);
     }
     let alike = members.keys().find(|known| alike(known, name));
-    let found = alike.or_else(|| members.keys().find(|known| same_name(known, name)));
-    found.map(String::as_str)
+    alike.or_else(|| members.keys().find(|known| same_name(known, name)))
 }
 
 // ── From a value to its form ────────────────────────────────────────────────
@@ -239,12 +239,13 @@ pub fn signed(value: i64) -> Value {
 
 /// The form of octets: [hexadecimal](hex) in lower case.
 pub fn octets(octets: &[u8]) -> Value {
-    Value::String(hex(octets))
+    Value::String(hex(octets).into())
 }
 
-/// The form of text.
-pub fn text(text: &str) -> Value {
-    Value::String(text.to_string())
+/// The form of text: a `String`, or a `&'static str`, as the name of a value of an
+/// enumeration, which is not copied.
+pub fn text(text: impl Into<Cow<'static, str>>) -> Value {
+    Value::String(text.into())
 }
 
 /// The form of a string of bits whose length its type does not say: its octets, with
@@ -260,7 +261,7 @@ pub fn text(text: &str) -> Value {
 /// ```
 pub fn bits(octets: &[u8], length: usize) -> Value {
     let mut members = Map::new();
-    members.push("value".into(), Value::String(hex(octets)));
+    members.push("value".into(), Value::String(hex(octets).into()));
     members.push("length".into(), Value::Number(Number::from(length)));
     Value::Object(members)
 }
@@ -268,8 +269,8 @@ pub fn bits(octets: &[u8], length: usize) -> Value {
 /// The form of a value that is one of several alternatives, with content: an object with
 /// one member, the name of the alternative with its value. An alternative without
 /// content is its name alone, as [`text`].
-pub fn alternative(name: &str, value: Value) -> Value {
+pub fn alternative(name: impl Into<Cow<'static, str>>, value: Value) -> Value {
     let mut members = Map::new();
-    members.push(name.to_string(), value);
+    members.push(name.into(), value);
     Value::Object(members)
 }

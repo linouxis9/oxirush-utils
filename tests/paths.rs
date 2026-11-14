@@ -1355,8 +1355,13 @@ fn the_members_keep_the_order_in_which_they_are_written() {
         members.put(name, tree!(1));
     }
     let mut tree = members.finish();
-    let order =
-        |tree: &Value| -> Vec<String> { tree.as_object().unwrap().keys().cloned().collect() };
+    let order = |tree: &Value| -> Vec<String> {
+        tree.as_object()
+            .unwrap()
+            .keys()
+            .map(str::to_string)
+            .collect()
+    };
     assert_eq!(
         order(&tree),
         ["startTimeStamp", "endTimeStamp", "message", "ies", "a"]
@@ -1448,7 +1453,7 @@ fn a_name_written_twice_in_an_object_is_refused() {
     );
     let members: tree::Map = [("a", 1), ("b", 2), ("a", 3)]
         .into_iter()
-        .map(|(name, value)| (name.to_string(), tree!(value)))
+        .map(|(name, value)| (name.into(), tree!(value)))
         .collect();
     assert_eq!(Value::Object(members).to_string(), r#"{"a":3,"b":2}"#);
 }
@@ -1504,7 +1509,7 @@ fn the_operations_are_linear_in_the_size_of_the_tree() {
     );
     // A plain tree of as many members as an object that is read has.
     let members: tree::Map = (0..4096)
-        .map(|index| (format!("m{index}"), tree!(index)))
+        .map(|index| (format!("m{index}").into(), tree!(index)))
         .collect();
     let wide = Value::Object(members);
     assert_eq!(tree::paths(&wide).len(), 4096);
@@ -1725,7 +1730,7 @@ fn a_missing_name_is_refused_with_twelve_names_at_most() {
     let object = |count: usize| {
         let mut members = tree::Map::new();
         for name in 0..count {
-            members.insert(format!("m{name}"), tree!(1));
+            members.insert(format!("m{name}").into(), tree!(1));
         }
         Value::Object(members)
     };
@@ -1988,7 +1993,7 @@ fn a_name_that_a_value_has_not_is_refused_in_one_wording() {
     let object = Value::Object(
         TIMERS
             .iter()
-            .map(|name| (name.to_string(), tree!(1)))
+            .map(|name| ((*name).into(), tree!(1)))
             .collect(),
     );
     assert_eq!(
