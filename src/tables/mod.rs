@@ -28,11 +28,19 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 
 mod macros;
+#[cfg(feature = "tree")]
+mod paths;
 mod registry;
 
 #[cfg(feature = "tree")]
+pub use paths::{
+    Of, Paths, RowAt, TreeProtocol, TreeScope, field_tree, located, read_field, row_at,
+    scope_from_tree, scope_to_tree, select, set,
+};
+
+#[cfg(feature = "tree")]
 pub use registry::RegistryTree;
-pub use registry::{Form, IeTypeInfo};
+pub use registry::{Form, IeTypeInfo, MessageTypeInfo};
 
 /// What a protocol gives the tables: the key of an IE, its framing, its kept IEs, its
 /// presences and its interfaces.

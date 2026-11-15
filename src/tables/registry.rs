@@ -104,3 +104,29 @@ impl<P: RegistryTree> IeTypeInfo<P> {
         P::value_tree(self.ie_type, table, octets)
     }
 }
+
+/// A message type as the table of message types of its protocol has it.
+#[derive(Debug)]
+pub struct MessageTypeInfo<P: Protocol> {
+    /// The message type.
+    pub message_type: u8,
+    /// The interfaces that have it.
+    pub interfaces: P::Interfaces,
+    /// The table of its IEs.
+    pub table: &'static Table<P>,
+}
+
+impl<P: Protocol> Clone for MessageTypeInfo<P> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<P: Protocol> Copy for MessageTypeInfo<P> {}
+
+impl<P: Protocol> MessageTypeInfo<P> {
+    /// The name that the table of message types gives it.
+    pub fn name(&self) -> &'static str {
+        self.table.name
+    }
+}

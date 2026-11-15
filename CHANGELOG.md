@@ -44,8 +44,10 @@ All notable changes to `oxirush-utils` are recorded here.
   a row. `table!` writes the scope of a table from its rows: the struct, its builders and
   constructors, its codec, its check and its tree, on the modules that the protocol's
   crate names. `ies!` writes a protocol's IE types (`IeTypeInfo`, `Form`, what their trees
-  take and the trees of their values), and `messages!` its message types and the body of
-  a message.
+  take and the trees of their values), and `messages!` its message types
+  (`MessageTypeInfo`) and the body of a message. With `tree`, the trees of the scopes and
+  the paths of the tree of a message (`select`, `set`, `row_at`, `located`), over what the
+  protocol says through `TreeProtocol`.
 
 ### Changed
 
