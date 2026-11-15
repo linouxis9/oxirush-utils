@@ -176,7 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 With the `tree` feature, a message is a `tree::Value`: a JSON value in one
 form for every protocol, with octets in lower-case hexadecimal and numbers as
-JSON numbers. Names match whatever their case, and with spaces or hyphens.
+JSON numbers. Names match regardless of case, spaces and hyphens.
 Members keep the order in which they are written, and `tree!` writes a tree
 as `serde_json::json!` does. A type that implements `Tree` gets `Serialize`
 and `Deserialize` through its tree with `impl_serde!`, so YAML and JSON carry
@@ -305,7 +305,7 @@ named_values! {
     }
 }
 
-// What `bits!` lists of each field: here, its name alone
+// `bits!` writes `FIELDS` with this macro, one value per field: here, its name
 struct Field(&'static str);
 macro_rules! field {
     ($field:ident, $name:literal, $($rest:tt)*) => { Field($name) };
@@ -383,10 +383,9 @@ has what a protocol provides.
 
 On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), at 8865ad4 on
 2026-10-18, the lowest of five runs. The serde_json cell says how much slower
-or faster serde_json is than this crate, and "about the same" is within
-10 %. An
-object keeps its members in order and is searched by name; `Map::push` adds
-4096 members whose names are new in 145 µs. Reading a 5G-GUTI from a 5GS
+or faster serde_json is than this crate: "about the same" when the two are
+within 10 %. An object keeps its members in order and is searched by name;
+`Map::push` adds 4096 members whose names are new in 145 µs. Reading a 5G-GUTI from a 5GS
 mobile identity takes 14 ns, and the SUCI of an IMSI 80 ns.
 [`benches/README.md`](benches/README.md) has every figure, the allocations,
 the method and the commands.

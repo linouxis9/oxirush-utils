@@ -54,10 +54,3 @@ about the same. A tree keeps the members of an object in their order, where a
 name: putting n members one after the other takes a time that grows as n²,
 and `Map::push` adds a member whose name is new in a time that grows as n.
 The identities allocate nothing but the SUCI, which holds its scheme output.
-
-Some rows were taken later, on the same machine: the rows of 4096 members
-that are put and read on 2026-11-07, the row that pushes them on 2026-11-13
-(Rust 1.88.0, while the machine ran other work: put took 18.0 ms there), and
-the five rows of 65,535 entries on 2026-11-11, while the machine ran other
-work. Those five use a path family that behaves like those of the protocol
-crates: list entries are selected by a name that they hold.
