@@ -7,7 +7,7 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 
 #[cfg(feature = "tree")]
 use super::text_from_tree;
-use super::{Deviate, FieldLength, Finding, Octets, Path, together};
+use super::{Deviate, FieldError, Finding, Octets, Path, together};
 
 /// A field of a layout: its octets, read in network order.
 pub trait Field: Sized {
@@ -99,9 +99,9 @@ pub fn put<F: Field>(
     ie: &'static str,
     name: &'static str,
     out: &mut Vec<u8>,
-) -> Result<(), FieldLength> {
+) -> Result<(), FieldError> {
     if !field.fits() {
-        return Err(FieldLength { ie, field: name });
+        return Err(FieldError::Length { ie, field: name });
     }
     field.write(out);
     Ok(())
@@ -270,13 +270,17 @@ signed_field!(i32, i64);
 pub trait Narrowable: Copy + Field {
     /// The width of its field, in bits.
     const BITS: u32;
-    /// What its tree takes in a [`Narrow`] field: a value of its bits.
-    #[cfg(feature = "tree")]
-    const NARROW: &'static crate::tree::Takes;
     /// The value of a number.
     fn from_value(value: u8) -> Self;
     /// The number.
     fn value(self) -> u8;
+}
+
+/// The tree of a value of a few bits in a [`Narrow`] field.
+#[cfg(feature = "tree")]
+pub trait NarrowTree: Narrowable + FieldTree {
+    /// What its tree takes in a [`Narrow`] field: a value of its bits.
+    const NARROW: &'static crate::tree::Takes;
 }
 
 /// A value of the low bits of its octet, whose other bits are spare, as the Time Unit of
@@ -344,7 +348,7 @@ impl<E: Narrowable> Field for Narrow<E> {
 }
 
 #[cfg(feature = "tree")]
-impl<E: Narrowable + FieldTree> FieldTree for Narrow<E> {
+impl<E: NarrowTree> FieldTree for Narrow<E> {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Members(
         Some("value"),
         &[
@@ -397,10 +401,13 @@ pub struct Number<const BITS: u32>(pub u8);
 /// Paging Policy Indication value and the DSCP value of PFCP (TS 29.244 §8.2.27, §8.2.214).
 pub type SixBits = Narrow<Number<6>>;
 
+#[cfg(feature = "tree")]
+impl<const BITS: u32> NarrowTree for Number<BITS> {
+    const NARROW: &'static crate::tree::Takes = &crate::tree::Takes::Number((1 << BITS) - 1);
+}
+
 impl<const BITS: u32> Narrowable for Number<BITS> {
     const BITS: u32 = BITS;
-    #[cfg(feature = "tree")]
-    const NARROW: &'static crate::tree::Takes = &crate::tree::Takes::Number((1 << BITS) - 1);
     fn from_value(value: u8) -> Self {
         Self(value)
     }

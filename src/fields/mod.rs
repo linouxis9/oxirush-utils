@@ -29,6 +29,7 @@
 use core::fmt;
 
 mod kinds;
+mod macros;
 mod octets;
 
 pub use kinds::*;
@@ -38,14 +39,27 @@ pub use octets::{Octets, together};
 /// later release, which the receiver ignores.
 pub const UNKNOWN_OCTETS: &str = "unknown octets";
 
-/// A field too long for the bits that say its length, its number or its type, which
-/// [`put`] refuses: the IE and the field.
+/// Why a value does not encode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FieldLength {
-    /// The name of the IE.
-    pub ie: &'static str,
-    /// The name of the field.
-    pub field: &'static str,
+pub enum FieldError {
+    /// A field too long for the bits that say its length, its number or its type, which
+    /// [`put`] refuses.
+    Length {
+        /// The name of the IE.
+        ie: &'static str,
+        /// The name of the field.
+        field: &'static str,
+    },
+    /// A field that disagrees with the flags or the other fields of its value, or whose
+    /// octets would read as another value.
+    Inconsistent {
+        /// The name of the IE.
+        ie: &'static str,
+        /// The name of the field.
+        field: &'static str,
+        /// The clause of the value.
+        clause: &'static str,
+    },
 }
 
 /// What a check finds in a field or a value.
@@ -70,8 +84,34 @@ pub enum Finding {
         /// The value that the receiver takes.
         read: u32,
     },
+    /// A field that is there where the flags of its value do not have it, or the reverse,
+    /// or whose octets would read as another value.
+    Inconsistent {
+        /// The field.
+        field: &'static str,
+    },
     /// A rule of the clause, in words.
     Rule(&'static str),
+}
+
+/// The one field of `fields`, which the tree of a value is when it is written as a scalar.
+pub const fn one(fields: &'static [&'static str]) -> Option<&'static str> {
+    match fields {
+        [field] => Some(field),
+        _ => None,
+    }
+}
+
+/// Each value from `from`, `N` of them: the values that a note of a table of values has a
+/// receiver reject.
+pub const fn values_from<const N: usize>(from: u8) -> [u8; N] {
+    let mut values = [0; N];
+    let mut at = 0;
+    while at < N {
+        values[at] = from + at as u8;
+        at += 1;
+    }
+    values
 }
 
 /// A deviation of a protocol, made of what a check finds.

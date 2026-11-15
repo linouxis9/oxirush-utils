@@ -26,7 +26,12 @@ All notable changes to `oxirush-utils` are recorded here.
   lists, addresses, PLMNs, FQDNs, text, digits and secrets), each with its tree and what
   its tree takes; `put`, which refuses a field too long for its length; what a check finds
   in a field (`Finding`), which a protocol makes its own deviation (`Deviate`); and the
-  layout of a value that a test compares with the figure of its specification.
+  layout of a value that a test compares with the figure of its specification. Its
+  macros write a value from its description: `bits!` (flags and fields by octet, lowest
+  bit and width), `layout!` (fields always there, an octet of flags, fields that the
+  flags make present, unknown octets) and `named_values!` (a table of named values), each
+  with its codec, its check, its tree and what its tree takes, on the traits that the
+  protocol's crate names.
 
 ### Changed
 
