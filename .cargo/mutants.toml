@@ -38,6 +38,18 @@ exclude_re = [
     "src/identity/plmn\\.rs:.*: replace \\| with \\^ in Plmn::to_(ap|nas)_octets$",
     "src/identity/guti\\.rs:.*: replace \\| with \\^ in (<impl fmt::Display for Guti(5g|Eps)>::fmt|STmsi(5g|Eps)::to_u64)$",
     "src/tree/forms\\.rs:\\d+:28: replace \\| with \\^ in unhex$",
+    # The masks and the halves that four_octets joins have no bit in common: a lane is a
+    # digit or a letter, a high half and a low half fill distinct bits, and the lanes that
+    # it moves together were empty. By column: its other `|` set bits that are there.
+    "src/tree/forms\\.rs:\\d+:(52|47|38|24|13): replace \\| with \\^ in four_octets$",
+    # The pairs after the last eight digits, from fewer of them: those that four_octets read
+    # are read again one by one, to the same octets.
+    "src/tree/forms\\.rs:\\d+:\\d+: replace \\* with / in unhex$",
+    # An entry is set at a position below the length of its list here: the arm before
+    # takes the position equal to the length, and the walk of the path selects no
+    # position beyond it (tests/paths.rs, an_edit_is_done_whole_or_not_at_all).
+    "src/tree/walk\\.rs:\\d+:16: replace match guard \\*position < entries.len\\(\\) with true in apply$",
+    "src/tree/walk\\.rs:\\d+:26: replace < with <= in apply$",
     "src/identity/suci\\.rs:.*: replace \\| with \\^ in RoutingIndicator::to_nas_octets$",
     "src/identity/nai\\.rs:.*: replace \\| with \\^ in NaiSuci::from_nas_octets_tolerant$",
     # A digit shifted into the high half of an octet: `+ b'0'` for `- b'0'` adds 96, a

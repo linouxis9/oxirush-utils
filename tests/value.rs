@@ -116,6 +116,8 @@ fn a_name_that_the_program_holds_is_not_copied() {
         tree::text(NAME.to_string()),
         Value::String(Cow::Owned(_))
     ));
+    let held: Cow<'static, str> = Cow::Borrowed(NAME);
+    assert_eq!(Value::from(held), tree!("registration-request"));
     let mut map = Map::new();
     map.push(NAME.into(), tree!(1));
     let (name, _) = map.iter().next().unwrap();

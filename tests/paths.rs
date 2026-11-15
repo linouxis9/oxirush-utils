@@ -872,6 +872,14 @@ fn an_edit_is_done_whole_or_not_at_all() {
     let mut tree = before.clone();
     tree::set(&mut tree, "/list/*/b", tree!("new")).unwrap();
     assert_eq!(tree["list"][2], tree!({"a": 3, "b": "new"}));
+    // An entry is set at its position, or added at the length of its list, and no
+    // further: the tree is as it was.
+    let mut entries = tree!({"list": [1, 2]});
+    tree::set(&mut entries, "/list/1", tree!(20)).unwrap();
+    tree::set(&mut entries, "/list/2", tree!(3)).unwrap();
+    assert_eq!(entries, tree!({"list": [1, 20, 3]}));
+    assert!(tree::set(&mut entries, "/list/5", tree!(6)).is_err());
+    assert_eq!(entries, tree!({"list": [1, 20, 3]}));
     // `null` takes a member or an entry out, as `remove` does.
     tree::set(&mut tree, "/list/0", Value::Null).unwrap();
     tree::set(&mut tree, "/kept", Value::Null).unwrap();
