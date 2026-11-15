@@ -1615,6 +1615,53 @@ impl FieldTree for SecretLv8 {
     }
 }
 
+/// The octets of a key up to the end of the IE, which `Debug` does not print: their
+/// length alone. The last field of a layout, as [`Rest`] is.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct SecretRest(pub Octets);
+
+impl fmt::Debug for SecretRest {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SecretRest({} octets)", self.0.len())
+    }
+}
+
+impl Field for SecretRest {
+    const TO_THE_END: bool = true;
+
+    #[inline]
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        Rest::read(octets).map(|value| Self(value.0))
+    }
+    #[inline]
+    fn write(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.0);
+    }
+    #[inline]
+    fn size(&self) -> usize {
+        self.0.len()
+    }
+}
+
+#[cfg(feature = "tree")]
+impl FieldTree for SecretRest {
+    const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Octets(None);
+    #[inline]
+    fn to_tree(&self) -> crate::tree::Value {
+        crate::tree::octets(&self.0)
+    }
+    #[inline]
+    fn from_tree(
+        value: &crate::tree::Value,
+        reading: &mut crate::tree::Reading,
+    ) -> Result<Self, crate::tree::Refused> {
+        reading
+            .secret(|reading| reading.octets(value))
+            .map(|octets| Self(octets.into()))
+    }
+}
+
 /// A passphrase after a length of one octet, a UTF8String, which `Debug` does not print,
 /// nor an error of its tree, as the Shared Secret of PFCP (TS 29.244 §8.2.276).
 /// Its tree is the text, or `{"octets": ...}` for octets that are no UTF-8.

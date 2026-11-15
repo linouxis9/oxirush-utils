@@ -55,6 +55,11 @@ pub trait TreeProtocol: RegistryTree {
     const HEADER_MEMBERS: &'static [&'static str];
     /// What an IE that a scope keeps as its octets takes, and each entry of a list of them.
     const KEPT: &'static Takes;
+    /// Whether the key of an IE is its type alone: the IEs of a type that a row has then go
+    /// by the name of the row, which a name of the type is refused for. A protocol whose
+    /// key has more (an instance) refuses an IE written under the name of its type whose
+    /// key is a row's, once it is read.
+    const BY_TYPE: bool = true;
     /// Its IE types, in the order of their numbers.
     fn ie_types() -> &'static [IeTypeInfo<Self>];
     /// Its message types.
@@ -360,7 +365,7 @@ fn written_ie<'w, P: TreeProtocol>(
             }
             rows_written.push((at, written));
         }
-        None => {
+        None if P::BY_TYPE => {
             if let Some(row) = row_of_type::<P>(table, ie_type) {
                 let why = alloc::format!(
                     "{written:?} is the IE type of the row {}, which goes by its name",
@@ -369,6 +374,7 @@ fn written_ie<'w, P: TreeProtocol>(
                 return Err(reading.refuse(ErrorKind::NoSuchMember, why));
             }
         }
+        None => {}
     }
     Ok((at, ie_type))
 }
@@ -386,7 +392,14 @@ fn read_ies<P: TreeProtocol, S: TreeScope + Scope<P = P>>(
     let mut read = Vec::new();
     let mut entry = |value: &Value, reading: &mut Reading| -> Result<(), Refused> {
         if is_octets(value) || row.is_none() {
-            read.push(Some(P::read_raw(ie_type, value, reading)?));
+            let raw = P::read_raw(ie_type, value, reading)?;
+            if row.is_none()
+                && let Some(row) = S::table().rows.iter().find(|row| row.ie_type == raw.key())
+            {
+                let why = alloc::format!("its key is that of the row {}, which goes by its name", row.name);
+                return Err(reading.refuse(ErrorKind::Value, why));
+            }
+            read.push(Some(raw));
             return Ok(());
         }
         // A row that is there once has one value; the IEs of its type that the scope keeps
@@ -767,8 +780,9 @@ fn no_such_member<P: TreeProtocol>(of: Of<P>, name: &str) -> Option<String> {
     };
     Some(match of {
         Of::Ies(table) => {
-            if let Some(row) =
-                type_of_name::<P>(name).and_then(|ie_type| row_of_type::<P>(table, ie_type))
+            if let Some(row) = type_of_name::<P>(name)
+                .and_then(|ie_type| row_of_type::<P>(table, ie_type))
+                .filter(|_| P::BY_TYPE)
             {
                 return Some(alloc::format!(
                     "{name:?} is the IE type of the row {}, which goes by its name",

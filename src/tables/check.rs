@@ -504,7 +504,7 @@ where
 
 /// The scope without the values of the rows of `off`, the bits of their positions: what a
 /// receiver reads of it on an interface that lacks them. `None` for none.
-pub fn taken<S: Scope + Clone>(scope: &S, off: u64) -> Option<S> {
+pub fn taken<S: Scope + Clone>(scope: &S, off: u128) -> Option<S> {
     if off == 0 {
         return None;
     }

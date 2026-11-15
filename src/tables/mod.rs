@@ -682,7 +682,7 @@ fn positions_of<S: Scope>(scope: &S, row: &Row<S::P>, mut each: impl FnMut(Entry
 
 /// More than the rows of a table, which the table macro asserts: the counts of each row
 /// that the encoder keeps on the stack.
-pub const MAX_ROWS: usize = 64;
+pub const MAX_ROWS: usize = 128;
 
 /// Write `scope`: in the order that it keeps, with the values that were added since in
 /// the places of their rows, or in the order of its table, where an IE that it keeps as

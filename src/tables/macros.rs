@@ -27,7 +27,9 @@
 /// `emit_field`), its IE items (`IeType`, `Codec`, `Listed`, `RawIe`, `encode_value`), its
 /// checks and its trees, and `c` its macro of constructors by interface.
 ///
-/// A row is `field: "Name" P TYPE [INTERFACES]`, where `P` is `M`, `C` or `O`, followed by
+/// A row is `field: "Name" P TYPE [INTERFACES]`, or `field: "Name" P TYPE INSTANCE
+/// [INTERFACES]` for a protocol whose IEs are keyed by their type and instance, where `P`
+/// is `M`, `C`, `CO` or `O` (as the protocol's presences name them), followed by
 /// `*` for a list or `*N` for a list of at most N, and `TYPE` the type of its value. `Cb`
 /// and `Ob` are `C` and `O` of a grouped IE that the field boxes, as it is large and most
 /// scopes lack it. A field that several rows share, which the wire does not tell apart,
@@ -64,7 +66,7 @@ macro_rules! table {
         $(#[$meta:meta])*
         $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
             $(@ $across:path ;)?
-            $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident
+            $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($instance:literal)?
                 [$($interface:ident)*] $(roles [$($role:literal $rp:ident $(* $($rmax:literal)?)? [$($ri:ident)*]),*])?
                 $(absent(|$ascope:ident| $absent:expr))? $(if |$scope:ident| $condition:expr)? , )*
         }
@@ -104,7 +106,7 @@ macro_rules! table {
             rows: &[$(
                 crate::$tm::Row {
                     name: $row,
-                    ie_type: <$vty as crate::$im::IeType>::IE_TYPE,
+                    ie_type: $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?),
                     roles: $crate::table!(@roles {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $row $p [$(* $($max)?)?] [$($interface)*] $([$($role $rp [$(* $($rmax)?)?] [$($ri)*]),*])?),
                     content: <$vty as crate::$tm::Content>::TABLE,
                     checked: $crate::table!(@checked {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $($scope)? $($ascope)?),
@@ -141,7 +143,7 @@ macro_rules! table {
             fn position(ie_type: <$proto as $crate::tables::Protocol>::Key) -> Option<usize> {
                 let mut at = 0;
                 $(
-                    if ie_type == <$vty as crate::$im::IeType>::IE_TYPE {
+                    if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
                         return Some(at);
                     }
                     at += 1;
@@ -159,7 +161,7 @@ macro_rules! table {
                 for (ie_type, content) in <$proto as $crate::tables::Protocol>::ies(octets).flatten() {
                     $(
                         if $crate::table!(@large {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} [$(* $($max)?)?] ($vty))
-                            && ie_type == <$vty as crate::$im::IeType>::IE_TYPE
+                            && ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?)
                         {
                             if !content.is_empty() && <$proto as $crate::tables::Protocol>::ies(content).all(|inner| inner.is_ok()) {
                                 [<count_ $field>] += 1;
@@ -173,7 +175,7 @@ macro_rules! table {
 
             fn place(&mut self, ie_type: <$proto as $crate::tables::Protocol>::Key, body: &[u8]) -> crate::$im::Placing {
                 $(
-                    if ie_type == <$vty as crate::$im::IeType>::IE_TYPE {
+                    if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
                         return $crate::table!(@place {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} [$(* $($max)?)?] $p ($vty) self.$field, body);
                     }
                 )*
@@ -182,8 +184,8 @@ macro_rules! table {
 
             fn emit(&self, ie_type: <$proto as $crate::tables::Protocol>::Key, nth: usize, out: &mut alloc::vec::Vec<u8>) -> Result<bool, $error> {
                 $(
-                    if ie_type == <$vty as crate::$im::IeType>::IE_TYPE {
-                        return crate::$tm::emit_field::<$vty, _>(&self.$field, nth, out);
+                    if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
+                        return crate::$tm::emit_field::<$vty, _>(ie_type, &self.$field, nth, out);
                     }
                 )*
                 Ok(false)
@@ -202,7 +204,7 @@ macro_rules! table {
 
             fn encode_fields(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), $error> {
                 $( $crate::table!(@each {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} [$(* $($max)?)?] ($vty) self.$field, |value| {
-                    crate::$im::encode_value(value, out)?;
+                    crate::$im::encode_value($crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?), value, out)?;
                 }); )*
                 Ok(())
             }
@@ -217,7 +219,7 @@ macro_rules! table {
 
             fn count(&self, ie_type: <$proto as $crate::tables::Protocol>::Key) -> usize {
                 $(
-                    if ie_type == <$vty as crate::$im::IeType>::IE_TYPE {
+                    if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
                         return crate::$tm::FieldValues::<$vty>::values(&self.$field).len();
                     }
                 )*
@@ -226,7 +228,7 @@ macro_rules! table {
 
             fn clear(&mut self, ie_type: <$proto as $crate::tables::Protocol>::Key) {
                 $(
-                    if ie_type == <$vty as crate::$im::IeType>::IE_TYPE {
+                    if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
                         self.$field = Default::default();
                         return;
                     }
@@ -235,7 +237,7 @@ macro_rules! table {
 
             fn decodes(&self, ie_type: <$proto as $crate::tables::Protocol>::Key, octets: &[u8]) -> bool {
                 $(
-                    if ie_type == <$vty as crate::$im::IeType>::IE_TYPE {
+                    if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
                         return <$vty as crate::$im::Codec>::decode(octets).is_some();
                     }
                 )*
@@ -263,11 +265,11 @@ macro_rules! table {
                 // The conditions read the scope as its receiver on the interface takes it:
                 // without the values of the rows that the interface does not have.
                 const CONDITIONS: bool = false $( || $crate::table!(@checked {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $($scope)? $($ascope)?) )*;
-                let mut off = 0u64;
+                let mut off = 0u128;
                 if CONDITIONS {
                     let (rows, mut row) = (<Self as $crate::tables::Scope>::table().rows, 0);
                     $(
-                        if !crate::$tm::FieldValues::<$vty>::values(&self.$field).is_empty() && !rows[row].roles.iter().any(|role| role.interfaces.has(context.interface)) {
+                        if !crate::$tm::FieldValues::<$vty>::values(&self.$field).is_empty() && !rows[row].roles.iter().any(|role| $crate::tables::Interfaces::has(role.interfaces, <$proto as $crate::tables::Checking>::interfaces(context))) {
                             off |= 1 << row;
                         }
                         row += 1;
@@ -306,7 +308,7 @@ macro_rules! table {
         impl crate::$pm::TreeScope for $ty {
             fn field_tree(&self, ie_type: <$proto as $crate::tables::Protocol>::Key, nth: usize) -> Option<$crate::tree::Value> {
                 $(
-                    if ie_type == <$vty as crate::$im::IeType>::IE_TYPE {
+                    if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
                         return crate::$pm::field_tree::<$vty, _>(&self.$field, nth);
                     }
                 )*
@@ -320,7 +322,7 @@ macro_rules! table {
                 reading: &mut $crate::tree::Reading,
             ) -> Result<(), $crate::tree::Refused> {
                 $(
-                    if ie_type == <$vty as crate::$im::IeType>::IE_TYPE {
+                    if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
                         return crate::$pm::read_field::<$vty, _>(&mut self.$field, value, reading);
                     }
                 )*
@@ -333,6 +335,9 @@ macro_rules! table {
 
     // A row that is there once is a field of its value, in place, but a grouped IE of `Cb`
     // or `Ob`, large and rare, which is boxed.
+    // The key of the IEs of a row: its IE type, or its IE type and its instance.
+    (@key {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} $vty:ident) => { <$vty as crate::$im::IeType>::IE_TYPE };
+    (@key {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} $vty:ident $instance:literal) => { (<$vty as crate::$im::IeType>::IE_TYPE, $instance) };
     (@field $fam:tt [] Cb ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
     (@field $fam:tt [] Ob ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
     (@field $fam:tt [] $p:ident ($t:ty)) => { Option<$t> };
@@ -340,6 +345,7 @@ macro_rules! table {
     (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} M) => { crate::$tm::Presence::Mandatory };
     (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} C) => { crate::$tm::Presence::Conditional };
     (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} O) => { crate::$tm::Presence::Optional };
+    (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} CO) => { crate::$tm::Presence::ConditionalOptional };
     (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} Cb) => { crate::$tm::Presence::Conditional };
     (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} Ob) => { crate::$tm::Presence::Optional };
     // The roles of a row: the row itself, or the rows that share its field.
