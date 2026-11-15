@@ -4,10 +4,10 @@
 [![Documentation](https://docs.rs/oxirush-utils/badge.svg)](https://docs.rs/oxirush-utils)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-What the OxiRush crates share, in Rust: the identities of 3GPP networks as
-values, one JSON tree with paths for the messages of every protocol, and the
-fields and tables that codecs of type, length and value are written with. It
-is `no_std`, with no dependency unless a feature asks for one.
+The shared building blocks of the OxiRush crates, in Rust: 3GPP identities
+(PLMN, IMSI, SUPI, SUCI, GUTI, TAI) in their NAS, NGAP/S1AP and text forms;
+a JSON tree with path queries and edits; and macros for writing TLV codecs.
+It is `no_std`, and every dependency is behind a feature.
 
 ```rust
 use oxirush_utils::identity::{Guti5g, Plmn};
@@ -23,41 +23,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // A 5G-GUTI as text, and as a 5GS mobile identity
     assert_eq!(guti.to_string(), "5g-guti-310410caff81deadbeef");
-    assert_eq!(guti.to_nas_octets(), [0xf2, 0x13, 0x00, 0x14, 0xca, 0xff, 0x81, 0xde, 0xad, 0xbe, 0xef]);
+    let octets = [0xf2, 0x13, 0x00, 0x14, 0xca, 0xff, 0x81, 0xde, 0xad, 0xbe, 0xef];
+    assert_eq!(guti.to_nas_octets(), octets);
     Ok(())
 }
 ```
-
-Each example shows what it gives with `assert_eq!`, and runs as a test of the crate.
 
 ## Installation
 
 ```toml
 [dependencies]
-oxirush-utils = { version = "0.3", features = ["alloc"] }
-# With the tree and its paths, which need an allocator too:
-# oxirush-utils = { version = "0.3", features = ["tree"] }
-# With what a codec of type, length and value is written with:
-# oxirush-utils = { version = "0.3", features = ["fields", "tables"] }
-# Without an allocator, the values that have their digits in place:
-# oxirush-utils = "0.3"
+oxirush-utils = { version = "0.3", features = ["tree", "fields"] }
+# for the examples of this page
+serde_json = "1"
+serde_norway = "0.9"
 ```
 
-| Feature | Adds | Through |
-|---------|------|---------|
-| `alloc` | What holds a text or a list: the SUPI, the SUCIs, TBCD strings, identity digits as octets | |
-| `tree` | The tree of a message, its forms and its paths, and `Serialize` and `Deserialize` for a type through its tree | `serde_json`, `serde_core` |
-| `fields` | The fields of the values of a protocol of type, length and value, and the macros that describe them: `bits!`, `layout!`, `named_values!` | `pastey` |
-| `tables` | The tables of the IEs of a protocol's messages, and the macros that write their codecs: `table!`, `ies!`, `messages!` | `fields` |
-| `idna` | The realm and the username of a NAI checked as internationalized names too: Unicode normalization form C, and a realm that IDNA takes as it is written | `idna`, `unicode-normalization` |
+| Feature | Adds | Needs |
+|---------|------|-------|
+| none | The identities that hold their digits in place: PLMN, IMSI, IMEI, GUTIs, TAIs | Nothing |
+| `alloc` | The identities that hold text or a list: SUPI, SUCIs, TBCD strings | An allocator |
+| `tree` | The JSON tree, its paths, and serde through the tree | `alloc` |
+| `fields` | Bit-field accessors and named-value tables for TLV protocols | `alloc` |
+| `tables` | IE tables, and the macros that write TLV codecs from them | `fields` |
+| `idna` | NAI realms and usernames checked as internationalized names | `alloc` |
 
-No feature is on by default. `tree` turns on the `float_roundtrip` feature of
-`serde_json`, so a number with a fraction is read as the nearest f64. A tree
-keeps the members of an object in the order the program wrote them.
+No feature is on by default. The minimum supported Rust version is 1.88.
 
-The minimum supported Rust version is 1.88.
-
-## An identity through its forms
+## Convert an identity between its forms
 
 A value of `identity` is checked when it is made, and prints whole, in the
 text of the service based interfaces. An MNC has two or three digits, and
@@ -96,12 +89,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The NAS octets of an identity are the value of an IE of
-[oxirush-nas](https://github.com/linouxis9/oxirush-nas), and the AP octets of
-a PLMN are those of [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap)
-and [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap).
+`to_nas_octets()` gives the value of a NAS IE, as
+[oxirush-nas](https://github.com/linouxis9/oxirush-nas) carries it, and
+`to_ap_octets()` the PLMN identity of
+[oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
+[oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap).
 
-## IMEI, IMEISV, and the identities of EPS
+## Use IMEI, IMEISV and the identities of EPS
 
 ```rust
 use oxirush_utils::identity::{GutiEps, Imei, Imeisv, Imsi, Plmn, Tai5gs, TaiEps};
@@ -126,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## The SUCI in the form of a NAI
+## Read a SUCI in the NAI format
 
 A SUPI that is not an IMSI is a NAI, and so is its SUCI. A NAI follows the
 grammar of RFC 7542; with the `idna` feature, its realm must also be a name
@@ -154,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## What other implementations send
+## Read what other implementations send
 
 `from_nas_octets` takes only the octets that the clause writes. The readers
 named `_tolerant` also take what other implementations are known to send,
@@ -178,13 +172,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## A type as a tree
+## Write a type as a tree
 
 With the `tree` feature, a message is a `tree::Value`: a JSON value in one
-form for every protocol, with octets in lower-case hexadecimal, numbers as
-JSON numbers, names read however they are written, and members in the order
-of the specification. `tree!` writes one as `serde_json::json!` does, and
-keeps that order.
+form for every protocol, with octets in lower-case hexadecimal and numbers as
+JSON numbers. Names match whatever their case, and with spaces or hyphens.
+Members keep the order in which they are written, and `tree!` writes a tree
+as `serde_json::json!` does. A type that implements `Tree` gets `Serialize`
+and `Deserialize` through its tree with `impl_serde!`, so YAML and JSON carry
+the same form.
 
 ```rust
 use oxirush_utils::{tree, tree::{Members, Reading, Refused, Tree, Value}};
@@ -208,11 +204,16 @@ impl Tree for Slice {
     fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
         let members = reading.members(value, &["sst", "sd"])?;
         Ok(Self {
-            sst: reading.member(&members, "sst", |value, reading| reading.unsigned(value, 0, 255))? as u8,
+            sst: reading.member(&members, "sst", |value, reading| {
+                reading.unsigned(value, 0, 255)
+            })? as u8,
             sd: reading.optional(&members, "sd", |value, reading| reading.octet_array(value))?,
         })
     }
 }
+
+// `Serialize` and `Deserialize`, through the tree
+oxirush_utils::impl_serde!(Slice);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let slice = Slice { sst: 1, sd: Some([0, 0, 0xff]) };
@@ -225,13 +226,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A refusal says where and why
     assert_eq!(
         tree::from_value::<Slice>(&tree!({"sst": 256})).unwrap_err().to_string(),
-        "this is not a value of S-NSSAI: a number from 0 to 255 is expected, and 256 is written, at sst",
+        "this is not a value of S-NSSAI: a number from 0 to 255 is expected, and 256 is written, \
+         at sst",
     );
+
+    // Any serde format, through the tree
+    assert_eq!(serde_norway::to_string(&slice)?, "sst: 1\nsd: 0000ff\n");
+    assert_eq!(serde_json::from_str::<Slice>(r#"{"SST": 1, "sd": "0000ff"}"#)?, slice);
     Ok(())
 }
 ```
 
-## Paths
+## Select and edit by path
 
 A path is a JSON pointer: the name of a member, the position of an entry, `*`
 for each of them, and `-` for the end of a list in an insertion.
@@ -257,8 +263,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Each value with the path that selects it
-    let paths: Vec<String> =
-        tree::paths(&message).into_iter().map(|(path, value)| format!("{path} = {value}")).collect();
+    let paths: Vec<String> = (tree::paths(&message).into_iter())
+        .map(|(path, value)| format!("{path} = {value}"))
+        .collect();
     assert_eq!(
         paths,
         [
@@ -274,47 +281,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tree::insert(&mut message, "/requested-nssai/-", tree!({"sst": 3}))?;
     tree::remove(&mut message, "/requested-nssai/1")?;
     assert_eq!(message["requested-nssai"], tree!([{"sst": 1, "sd": "000001"}, {"sst": 3}]));
-    Ok(())
-}
-```
-
-## Any format of serde
-
-A type is serialized and deserialized through its tree, so YAML and JSON
-carry the same form.
-
-```rust
-use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
-
-#[derive(Debug, PartialEq)]
-struct Timer {
-    seconds: u32,
-}
-
-impl Tree for Timer {
-    const NAME: &'static str = "GPRS timer";
-
-    fn to_tree(&self) -> Value {
-        let mut members = Members::new();
-        members.put("seconds", tree::unsigned(self.seconds.into()));
-        members.finish()
-    }
-
-    fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
-        let members = reading.members(value, &["seconds"])?;
-        let seconds = reading.member(&members, "seconds", |value, reading| reading.unsigned(value, 0, 11160))?;
-        Ok(Self { seconds: seconds as u32 })
-    }
-}
-
-// `Serialize` and `Deserialize`, through the tree
-oxirush_utils::impl_serde!(Timer);
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let timer = Timer { seconds: 3600 };
-    assert_eq!(serde_json::to_string(&timer)?, r#"{"seconds":3600}"#);
-    assert_eq!(serde_norway::to_string(&timer)?, "seconds: 3600\n");
-    assert_eq!(serde_norway::from_str::<Timer>("Seconds: 3600")?, timer);
     Ok(())
 }
 ```
@@ -399,26 +365,27 @@ has what a protocol provides.
   [oxirush-security](https://github.com/linouxis9/oxirush-security) does.
 - `Supi` checks that a NAI has a realm, and its length, but not its grammar:
   `nai::check_realm` and `nai::check_username` check that.
-- A value of `identity` holds what the clauses allow. Octets that are no such
-  identity stay octets in the crate that reads them.
-- It has no JSON parser of its own: serde_json's reads a tree.
+- An `identity` value is always valid per its clause; invalid octets stay raw
+  in the crate that read them.
+- It has no JSON parser of its own: serde_json's reads a tree. `tree` turns on
+  serde_json's `float_roundtrip`, so a number with a fraction is read as the
+  nearest f64.
 
 ## Performance
 
-| Operation | Time | serde_json 1, time over this crate's |
+| Operation | This crate | serde_json 1 |
 |---|---|---|
 | Read a tree of 925 octets | 2,645 ns | about the same |
-| Write it | 923 ns | 2.3x |
+| Write it | 923 ns | 2.3× slower |
 | Select a value of it | 219 ns | about the same |
-| Read an object of 4096 members, 39,851 octets | 380 µs | 2.0x |
-| Read a 5G-GUTI from a 5GS mobile identity | 14 ns | |
-| Read the SUCI of an IMSI from a 5GS mobile identity | 80 ns | |
+| Read an object of 4096 members, 39,851 octets | 380 µs | 2.0× slower |
+| Put 4096 members into an object, one after the other | 15.9 ms | 24× faster |
 
 On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), at 8865ad4 on
 2026-10-18, the lowest of five runs; "about the same" is within 10 %. An
-object keeps its members in order and is searched by name, which suits the
-few dozen members of a value of a protocol: putting thousands of members one
-after the other is slower than serde_json, and `Map::push` avoids it.
+object keeps its members in order and is searched by name; `Map::push` adds
+4096 members whose names are new in 145 µs. Reading a 5G-GUTI from a 5GS
+mobile identity takes 14 ns, and the SUCI of an IMSI 80 ns.
 [`benches/README.md`](benches/README.md) has every figure, the allocations,
 the method and the commands.
 
@@ -426,21 +393,17 @@ the method and the commands.
 
 ```sh
 cargo test --all-features
-cargo +nightly fuzz run identity -- -max_total_time=60 -max_len=64
-cargo +nightly fuzz run paths -- -max_total_time=60 -max_len=512
 ```
 
-The identities are tested against their clauses, against what Open5GS,
-free5GC and PacketRusher sent in lab runs, and against themselves: every
-value is read back from the octets it writes. The path tests of oxirush-nas
-and oxirush-ngap run here too, on trees written without a codec. `fuzz/` has
-three [cargo-fuzz](https://crates.io/crates/cargo-fuzz) targets: `identity`
-reads octets and text as each identity, `paths` takes any path and edit on
-any tree, and `forms` reads any JSON with each reader of a tree.
+Each example of this page checks what it gives with `assert_eq!`, and runs
+as a documentation test. The identities are tested against their clauses,
+against what Open5GS, free5GC and PacketRusher sent in lab runs, and against
+themselves: every value is read back from the octets it writes. The path
+tests of oxirush-nas and oxirush-ngap run here too, on trees written without
+a codec.
 
-A pull request comes with a test for what it changes. Sign off your commits
-(`git commit -s`): by contributing you agree to the [Developer Certificate
-of Origin](https://developercertificate.org/). [SECURITY.md](SECURITY.md)
+[CONTRIBUTING.md](CONTRIBUTING.md) has the fuzz targets, the reader of 3GPP
+documents in `tools/`, and how to contribute. [SECURITY.md](SECURITY.md)
 says how to report a vulnerability.
 
 ## The OxiRush family

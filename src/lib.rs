@@ -15,10 +15,10 @@
    limitations under the License.
 */
 
-//! What the OxiRush crates share: the identities of 3GPP networks as values, one tree
-//! with paths for the messages of every family, and the fields and tables that codecs
-//! of type, length and value are written with. `no_std`, without a dependency unless a
-//! feature asks for one.
+//! The shared building blocks of the OxiRush crates: 3GPP identities (PLMN, IMSI, SUPI,
+//! SUCI, GUTI, TAI) in their NAS, NGAP/S1AP and text forms; a JSON tree with path queries
+//! and edits; and macros for writing TLV codecs. It is `no_std`, and every dependency is
+//! behind a feature.
 //!
 //! ```rust
 //! use oxirush_utils::identity::{Guti5g, Plmn};
@@ -34,7 +34,8 @@
 //!
 //!     // A 5G-GUTI as text, and as a 5GS mobile identity
 //!     assert_eq!(guti.to_string(), "5g-guti-310410caff81deadbeef");
-//!     assert_eq!(guti.to_nas_octets(), [0xf2, 0x13, 0x00, 0x14, 0xca, 0xff, 0x81, 0xde, 0xad, 0xbe, 0xef]);
+//!     let octets = [0xf2, 0x13, 0x00, 0x14, 0xca, 0xff, 0x81, 0xde, 0xad, 0xbe, 0xef];
+//!     assert_eq!(guti.to_nas_octets(), octets);
 //!     Ok(())
 //! }
 //! ```
@@ -48,15 +49,14 @@
 //!
 //! | Task | Items |
 //! |------|-------|
-//! | An identity through its forms | [`Imsi`](identity::Imsi), [`Plmn`](identity::Plmn), [`ImsiSuci`](identity::ImsiSuci), [`Suci`](identity::Suci), [`Supi`](identity::Supi), [`Guti5g`](identity::Guti5g), [`STmsi5g`](identity::STmsi5g) |
-//! | IMEI, IMEISV, and the identities of EPS | [`Imei`](identity::Imei), [`Imeisv`](identity::Imeisv), [`GutiEps`](identity::GutiEps), [`Tai5gs`](identity::Tai5gs), [`TaiEps`](identity::TaiEps) |
-//! | The SUCI in the form of a NAI | [`NaiSuci`](identity::NaiSuci), [`nai::check_realm`](identity::nai::check_realm) |
+//! | Convert an identity between its forms | [`Imsi`](identity::Imsi), [`Plmn`](identity::Plmn), [`ImsiSuci`](identity::ImsiSuci), [`Suci`](identity::Suci), [`Supi`](identity::Supi), [`Guti5g`](identity::Guti5g), [`STmsi5g`](identity::STmsi5g) |
+//! | Use IMEI, IMEISV and the identities of EPS | [`Imei`](identity::Imei), [`Imeisv`](identity::Imeisv), [`GutiEps`](identity::GutiEps), [`Tai5gs`](identity::Tai5gs), [`TaiEps`](identity::TaiEps) |
+//! | Read a SUCI in the NAI format | [`NaiSuci`](identity::NaiSuci), [`nai::check_realm`](identity::nai::check_realm) |
 //! | The identity of a security algorithm | [`Algorithm`](identity::Algorithm) |
-//! | What other implementations send | [`Imeisv::from_nas_octets_tolerant`](identity::Imeisv::from_nas_octets_tolerant), [`Fault`](identity::Fault) |
-//! | A type as a tree | [`tree::Tree`], [`tree!`], [`tree::from_value`] |
-//! | Paths | [`tree::select`], [`tree::paths`], [`tree::set`], [`tree::insert`], [`tree::remove`] |
+//! | Read what other implementations send | [`Imeisv::from_nas_octets_tolerant`](identity::Imeisv::from_nas_octets_tolerant), [`Fault`](identity::Fault) |
+//! | Write a type as a tree | [`tree::Tree`], [`tree!`], [`tree::from_value`], [`impl_serde!`] |
+//! | Select and edit by path | [`tree::select`], [`tree::paths`], [`tree::set`], [`tree::insert`], [`tree::remove`] |
 //! | The rules of a family of messages | [`tree::Family`], [`tree::select_in`] |
-//! | Any format of serde | [`impl_serde!`] |
 //! | Describe the bits of a value | [`named_values!`], [`bits!`], [`fields::OutOfRange`], [`layout!`], [`fields::Layout::differences`] |
 //! | What the tree of a value takes | [`tree::Takes`], [`tree::read`] |
 //!
