@@ -585,8 +585,22 @@ fn in_table_order<P: Protocol>(
 /// Keep `order` in `scope`, unless it is the order of the table, which the scope without
 /// one is encoded in: then nothing is kept, and a scope that is changed stays in that order.
 pub fn keep_order<S: Scope>(scope: &mut S, order: Vec<Placed<Key<S>>>) {
-    let ordered = in_table_order(S::table(), scope.raw(), |ie_type| scope.count(ie_type));
-    *scope.order_mut() = if order == ordered { Vec::new() } else { order };
+    let table = S::table();
+    let ordered = in_table_order(table, scope.raw(), |ie_type| scope.count(ie_type));
+    // The order of the table puts the kept IEs of each row with it, in the order of the
+    // rows, and those of no row last: kept IEs in another order need the order kept too,
+    // which says only where each kept IE is and not which.
+    let position =
+        |ie: &<S::P as Protocol>::Raw| table.rows.iter().position(|row| row.ie_type == ie.key());
+    let raws = scope.raw();
+    let grouped = raws.windows(2).all(|pair| {
+        position(&pair[0]).unwrap_or(usize::MAX) <= position(&pair[1]).unwrap_or(usize::MAX)
+    });
+    *scope.order_mut() = if order == ordered && grouped {
+        Vec::new()
+    } else {
+        order
+    };
 }
 
 /// An entry of a row in the tree of its scope: a value of its field, or an IE that the
