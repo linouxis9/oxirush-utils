@@ -15,6 +15,7 @@ autobenches = false
 include = [
     "src/**/*.rs",
     "tests/**/*.rs",
+    "tools/*.py",
     "README.md",
     "CHANGELOG.md",
     "SECURITY.md",

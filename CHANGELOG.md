@@ -48,6 +48,11 @@ All notable changes to `oxirush-utils` are recorded here.
   (`MessageTypeInfo`) and the body of a message. With `tree`, the trees of the scopes and
   the paths of the tree of a message (`select`, `set`, `row_at`, `located`), over what the
   protocol says through `TreeProtocol`.
+- `tools/docx_tables.py` reads the paragraphs, tables and figures of a 3GPP specification
+  in .docx, for the tests that compare a crate's tables with its document: the cells of a
+  figure by their widths or by their grid columns, the label of a row on its left or on
+  its right, and the octets that a label of the NAS specifications names.
+  `Layout::differences` compares a layout with the cells of its figure.
 
 ### Changed
 

@@ -133,6 +133,40 @@ fn accessors_over_one_octet() {
 }
 
 #[test]
+fn a_layout_is_compared_with_its_figure() {
+    use oxirush_utils::fields::FigureCell;
+    let cell = |octet, name: &str, bit, width| FigureCell {
+        octet,
+        name: name.into(),
+        bit,
+        width,
+    };
+    let figure = [
+        cell(0, "Follow-on request pending", 4, 1),
+        cell(0, "Registration type", 1, 3),
+    ];
+    assert!(OneOctet::LAYOUT.differences(&figure).is_empty());
+    let moved = [
+        cell(0, "Follow-on request pending", 5, 1),
+        cell(0, "registration type", 1, 3),
+    ];
+    assert_eq!(
+        OneOctet::LAYOUT.differences(&moved),
+        [
+            "Follow-on request pending is at octet 0, bit 4, 1 bits, where the figure has octet 0, bit 5, 1 bits"
+        ]
+    );
+    let more = [cell(0, "Registration type", 1, 3), cell(0, "Spare", 5, 4)];
+    assert_eq!(
+        OneOctet::LAYOUT.differences(&more),
+        [
+            "Spare (octet 0, bit 5, 4 bits) is not laid out",
+            "Follow-on request pending (octet 0, bit 4, 1 bits) is not in the figure"
+        ]
+    );
+}
+
+#[test]
 fn accessors_over_octets() {
     // An absent octet reads 0, and a setter adds octets of 0 up to its own
     let mut value = Several(Octets::copied(&[0x0a]));

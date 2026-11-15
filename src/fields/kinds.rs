@@ -129,6 +129,76 @@ pub struct Layout {
     pub read: fn(&[u8]) -> Option<Vec<&'static str>>,
 }
 
+/// A cell of bits of a figure as a test reads it from the document: its octet, from 0 for
+/// the first octet of the value, its name, its lowest bit, from 1, and how many bits it has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FigureCell {
+    /// Its octet, from 0 for the first octet of the value.
+    pub octet: usize,
+    /// Its name in the figure.
+    pub name: String,
+    /// Its lowest bit, from 1.
+    pub bit: u8,
+    /// How many bits it has.
+    pub width: u8,
+}
+
+impl Layout {
+    /// How its bits differ from the cells of bits of its figure, each in words: a cell of
+    /// the figure that it lays out elsewhere or not at all, and one of its fields of bits
+    /// that the figure does not have there. None for a layout that has each cell where its
+    /// figure has it. A name compares in any case and with any punctuation.
+    pub fn differences(&self, figure: &[FigureCell]) -> Vec<String> {
+        let same = |a: &str, b: &str| {
+            let letters = |name: &str| {
+                name.chars()
+                    .filter(char::is_ascii_alphanumeric)
+                    .map(|c| c.to_ascii_lowercase())
+                    .collect::<String>()
+            };
+            letters(a) == letters(b)
+        };
+        let at = |bits: &Bits, cell: &FigureCell| {
+            bits.octet == cell.octet && bits.bit == cell.bit && bits.width == cell.width
+        };
+        let mut out = Vec::new();
+        for cell in figure {
+            let named: Vec<&Bits> = self
+                .bits
+                .iter()
+                .filter(|bits| same(bits.name, &cell.name))
+                .collect();
+            if named.is_empty() {
+                out.push(alloc::format!(
+                    "{} (octet {}, bit {}, {} bits) is not laid out",
+                    cell.name,
+                    cell.octet,
+                    cell.bit,
+                    cell.width
+                ));
+            } else if !named.iter().any(|bits| at(bits, cell)) {
+                let bits = named[0];
+                out.push(alloc::format!(
+                    "{} is at octet {}, bit {}, {} bits, where the figure has octet {}, bit {}, {} bits",
+                    cell.name, bits.octet, bits.bit, bits.width, cell.octet, cell.bit, cell.width
+                ));
+            }
+        }
+        for bits in self.bits {
+            if figure.iter().all(|cell| !same(bits.name, &cell.name)) {
+                out.push(alloc::format!(
+                    "{} (octet {}, bit {}, {} bits) is not in the figure",
+                    bits.name,
+                    bits.octet,
+                    bits.bit,
+                    bits.width
+                ));
+            }
+        }
+        out
+    }
+}
+
 /// A field of bits: where it is.
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
