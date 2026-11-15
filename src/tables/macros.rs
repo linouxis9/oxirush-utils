@@ -79,10 +79,10 @@ macro_rules! table {
                 pub $field: $crate::table!(@field {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} [$(* $($max)?)?] $p ($vty)),
             )*
             /// The IEs that the scope keeps as octets, in the order of the wire.
-            pub raw: alloc::vec::Vec<crate::$im::RawIe>,
+            pub raw: $crate::__alloc::vec::Vec<crate::$im::RawIe>,
             /// The order of the wire, when it is not that of the table: each row, its values
             /// then the IEs of its type in `raw`, and the IEs of no row last.
-            pub order: alloc::vec::Vec<crate::$im::Placed>,
+            pub order: $crate::__alloc::vec::Vec<crate::$im::Placed>,
         }
 
         const _: () = assert!(
@@ -182,7 +182,7 @@ macro_rules! table {
                 crate::$im::Placing::Unexpected
             }
 
-            fn emit(&self, ie_type: <$proto as $crate::tables::Protocol>::Key, nth: usize, out: &mut alloc::vec::Vec<u8>) -> Result<bool, $error> {
+            fn emit(&self, ie_type: <$proto as $crate::tables::Protocol>::Key, nth: usize, out: &mut $crate::__alloc::vec::Vec<u8>) -> Result<bool, $error> {
                 $(
                     if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
                         return crate::$tm::emit_field::<$vty, _>($crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?), &self.$field, nth, out);
@@ -202,7 +202,7 @@ macro_rules! table {
                 length
             }
 
-            fn encode_fields(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), $error> {
+            fn encode_fields(&self, out: &mut $crate::__alloc::vec::Vec<u8>) -> Result<(), $error> {
                 $( $crate::table!(@each {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} [$(* $($max)?)?] ($vty) self.$field, |value| {
                     crate::$im::encode_value($crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?), value, out)?;
                 }); )*
@@ -253,15 +253,15 @@ macro_rules! table {
             }
 
             fn raw(&self) -> &[crate::$im::RawIe] { &self.raw }
-            fn raw_mut(&mut self) -> &mut alloc::vec::Vec<crate::$im::RawIe> { &mut self.raw }
+            fn raw_mut(&mut self) -> &mut $crate::__alloc::vec::Vec<crate::$im::RawIe> { &mut self.raw }
             fn order(&self) -> &[crate::$im::Placed] { &self.order }
-            fn order_mut(&mut self) -> &mut alloc::vec::Vec<crate::$im::Placed> { &mut self.order }
+            fn order_mut(&mut self) -> &mut $crate::__alloc::vec::Vec<crate::$im::Placed> { &mut self.order }
         }
 
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
         impl crate::$cm::Checked for $ty {
-            fn check_values(&self, path: &crate::$cm::Path, context: crate::$cm::Context, found: &mut alloc::vec::Vec<crate::$cm::Deviation>) {
+            fn check_values(&self, path: &crate::$cm::Path, context: crate::$cm::Context, found: &mut $crate::__alloc::vec::Vec<crate::$cm::Deviation>) {
                 // The conditions read the scope as its receiver on the interface takes it:
                 // without the values of the rows that the interface does not have.
                 const CONDITIONS: bool = false $( || $crate::table!(@checked {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $($scope)? $($ascope)?) )*;
@@ -338,10 +338,10 @@ macro_rules! table {
     // The key of the IEs of a row: its IE type, or its IE type and its instance.
     (@key {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} $vty:ident) => { <$vty as crate::$im::IeType>::IE_TYPE };
     (@key {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} $vty:ident $instance:literal) => { (<$vty as crate::$im::IeType>::IE_TYPE, $instance) };
-    (@field $fam:tt [] Cb ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
-    (@field $fam:tt [] Ob ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
+    (@field $fam:tt [] Cb ($t:ty)) => { Option<$crate::__alloc::boxed::Box<$t>> };
+    (@field $fam:tt [] Ob ($t:ty)) => { Option<$crate::__alloc::boxed::Box<$t>> };
     (@field $fam:tt [] $p:ident ($t:ty)) => { Option<$t> };
-    (@field $fam:tt [* $($max:literal)?] $p:ident ($t:ty)) => { alloc::vec::Vec<$t> };
+    (@field $fam:tt [* $($max:literal)?] $p:ident ($t:ty)) => { $crate::__alloc::vec::Vec<$t> };
     (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} M) => { crate::$tm::Presence::Mandatory };
     (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} C) => { crate::$tm::Presence::Conditional };
     (@presence {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} O) => { crate::$tm::Presence::Optional };
@@ -436,7 +436,7 @@ macro_rules! table {
                 crate::$tm::decode_scope(octets).ok()
             }
 
-            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), $error> {
+            fn encode(&self, out: &mut $crate::__alloc::vec::Vec<u8>) -> Result<(), $error> {
                 crate::$tm::encode_scope(self, out)
             }
 
@@ -456,7 +456,7 @@ macro_rules! table {
                 true
             }
 
-            fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &[u8]) -> bool {
+            fn decode_push(list: &mut $crate::__alloc::vec::Vec<Self>, octets: &[u8]) -> bool {
                 list.push(Self::default());
                 let last = list.len() - 1;
                 if crate::$tm::decode_scope_into(&mut list[last], octets).is_err() {
@@ -471,7 +471,7 @@ macro_rules! table {
                 $crate::tables::Scope::held(self)
             }
 
-            fn check_in(&self, path: &crate::$cm::Path, context: crate::$cm::Context, found: &mut alloc::vec::Vec<crate::$cm::Deviation>) {
+            fn check_in(&self, path: &crate::$cm::Path, context: crate::$cm::Context, found: &mut $crate::__alloc::vec::Vec<crate::$cm::Deviation>) {
                 crate::$cm::check_scope(self, path, context, found);
             }
 
@@ -485,7 +485,7 @@ macro_rules! table {
             /// Its table on the interfaces that it has, as the receiver of a response: the
             /// IEs of any, and those that all need; as its receiver reads it
             /// ([`crate::$cm::as_read`]).
-            fn check(&self, path: &crate::$cm::Path, found: &mut alloc::vec::Vec<crate::$cm::Deviation>) {
+            fn check(&self, path: &crate::$cm::Path, found: &mut $crate::__alloc::vec::Vec<crate::$cm::Deviation>) {
                 let interfaces = <Self as $crate::tables::Scope>::table().interfaces();
                 let context = crate::$cm::Context::on(interfaces);
                 let read = crate::$cm::as_read(self, path, context, found);
@@ -701,7 +701,7 @@ macro_rules! messages {
         pub enum Body {
             $(
                 #[doc = concat!("Message type ", stringify!($code), ".")]
-                $ty(alloc::boxed::Box<crate::$rm::$ty>),
+                $ty($crate::__alloc::boxed::Box<crate::$rm::$ty>),
             )*
             /// A message type that the table of message types does not have, with the
             /// octets after its header.
@@ -716,7 +716,7 @@ macro_rules! messages {
         $(
             impl From<crate::$rm::$ty> for Body {
                 fn from(body: crate::$rm::$ty) -> Self {
-                    Self::$ty(alloc::boxed::Box::new(body))
+                    Self::$ty($crate::__alloc::boxed::Box::new(body))
                 }
             }
         )*
@@ -753,7 +753,7 @@ macro_rules! messages {
                 Ok(match message_type {
                     $( $code => {
                         // The message is decoded in its box, and not moved there.
-                        let mut body = alloc::boxed::Box::<crate::$rm::$ty>::default();
+                        let mut body = $crate::__alloc::boxed::Box::<crate::$rm::$ty>::default();
                         crate::$tm::decode_scope_sized(&mut *body, octets, true)?;
                         Self::$ty(body)
                     } )*
@@ -761,7 +761,7 @@ macro_rules! messages {
                 })
             }
 
-            pub(crate) fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), $error> {
+            pub(crate) fn encode(&self, out: &mut $crate::__alloc::vec::Vec<u8>) -> Result<(), $error> {
                 match self {
                     $( Self::$ty(body) => crate::$tm::encode_scope(&**body, out), )*
                     Self::Other { octets, .. } => {
@@ -789,7 +789,7 @@ macro_rules! messages {
             }
 
             /// The body as its receiver reads its octets ([`crate::$cm::as_read`]).
-            pub(crate) fn as_read(&self, context: crate::$cm::Context, found: &mut alloc::vec::Vec<crate::$cm::Deviation>) -> Option<Self> {
+            pub(crate) fn as_read(&self, context: crate::$cm::Context, found: &mut $crate::__alloc::vec::Vec<crate::$cm::Deviation>) -> Option<Self> {
                 let path = crate::$cm::Path::Root(crate::$cm::ROOT);
                 match self {
                     $( Self::$ty(body) => crate::$cm::as_read(&**body, &path, context, found).map(Self::from), )*
@@ -797,7 +797,7 @@ macro_rules! messages {
                 }
             }
 
-            pub(crate) fn check(&self, path: &crate::$cm::Path, context: crate::$cm::Context, found: &mut alloc::vec::Vec<crate::$cm::Deviation>) {
+            pub(crate) fn check(&self, path: &crate::$cm::Path, context: crate::$cm::Context, found: &mut $crate::__alloc::vec::Vec<crate::$cm::Deviation>) {
                 match self {
                     $( Self::$ty(body) => crate::$cm::check_scope(&**body, path, context, found), )*
                     Self::Other { message_type, .. } => {
@@ -829,7 +829,7 @@ macro_rules! messages {
                     Err(code) => code,
                 };
                 Ok(match code {
-                    $( $code => Self::$ty(alloc::boxed::Box::new(crate::$pm::scope_from_tree(value, reading)?)), )*
+                    $( $code => Self::$ty($crate::__alloc::boxed::Box::new(crate::$pm::scope_from_tree(value, reading)?)), )*
                     other => {
                         let (_, octets) = reading.alternative(value, &["octets"])?;
                         let octets = reading.within("octets", octets, |value, reading| reading.octets(value))?;

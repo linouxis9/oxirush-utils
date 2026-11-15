@@ -20,8 +20,6 @@
 
 #![cfg(feature = "fields")]
 
-extern crate alloc;
-
 use oxirush_utils::fields::{Narrowable, Octets, OutOfRange};
 use oxirush_utils::{bits, named_values};
 

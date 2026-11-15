@@ -93,6 +93,12 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+// The allocation crate, for the code that the macros of the crate write in a crate that
+// does not name it itself, as a crate of the standard library.
+#[cfg(feature = "alloc")]
+#[doc(hidden)]
+pub extern crate alloc as __alloc;
+
 #[cfg(feature = "fields")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fields")))]
 pub mod fields;

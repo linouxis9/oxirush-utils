@@ -668,7 +668,7 @@ macro_rules! __length_value {
                 Some(Self($crate::fields::Octets::copied(value)))
             }
             #[inline]
-            fn write(&self, out: &mut alloc::vec::Vec<u8>) {
+            fn write(&self, out: &mut $crate::__alloc::vec::Vec<u8>) {
                 // encode() refuses a value longer than its length can say.
                 let length = <$length>::try_from(self.0.len()).unwrap_or(<$length>::MAX);
                 out.extend_from_slice(&length.to_be_bytes());
@@ -683,7 +683,7 @@ macro_rules! __length_value {
                 self.0.len() <= usize::from(<$length>::MAX)
             }
             #[inline]
-            fn check<D: $crate::fields::Deviate>(&self, path: &$crate::fields::Path<'_>, clause: &'static str, found: &mut alloc::vec::Vec<D>) {
+            fn check<D: $crate::fields::Deviate>(&self, path: &$crate::fields::Path<'_>, clause: &'static str, found: &mut $crate::__alloc::vec::Vec<D>) {
                 if !self.fits() {
                     found.push(D::found(path, Some(clause), $crate::fields::Finding::Rule("more octets than their length can say")));
                 }
@@ -1242,7 +1242,7 @@ macro_rules! address_field {
             const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::$takes;
             #[inline]
             fn to_tree(&self) -> crate::tree::Value {
-                crate::tree::text(alloc::format!("{self}"))
+                crate::tree::text($crate::__alloc::format!("{self}"))
             }
             #[inline]
             fn from_tree(

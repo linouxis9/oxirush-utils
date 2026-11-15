@@ -65,7 +65,7 @@ macro_rules! bits {
                     $( $crate::fields::Bits { name: $name, ident: stringify!($field), octet: $octet2, bit: $low2, width: $width2 }, )?
                 )*],
                 fields: &[],
-                read: |_| Some(alloc::vec::Vec::new()),
+                read: |_| Some($crate::__alloc::vec::Vec::new()),
             };
 
             /// Whether the bits that no field has are 0 in each of its octets.
@@ -203,7 +203,7 @@ macro_rules! bits {
                     $( $crate::fields::Bits { name: $name, ident: stringify!($field), octet: $octet2, bit: $low2, width: $width2 }, )?
                 )*],
                 fields: &[],
-                read: |octets| <Self as $codec>::decode(octets).map(|_| alloc::vec::Vec::new()),
+                read: |octets| <Self as $codec>::decode(octets).map(|_| $crate::__alloc::vec::Vec::new()),
             });
             /// Whether the tree is the value of the field alone: one field, not a flag.
             #[cfg(feature = "tree")]
@@ -264,7 +264,7 @@ macro_rules! bits {
                 })
             }
 
-            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> core::result::Result<(), $error> {
+            fn encode(&self, out: &mut $crate::__alloc::vec::Vec<u8>) -> core::result::Result<(), $error> {
                 let ie = <Self as $ie_type>::TYPE_NAME;
                 if let Some(field) = self.wide() {
                     return Err($error_of($crate::fields::FieldError::Length { ie, field }));
@@ -297,7 +297,7 @@ macro_rules! bits {
         }
 
         impl $rules_trait for $ty {
-            fn check(&self, path: &$crate::fields::Path<'_>, found: &mut alloc::vec::Vec<$deviation>) {
+            fn check(&self, path: &$crate::fields::Path<'_>, found: &mut $crate::__alloc::vec::Vec<$deviation>) {
                 if self.wide().is_some() {
                     found.push(<$deviation as $crate::fields::Deviate>::found(path, Some($clause), $crate::fields::Finding::Rule("a value wider than its bits")));
                 }
@@ -372,7 +372,7 @@ macro_rules! bits {
                 if bits.past_length() {
                     return Err(reading.refuse(
                         $crate::tree::ErrorKind::Value,
-                        alloc::format!("a field or a spare bit is set past the length, or unknown octets follow a length short of the fields ({})", $clause),
+                        $crate::__alloc::format!("a field or a spare bit is set past the length, or unknown octets follow a length short of the fields ({})", $clause),
                     ));
                 }
                 Ok(bits)
@@ -580,7 +580,7 @@ macro_rules! layout {
                 read: |octets| {
                     let read = <Self as $codec>::decode(octets)?;
                     #[allow(unused_mut)]
-                    let mut names = alloc::vec![$($($head_name),*)?];
+                    let mut names = $crate::__alloc::vec![$($($head_name),*)?];
                     $($(
                         if $crate::layout!(@get [$($cond)?] read.$field).is_some() {
                             names.push($field_name);
@@ -659,7 +659,7 @@ macro_rules! layout {
                 })
             }
 
-            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> core::result::Result<(), $error> {
+            fn encode(&self, out: &mut $crate::__alloc::vec::Vec<u8>) -> core::result::Result<(), $error> {
                 if let Some(field) = self.inconsistent() {
                     return Err($error_of($crate::fields::FieldError::Inconsistent {
                         ie: Self::NAMED,
@@ -694,7 +694,7 @@ macro_rules! layout {
 
         impl $rules_trait for $ty {
             #[allow(unused_variables)]
-            fn check(&self, path: &$crate::fields::Path<'_>, found: &mut alloc::vec::Vec<$deviation>) {
+            fn check(&self, path: &$crate::fields::Path<'_>, found: &mut $crate::__alloc::vec::Vec<$deviation>) {
                 if let Some(field) = self.inconsistent() {
                     found.push(<$deviation as $crate::fields::Deviate>::found(path, Some($clause), $crate::fields::Finding::Inconsistent { field }));
                 }
@@ -722,7 +722,7 @@ macro_rules! layout {
             }
 
             $(
-                fn check_placed(&self, $table: &'static str, $ppath: &$crate::fields::Path<'_>, $pfound: &mut alloc::vec::Vec<$deviation>) {
+                fn check_placed(&self, $table: &'static str, $ppath: &$crate::fields::Path<'_>, $pfound: &mut $crate::__alloc::vec::Vec<$deviation>) {
                     let $pthis = self;
                     $placed
                 }
@@ -805,7 +805,7 @@ macro_rules! layout {
                     None => Ok(value),
                     Some(field) => Err(reading.refuse(
                         $crate::tree::ErrorKind::Value,
-                        alloc::format!(
+                        $crate::__alloc::format!(
                             "{field} is written where its flags or its other fields do not have it, or is missing where they do, or its octets would read as another value ({})",
                             $clause
                         ),
@@ -827,9 +827,9 @@ macro_rules! layout {
                 *octets = rest;
                 <Self as $codec>::decode(within)
             }
-            fn write(&self, out: &mut alloc::vec::Vec<u8>) {
+            fn write(&self, out: &mut $crate::__alloc::vec::Vec<u8>) {
                 // put() refuses one that does not encode, or is longer than its length says.
-                let mut within = alloc::vec::Vec::new();
+                let mut within = $crate::__alloc::vec::Vec::new();
                 if <Self as $codec>::encode(self, &mut within).is_ok() {
                     out.extend_from_slice(&(within.len() as u16).to_be_bytes());
                     out.extend_from_slice(&within);
@@ -841,7 +841,7 @@ macro_rules! layout {
             fn fits(&self) -> bool {
                 let length = <Self as $codec>::encoded_len(self);
                 length <= usize::from(u16::MAX)
-                    && <Self as $codec>::encode(self, &mut alloc::vec::Vec::new()).is_ok()
+                    && <Self as $codec>::encode(self, &mut $crate::__alloc::vec::Vec::new()).is_ok()
             }
         }
 
@@ -1098,13 +1098,13 @@ macro_rules! named_values {
                 *octets = rest;
                 Some(Self::from_value(first))
             }
-            fn write(&self, out: &mut alloc::vec::Vec<u8>) {
+            fn write(&self, out: &mut $crate::__alloc::vec::Vec<u8>) {
                 out.push(self.value());
             }
             fn size(&self) -> usize {
                 1
             }
-            fn check<D: $crate::fields::Deviate>(&self, path: &$crate::fields::Path<'_>, clause: &'static str, found: &mut alloc::vec::Vec<D>) {
+            fn check<D: $crate::fields::Deviate>(&self, path: &$crate::fields::Path<'_>, clause: &'static str, found: &mut $crate::__alloc::vec::Vec<D>) {
                 if self.name().is_none() {
                     let value = self.value().into();
                     let finding = match (Self::RESERVED.contains(&self.value()), self.effective().value()) {
