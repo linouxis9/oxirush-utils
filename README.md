@@ -382,7 +382,9 @@ has what a protocol provides.
 | Put 4096 members into an object, one after the other | 15.9 ms | 24× faster |
 
 On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), at 8865ad4 on
-2026-10-18, the lowest of five runs; "about the same" is within 10 %. An
+2026-10-18, the lowest of five runs. The serde_json cell says how much slower
+or faster serde_json is than this crate, and "about the same" is within
+10 %. An
 object keeps its members in order and is searched by name; `Map::push` adds
 4096 members whose names are new in 145 µs. Reading a 5G-GUTI from a 5GS
 mobile identity takes 14 ns, and the SUCI of an IMSI 80 ns.
