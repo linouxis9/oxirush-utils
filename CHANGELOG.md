@@ -32,6 +32,12 @@ All notable changes to `oxirush-utils` are recorded here.
   flags make present, unknown octets) and `named_values!` (a table of named values), each
   with its codec, its check, its tree and what its tree takes, on the traits that the
   protocol's crate names.
+- The feature `tables`: the tables of a protocol of type, length and value (`Row`,
+  `Role`, `Table`, `Repeat`, `On`) over what the protocol says through `Protocol` (the key
+  of an IE in its scope, its framing, the IEs that a scope keeps as octets, its presences
+  and its interfaces), and what a typed scope of a message or a grouped IE does with them
+  (`Scope`): decode, encode in the order of the wire or of the table, and the entries of
+  a row.
 
 ### Changed
 

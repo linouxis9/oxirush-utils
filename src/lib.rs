@@ -97,6 +97,9 @@ extern crate alloc;
 #[cfg_attr(docsrs, doc(cfg(feature = "fields")))]
 pub mod fields;
 pub mod identity;
+#[cfg(feature = "tables")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tables")))]
+pub mod tables;
 #[cfg(feature = "tree")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tree")))]
 pub mod tree;
