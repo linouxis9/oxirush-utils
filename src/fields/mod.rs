@@ -35,6 +35,50 @@ mod octets;
 pub use kinds::*;
 pub use octets::{Octets, together};
 
+/// The octets of a value that [`bits!`](crate::bits) reads and writes its fields in, over
+/// the value itself: an octet, or [`Octets`].
+pub trait Storage {
+    /// The octet `at`, from 0 for the first of the value: 0 where the value has none.
+    fn octet(&self, at: usize) -> u8;
+    /// Write the octet `at`.
+    fn set_octet(&mut self, at: usize, value: u8);
+}
+
+/// One octet, the first: no other octet is there, and none is written.
+impl Storage for u8 {
+    #[inline]
+    fn octet(&self, at: usize) -> u8 {
+        if at == 0 { *self } else { 0 }
+    }
+
+    #[inline]
+    fn set_octet(&mut self, at: usize, value: u8) {
+        if at == 0 {
+            *self = value;
+        }
+    }
+}
+
+/// The `width` bits of the octet `octet` of `storage` from bit `low` (from 1).
+#[inline]
+pub fn get_bits(storage: &impl Storage, octet: usize, low: u8, width: u8) -> u8 {
+    let mask = ((1u16 << width) - 1) as u8;
+    (storage.octet(octet) >> (low - 1)) & mask
+}
+
+/// Write `value` in the `width` bits of the octet `octet` of `storage` from bit `low`
+/// (from 1): the bits of `value` above them are left out, and the other bits of the octet
+/// are kept.
+#[inline]
+pub fn set_bits(storage: &mut impl Storage, octet: usize, low: u8, width: u8, value: u8) {
+    let mask = (((1u16 << width) - 1) as u8) << (low - 1);
+    let octets = (storage.octet(octet) & !mask) | ((value << (low - 1)) & mask);
+    storage.set_octet(octet, octets);
+}
+
+#[doc(hidden)]
+pub use pastey as __pastey;
+
 /// The member of a tree that holds the octets after the fields of a value: those of a
 /// later release, which the receiver ignores.
 pub const UNKNOWN_OCTETS: &str = "unknown octets";

@@ -36,7 +36,7 @@ tree = ["alloc", "dep:serde_json", "dep:serde_core"]
 # The fields of the values of a protocol of type, length and value, which the codecs of
 # the OxiRush crates lay out their values on: numbers, bits, octets after a length, lists,
 # addresses, PLMNs, names and digits, with their trees where `tree` is on.
-fields = ["alloc"]
+fields = ["alloc", "dep:pastey"]
 # The realm and the username of a NAI are also checked as internationalized names:
 # Unicode normalization form C, and a realm that IDNA takes as it is written. Without it
 # they are checked by the grammar of RFC 7542 alone. It brings the Unicode tables of
@@ -52,6 +52,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)', 'cfg(docsrs)'] }
 
 [dependencies]
+# The names of the accessors that `bits!` writes over the octets of a value.
+pastey = { version = "0.2", optional = true }
 # Its `Number` is that of a tree, and it reads and writes the text of one. 1.0.154 is the
 # first that builds on `serde_core` with `alloc` alone. With `float_roundtrip`, a number is
 # read as the nearest f64, so that a tree reads back the number that it prints. serde_json

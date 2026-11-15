@@ -5,7 +5,18 @@
 /// value of a table that only a flag gives meaning to, `if flag`, is checked where the
 /// flag is set. The rules of its clause on which flags go together follow it.
 ///
-/// The first argument names the protocol's items that the value is written with: its
+/// `over [Row, row]`, then `impl Type (field)`, writes no value: the accessors of the fields
+/// over the octets of a value that holds them, `field` an octet or an
+/// [`Octets`](crate::fields::Octets) ([`Storage`](crate::fields::Storage)): for each
+/// field its getter and its setter, which returns the value, and for a field of more
+/// than one bit its getter and setter of bits (`_raw`); `MASKS`, `spare_bits_are_zero()`,
+/// `FIELDS`, a `Row` of the protocol for each field, which its macro `row!` writes of
+/// `(field, name, octet, low, width, [octet2 low2 width2], [Kind])`, the brackets empty
+/// for a field of one part and one of no table, and `LAYOUT`.
+/// A field `as` a table's values is read and written through
+/// [`Narrowable`](crate::fields::Narrowable).
+///
+/// Otherwise, the first argument names the protocol's items that the value is written with: its
 /// codec trait, its trait of rules, its trait of IE types, its deviation, its error, and
 /// the function that makes a [`FieldError`](crate::fields::FieldError) its error. A
 /// protocol's crate wraps the macro with them, as PFCP's Apply Action (TS 29.244 §8.2.26)
@@ -19,6 +30,107 @@
 /// ```
 #[macro_export]
 macro_rules! bits {
+    // The accessors of the fields of bits over the octets of a value that holds them, an
+    // octet or `Octets`: no codec, no tree. The protocol names its row type and the macro
+    // that writes a row of it.
+    (
+        over [$row:ty, $row_macro:ident]
+        $(#[$meta:meta])*
+        impl $ty:ident ($storage:tt) $clause:literal octets $n:literal {
+            $( $field:ident $name:literal : $octet:literal $low:literal $width:tt $(+ $octet2:literal $low2:literal $width2:tt)? $(as $kind:ident)? ),* $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        impl $ty {
+            /// The bits of each octet that a field has: the others are spare.
+            pub const MASKS: [u8; $n] = {
+                let mut masks = [0u8; $n];
+                $( $crate::bits!(@mask masks, $octet, $low, $width [$($kind)? $(+ $octet2 $low2 $width2)?]); )*
+                masks
+            };
+            /// Its fields, in the order of the figure.
+            #[allow(dead_code)]
+            pub(crate) const FIELDS: &'static [$row] = &[$(
+                $row_macro!($field, $name, $octet, $low, $width, [$($octet2 $low2 $width2)?], [$($kind)?]),
+            )*];
+            /// Its layout, which a test compares with the figure of its clause.
+            #[doc(hidden)]
+            pub const LAYOUT: $crate::fields::Layout = $crate::fields::Layout {
+                head: &[],
+                bits: &[$(
+                    $crate::fields::Bits { name: $name, ident: stringify!($field), octet: $octet, bit: $low, width: $width },
+                    $( $crate::fields::Bits { name: $name, ident: stringify!($field), octet: $octet2, bit: $low2, width: $width2 }, )?
+                )*],
+                fields: &[],
+                read: |_| Some(alloc::vec::Vec::new()),
+            };
+
+            /// Whether the bits that no field has are 0 in each of its octets.
+            pub fn spare_bits_are_zero(&self) -> bool {
+                (0..$n).all(|at| $crate::fields::Storage::octet(&self.$storage, at) & !Self::MASKS[at] == 0)
+            }
+
+            $( $crate::bits!(@over $storage $field $name [$octet $low $width] [$($kind)? $(+ $octet2 $low2 $width2)?]); )*
+        }
+    };
+    // A flag: its getter and its setter.
+    (@over $storage:tt $field:ident $name:literal [$octet:literal $low:literal 1] []) => { $crate::fields::__pastey::paste! {
+        #[doc = concat!("The ", $name, " flag.")]
+        pub fn $field(&self) -> bool {
+            $crate::fields::get_bits(&self.$storage, $octet, $low, 1) == 1
+        }
+        #[doc = concat!("Set or clear the ", $name, " flag.")]
+        pub fn [<set_ $field>](&mut self, value: bool) -> &mut Self {
+            $crate::fields::set_bits(&mut self.$storage, $octet, $low, 1, u8::from(value));
+            self
+        }
+    }};
+    // A number, or a value of a table: its getter and setter, and those of its bits.
+    (@over $storage:tt $field:ident $name:literal [$octet:literal $low:literal $width:tt] [$($kind:ident)?]) => { $crate::fields::__pastey::paste! {
+        #[doc = concat!("The ", $name, " field.")]
+        pub fn $field(&self) -> $crate::bits!(@type $width [$($kind)?]) {
+            $crate::bits!(@from [$($kind)?] self.[<$field _raw>]())
+        }
+        #[doc = concat!("The bits of the ", $name, " field.")]
+        pub fn [<$field _raw>](&self) -> u8 {
+            $crate::fields::get_bits(&self.$storage, $octet, $low, $width)
+        }
+        #[doc = concat!("Set the ", $name, " field.")]
+        pub fn [<set_ $field>](&mut self, value: $crate::bits!(@type $width [$($kind)?])) -> &mut Self {
+            self.[<set_ $field _raw>]($crate::bits!(@into [$($kind)?] value))
+        }
+        #[doc = concat!("Set the bits of the ", $name, " field: those of `value` that it has.")]
+        pub fn [<set_ $field _raw>](&mut self, value: u8) -> &mut Self {
+            $crate::fields::set_bits(&mut self.$storage, $octet, $low, $width, value);
+            self
+        }
+    }};
+    // A number of two parts, the high bits in the first.
+    (@over $storage:tt $field:ident $name:literal [$octet:literal $low:literal $width:tt] [+ $octet2:literal $low2:literal $width2:tt]) => { $crate::fields::__pastey::paste! {
+        #[doc = concat!("The ", $name, " field.")]
+        pub fn $field(&self) -> u16 {
+            self.[<$field _raw>]()
+        }
+        #[doc = concat!("The bits of the ", $name, " field, the high ones first.")]
+        pub fn [<$field _raw>](&self) -> u16 {
+            (u16::from($crate::fields::get_bits(&self.$storage, $octet, $low, $width)) << $width2)
+                | u16::from($crate::fields::get_bits(&self.$storage, $octet2, $low2, $width2))
+        }
+        #[doc = concat!("Set the ", $name, " field.")]
+        pub fn [<set_ $field>](&mut self, value: u16) -> &mut Self {
+            self.[<set_ $field _raw>](value)
+        }
+        #[doc = concat!("Set the bits of the ", $name, " field: those of `value` that it has.")]
+        pub fn [<set_ $field _raw>](&mut self, value: u16) -> &mut Self {
+            $crate::fields::set_bits(&mut self.$storage, $octet, $low, $width, (value >> $width2) as u8);
+            $crate::fields::set_bits(&mut self.$storage, $octet2, $low2, $width2, (value & ((1u16 << $width2) - 1)) as u8);
+            self
+        }
+    }};
+    (@from [] $raw:expr) => { $raw };
+    (@from [$kind:ident] $raw:expr) => { <$kind as $crate::fields::Narrowable>::from_value($raw) };
+    (@into [] $value:expr) => { $value };
+    (@into [$kind:ident] $value:expr) => { <$kind as $crate::fields::Narrowable>::value($value) };
     (
         [$codec:path, $rules_trait:path, $ie_type:path, $deviation:ty, $error:ty, $error_of:path]
         $(#[$meta:meta])*
@@ -757,7 +869,7 @@ macro_rules! layout {
         $rest = tail;
         <$($kind)+ as $crate::fields::Field>::read(&mut head)
     }};
-    // A field of the octet of flags is one of `pfcp_bits`: a flag of one bit, or a number
+    // A field of the octet of flags is one of `bits!`: a flag of one bit, or a number
     // of `width` bits or a value of its table (`as`), at its bit of the octet.
     (@bits $op:ident [] $($rest:tt)*) => { $crate::bits!(@ $op 1 [] $($rest)*) };
     (@bits $op:ident [$width:literal] $($rest:tt)*) => { $crate::bits!(@ $op $width [] $($rest)*) };
@@ -942,7 +1054,6 @@ macro_rules! named_values {
         /// A whole octet; a value of fewer bits, whose octet has spare bits, is a
         /// `Narrow` field.
         impl $crate::fields::Field for $ty {
-            #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some(1);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let (&first, rest) = octets.split_first()?;

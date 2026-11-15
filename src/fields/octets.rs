@@ -71,6 +71,37 @@ impl Octets {
     }
 }
 
+impl Octets {
+    /// The octets as a slice to change in place.
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        match &mut self.0 {
+            Repr::Empty => &mut [],
+            Repr::Inline { length, octets } => &mut octets[..usize::from(*length)],
+            Repr::Heap(octets) => octets,
+        }
+    }
+}
+
+/// An absent octet reads 0, and writing one past the end adds octets of 0 up to it.
+impl super::Storage for Octets {
+    #[inline]
+    fn octet(&self, at: usize) -> u8 {
+        self.get(at).copied().unwrap_or(0)
+    }
+
+    #[inline]
+    fn set_octet(&mut self, at: usize, value: u8) {
+        if at < self.len() {
+            self.as_mut_slice()[at] = value;
+            return;
+        }
+        let mut octets = self.to_vec();
+        octets.resize(at + 1, 0);
+        octets[at] = value;
+        *self = Self::from(octets);
+    }
+}
+
 impl Default for Octets {
     #[inline]
     fn default() -> Self {

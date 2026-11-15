@@ -137,7 +137,7 @@ pub struct Bits {
     pub name: &'static str,
     /// Its name in the crate, which the conditions of the fields after it say.
     pub ident: &'static str,
-    /// Its octet, from 0 for octet 5 of the IE, the first after the Length.
+    /// Its octet, from 0 for the first octet of the value.
     pub octet: usize,
     /// Its lowest bit, from 1.
     pub bit: u8,
