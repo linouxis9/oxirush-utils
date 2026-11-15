@@ -631,7 +631,7 @@ macro_rules! __length_value {
             fn from_tree(
                 value: &$crate::tree::Value,
                 reading: &mut $crate::tree::Reading,
-            ) -> Result<Self, $crate::tree::Refused> {
+            ) -> core::result::Result<Self, $crate::tree::Refused> {
                 let octets = $crate::__length_value!(@from_tree $tree $(($fields, $takes))? value, reading)?;
                 if octets.len() > usize::from(<$length>::MAX) {
                     return Err(reading.mismatch("octets that their length can say", value));

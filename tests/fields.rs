@@ -171,3 +171,22 @@ fn a_tree_name_is_what_the_tree_writes_and_reads() {
     );
     assert_eq!(read.ok(), Some(Kind::Initial));
 }
+
+/// The macros name what they write by absolute paths: a crate's own `Result` of one
+/// parameter, in scope where they expand, changes nothing.
+mod shadowed {
+    #[allow(dead_code)]
+    type Result<T> = core::result::Result<T, ()>;
+
+    oxirush_utils::named_values! {
+        /// A table of one value.
+        pub enum One "Table 3" bits 1 {
+            0 Zero "zero",
+        }
+    }
+
+    #[test]
+    fn the_macros_expand_beside_a_result_of_one_parameter() {
+        assert_eq!(One::from_value(0).name(), Some("zero"));
+    }
+}

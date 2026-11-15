@@ -156,9 +156,9 @@ macro_rules! bits {
             pub extra: $crate::fields::Octets,
         }
 
-        impl Default for $ty {
+        impl core::default::Default for $ty {
             fn default() -> Self {
-                Self { $( $field: Default::default(), )* spare: [0; $n], present: $n, extra: Default::default() }
+                Self { $( $field: core::default::Default::default(), )* spare: [0; $n], present: $n, extra: core::default::Default::default() }
             }
         }
 
@@ -252,7 +252,7 @@ macro_rules! bits {
                 })
             }
 
-            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), $error> {
+            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> core::result::Result<(), $error> {
                 let ie = <Self as $ie_type>::TYPE_NAME;
                 if let Some(field) = self.wide() {
                     return Err($error_of($crate::fields::FieldError::Length { ie, field }));
@@ -332,7 +332,7 @@ macro_rules! bits {
             fn from_tree(
                 value: &$crate::tree::Value,
                 reading: &mut $crate::tree::Reading,
-            ) -> Result<Self, $crate::tree::Refused> {
+            ) -> core::result::Result<Self, $crate::tree::Refused> {
                 let mut bits = Self::default();
                 if Self::BARE && !value.is_object() {
                     $( bits.$field = $crate::bits!(@get $width [$($kind)? $(+ $octet2 $low2 $width2)?] value, reading)?; )*
@@ -647,7 +647,7 @@ macro_rules! layout {
                 })
             }
 
-            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), $error> {
+            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> core::result::Result<(), $error> {
                 if let Some(field) = self.inconsistent() {
                     return Err($error_of($crate::fields::FieldError::Inconsistent {
                         ie: Self::NAMED,
@@ -753,7 +753,7 @@ macro_rules! layout {
             fn from_tree(
                 value: &$crate::tree::Value,
                 reading: &mut $crate::tree::Reading,
-            ) -> Result<Self, $crate::tree::Refused> {
+            ) -> core::result::Result<Self, $crate::tree::Refused> {
                 $($(
                     if Self::FIELDS.len() == 1 && !value.is_object() {
                         let $head = <$hkind as $crate::fields::FieldTree>::from_tree(value, reading)?;
@@ -842,7 +842,7 @@ macro_rules! layout {
             fn from_tree(
                 value: &$crate::tree::Value,
                 reading: &mut $crate::tree::Reading,
-            ) -> Result<Self, $crate::tree::Refused> {
+            ) -> core::result::Result<Self, $crate::tree::Refused> {
                 <Self as $crate::tree::Tree>::from_tree(value, reading)
             }
         }
@@ -918,17 +918,17 @@ macro_rules! named_values {
             Other(u8),
         }
 
-        impl PartialEq for $ty {
+        impl core::cmp::PartialEq for $ty {
             fn eq(&self, other: &Self) -> bool {
                 self.value() == other.value()
             }
         }
 
-        impl Eq for $ty {}
+        impl core::cmp::Eq for $ty {}
 
         impl core::hash::Hash for $ty {
             fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-                self.value().hash(state);
+                core::hash::Hash::hash(&self.value(), state);
             }
         }
 
@@ -1029,7 +1029,7 @@ macro_rules! named_values {
                 value: &$crate::tree::Value,
                 reading: &mut $crate::tree::Reading,
                 upper: u8,
-            ) -> Result<Self, $crate::tree::Refused> {
+            ) -> core::result::Result<Self, $crate::tree::Refused> {
                 const NAMES: &[&str] = &[$($crate::named_values!(@tree_name $name $($tree_name)?)),*];
                 const VALUES: &[u8] = &[$($value),*];
                 if value.is_number() {
@@ -1039,20 +1039,20 @@ macro_rules! named_values {
             }
         }
 
-        impl Default for $ty {
+        impl core::default::Default for $ty {
             /// The value 0.
             fn default() -> Self {
                 Self::from_value(0)
             }
         }
 
-        impl From<u8> for $ty {
+        impl core::convert::From<u8> for $ty {
             fn from(value: u8) -> Self {
                 Self::from_value(value)
             }
         }
 
-        impl From<$ty> for u8 {
+        impl core::convert::From<$ty> for u8 {
             fn from(value: $ty) -> u8 {
                 value.value()
             }
@@ -1108,7 +1108,7 @@ macro_rules! named_values {
             fn from_tree(
                 value: &$crate::tree::Value,
                 reading: &mut $crate::tree::Reading,
-            ) -> Result<Self, $crate::tree::Refused> {
+            ) -> core::result::Result<Self, $crate::tree::Refused> {
                 Self::read_tree(value, reading, u8::MAX)
             }
         }
