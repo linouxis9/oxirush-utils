@@ -681,7 +681,8 @@ fn positions_of<S: Scope>(scope: &S, row: &Row<S::P>, mut each: impl FnMut(Entry
 }
 
 /// More than the rows of a table, which the table macro asserts: the counts of each row
-/// that the encoder keeps on the stack.
+/// that the encoder keeps on the stack, of 16 bits: a scope of more IEs in a row than they
+/// count does not encode, its length being more than 65,535 octets.
 pub const MAX_ROWS: usize = 128;
 
 /// Write `scope`: in the order that it keeps, with the values that were added since in
@@ -713,19 +714,19 @@ pub fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(), Error<
         return Ok(());
     }
     // How many values of each row the order has: those after are added.
-    let mut ordered = [0usize; MAX_ROWS];
+    let mut ordered = [0u16; MAX_ROWS];
     for placed in order {
         if let Placed::Field(ie_type) = placed
             && let Some(at) = S::position(*ie_type)
         {
-            ordered[at] += 1;
+            ordered[at] = ordered[at].saturating_add(1);
         }
     }
     let mut next_added = 0;
     let mut emit_added = |before: usize, out: &mut Vec<u8>| -> Result<(), Error<S>> {
         while next_added < table.rows.len() && next_added < before {
             let ie_type = table.rows[next_added].ie_type;
-            let mut nth = ordered[next_added];
+            let mut nth = usize::from(ordered[next_added]);
             while scope.emit(ie_type, nth, out)? {
                 nth += 1;
             }
@@ -733,15 +734,15 @@ pub fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(), Error<
         }
         Ok(())
     };
-    let mut emitted = [0usize; MAX_ROWS];
+    let mut emitted = [0u16; MAX_ROWS];
     let mut raw = scope.raw().iter();
     for placed in order {
         match placed {
             Placed::Field(ie_type) => {
                 let at = S::position(*ie_type).unwrap_or(table.rows.len());
                 emit_added(at, out)?;
-                scope.emit(*ie_type, emitted[at], out)?;
-                emitted[at] += 1;
+                scope.emit(*ie_type, usize::from(emitted[at]), out)?;
+                emitted[at] = emitted[at].saturating_add(1);
             }
             Placed::Raw => {
                 if let Some(ie) = raw.next() {

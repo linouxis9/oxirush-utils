@@ -185,7 +185,7 @@ macro_rules! table {
             fn emit(&self, ie_type: <$proto as $crate::tables::Protocol>::Key, nth: usize, out: &mut alloc::vec::Vec<u8>) -> Result<bool, $error> {
                 $(
                     if ie_type == $crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?) {
-                        return crate::$tm::emit_field::<$vty, _>(ie_type, &self.$field, nth, out);
+                        return crate::$tm::emit_field::<$vty, _>($crate::table!(@key {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} $vty $($instance)?), &self.$field, nth, out);
                     }
                 )*
                 Ok(false)
