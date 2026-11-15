@@ -153,6 +153,9 @@ fn named_values_with_tree_names_and_others() {
     assert_eq!(Level::from_value(3).effective(), Level::High);
     assert_eq!(Level::OTHERS_AS, None);
     assert_eq!(<Kind as Narrowable>::from_value(2), Kind::Mobility);
+    assert_eq!(Kind::named(2), Some(Kind::Mobility));
+    assert_eq!(Kind::named(7), None, "a value that the table does not name");
+    assert_eq!(Kind::from_value(7), Kind::Other(7));
 }
 
 #[cfg(feature = "tree")]

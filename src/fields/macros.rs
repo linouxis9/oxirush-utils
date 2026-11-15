@@ -979,6 +979,15 @@ macro_rules! named_values {
                 }
             }
 
+            /// The variant that the tables name for a number: `None` for a number that they do
+            /// not name, which [`from_value`](Self::from_value) gives as `Other`.
+            pub const fn named(value: u8) -> Option<Self> {
+                match value {
+                    $( $value => Some(Self::$variant), )*
+                    _ => None,
+                }
+            }
+
             /// The number.
             pub const fn value(self) -> u8 {
                 match self {
