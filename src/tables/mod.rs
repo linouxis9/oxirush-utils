@@ -27,6 +27,7 @@
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
+mod check;
 mod macros;
 #[cfg(feature = "tree")]
 mod paths;
@@ -38,6 +39,10 @@ pub use paths::{
     scope_from_tree, scope_to_tree, select, set,
 };
 
+pub use check::{
+    Checking, TableFinding, as_read, check_row, check_scope, check_values, condition_absent,
+    condition_missing, kept_path, presence, taken,
+};
 #[cfg(feature = "tree")]
 pub use registry::RegistryTree;
 pub use registry::{Form, IeTypeInfo, MessageTypeInfo};
@@ -79,10 +84,15 @@ pub trait Raw {
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error>;
     /// How many octets it writes, its header included.
     fn encoded_len(&self) -> usize;
+    /// Its content, which a scope reads as the value of its row.
+    fn content(&self) -> &[u8];
 }
 
 /// The presence of an IE in its table.
 pub trait Presence: Copy + Eq + Debug {
+    /// The presence of a row that the sender may include: of a row that an interface does
+    /// not have, whose IEs are discarded.
+    const OPTIONAL: Self;
     /// Whether the sender always includes it.
     fn is_mandatory(self) -> bool;
     /// Its rank from the strongest: the weakest of several is the one of the highest rank.
