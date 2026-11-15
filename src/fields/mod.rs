@@ -106,6 +106,41 @@ pub enum FieldError {
     },
 }
 
+/// A value that the bits of its field do not hold, which the field's setter refuses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OutOfRange {
+    /// The name of the field.
+    pub field: &'static str,
+    /// The value.
+    pub value: u32,
+    /// The most that the bits of the field hold.
+    pub most: u32,
+}
+
+impl OutOfRange {
+    /// Refuse `value` where the `width` bits of `field` do not hold it.
+    #[inline]
+    pub fn check(field: &'static str, value: u32, width: u32) -> Result<(), Self> {
+        let most = (1u32 << width) - 1;
+        match value <= most {
+            true => Ok(()),
+            false => Err(Self { field, value, most }),
+        }
+    }
+}
+
+impl fmt::Display for OutOfRange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}: {} is more than {}, the most that its bits hold",
+            self.field, self.value, self.most
+        )
+    }
+}
+
+impl core::error::Error for OutOfRange {}
+
 /// What a check finds in a field or a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Finding {

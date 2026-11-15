@@ -22,7 +22,7 @@
 
 extern crate alloc;
 
-use oxirush_utils::fields::{Narrowable, Octets};
+use oxirush_utils::fields::{Narrowable, Octets, OutOfRange};
 use oxirush_utils::{bits, named_values};
 
 /// A protocol's row of a field: what `row!` writes.
@@ -99,10 +99,20 @@ fn accessors_over_one_octet() {
     assert!(value.follow());
     assert_eq!(value.kind(), Kind::Mobility);
     assert_eq!(value.kind_raw(), 2);
-    value.set_follow(false).set_kind(Kind::Initial);
+    value.set_follow(false).set_kind(Kind::Initial).unwrap();
     assert_eq!(value.0, 0b0001);
-    value.set_kind_raw(0xff);
-    assert_eq!(value.0, 0b0111, "only the bits of the field are written");
+    // A value of the table that the bits do not hold is refused, and nothing is written
+    let refused = value.set_kind(Kind::Other(8)).unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        "Registration type: 8 is more than 7, the most that its bits hold"
+    );
+    assert_eq!(value.0, 0b0001);
+    value.set_kind(Kind::Other(7)).unwrap();
+    assert_eq!(value.0, 0b0111);
+    // The setter of bits writes those that the field has
+    value.set_kind_raw(0xf9);
+    assert_eq!(value.0, 0b0001, "only the bits of the field are written");
     assert_eq!(OneOctet::MASKS, [0b1111]);
     assert!(value.spare_bits_are_zero());
     assert!(!OneOctet(0x80).spare_bits_are_zero());
@@ -128,10 +138,29 @@ fn accessors_over_octets() {
     let mut value = Several(Octets::copied(&[0x0a]));
     assert_eq!(value.split(), 0xa0);
     assert_eq!(value.count(), 0);
-    value.set_count(5);
+    value.set_count(5).unwrap();
     assert_eq!(&*value.0, [0x0a, 0x00, 0x05]);
-    value.set_split(0x3c);
+    value.set_split(0x3c).unwrap();
     assert_eq!(&*value.0, [0x03, 0xc0, 0x05]);
+    // A number that the bits do not hold is refused, the most that they hold is written
+    assert_eq!(
+        value.set_count(8).unwrap_err(),
+        OutOfRange {
+            field: "Count",
+            value: 8,
+            most: 7
+        }
+    );
+    assert_eq!(value.set_split(0x100).unwrap_err().most, 0xff);
+    value.set_split(0xff).unwrap();
+    assert_eq!(&*value.0, [0x0f, 0xf0, 0x05]);
+    value.set_split(0x3c).unwrap();
+    value.set_count_raw(0x0d);
+    assert_eq!(
+        &*value.0,
+        [0x03, 0xc0, 0x05],
+        "the bits of the field are written"
+    );
     assert_eq!(value.split_raw(), 0x3c);
     assert_eq!(Several::FIELDS[0].second, Some((1, 5, 4)));
     assert_eq!(Several::MASKS, [0x0f, 0xf0, 0x07]);

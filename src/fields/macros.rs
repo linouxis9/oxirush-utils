@@ -9,7 +9,10 @@
 /// over the octets of a value that holds them, `field` an octet or an
 /// [`Octets`](crate::fields::Octets) ([`Storage`](crate::fields::Storage)): for each
 /// field its getter and its setter, which returns the value, and for a field of more
-/// than one bit its getter and setter of bits (`_raw`); `MASKS`, `spare_bits_are_zero()`,
+/// than one bit its getter and setter of bits (`_raw`). The setter of a field of more
+/// than one bit refuses a value that its bits do not hold
+/// ([`OutOfRange`](crate::fields::OutOfRange)); the setter of bits writes those of the
+/// value that the field has. Then `MASKS`, `spare_bits_are_zero()`,
 /// `FIELDS`, a `Row` of the protocol for each field, which its macro `row!` writes of
 /// `(field, name, octet, low, width, [octet2 low2 width2], [Kind])`, the brackets empty
 /// for a field of one part and one of no table, and `LAYOUT`.
@@ -95,9 +98,14 @@ macro_rules! bits {
         pub fn [<$field _raw>](&self) -> u8 {
             $crate::fields::get_bits(&self.$storage, $octet, $low, $width)
         }
-        #[doc = concat!("Set the ", $name, " field.")]
-        pub fn [<set_ $field>](&mut self, value: $crate::bits!(@type $width [$($kind)?])) -> &mut Self {
-            self.[<set_ $field _raw>]($crate::bits!(@into [$($kind)?] value))
+        #[doc = concat!("Set the ", $name, " field: a value that its bits do not hold is refused.")]
+        pub fn [<set_ $field>](
+            &mut self,
+            value: $crate::bits!(@type $width [$($kind)?]),
+        ) -> core::result::Result<&mut Self, $crate::fields::OutOfRange> {
+            let bits: u8 = $crate::bits!(@into [$($kind)?] value);
+            $crate::fields::OutOfRange::check($name, u32::from(bits), $width)?;
+            core::result::Result::Ok(self.[<set_ $field _raw>](bits))
         }
         #[doc = concat!("Set the bits of the ", $name, " field: those of `value` that it has.")]
         pub fn [<set_ $field _raw>](&mut self, value: u8) -> &mut Self {
@@ -116,9 +124,13 @@ macro_rules! bits {
             (u16::from($crate::fields::get_bits(&self.$storage, $octet, $low, $width)) << $width2)
                 | u16::from($crate::fields::get_bits(&self.$storage, $octet2, $low2, $width2))
         }
-        #[doc = concat!("Set the ", $name, " field.")]
-        pub fn [<set_ $field>](&mut self, value: u16) -> &mut Self {
-            self.[<set_ $field _raw>](value)
+        #[doc = concat!("Set the ", $name, " field: a value that its bits do not hold is refused.")]
+        pub fn [<set_ $field>](
+            &mut self,
+            value: u16,
+        ) -> core::result::Result<&mut Self, $crate::fields::OutOfRange> {
+            $crate::fields::OutOfRange::check($name, u32::from(value), $width + $width2)?;
+            core::result::Result::Ok(self.[<set_ $field _raw>](value))
         }
         #[doc = concat!("Set the bits of the ", $name, " field: those of `value` that it has.")]
         pub fn [<set_ $field _raw>](&mut self, value: u16) -> &mut Self {

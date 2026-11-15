@@ -31,7 +31,11 @@ All notable changes to `oxirush-utils` are recorded here.
   bit and width), `layout!` (fields always there, an octet of flags, fields that the
   flags make present, unknown octets) and `named_values!` (a table of named values), each
   with its codec, its check, its tree and what its tree takes, on the traits that the
-  protocol's crate names.
+  protocol's crate names. `bits!` with `over` writes the accessors of the fields over the
+  octets of a value that holds them: the getter and setter of each, and of the bits of a
+  field of more than one bit. Such a setter refuses a value that the bits of its field do
+  not hold (`OutOfRange`, "8 is more than 7, the most that its bits hold"); the setter of
+  bits (`_raw`) writes those of the value that the field has.
 - The feature `tables`: the tables of a protocol of type, length and value (`Row`,
   `Role`, `Table`, `Repeat`, `On`) over what the protocol says through `Protocol` (the key
   of an IE in its scope, its framing, the IEs that a scope keeps as octets, its presences
