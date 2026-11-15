@@ -1765,6 +1765,89 @@ impl fmt::Debug for DigitsLv8 {
     }
 }
 
+/// Digits as TBCD up to the end of the IE: an IMSI, an MSISDN or an MEI of GTPv2-C (TS
+/// 29.274 §8.3, §8.10, §8.11). Its tree is the digits, or `{"octets": ...}` for octets that
+/// are no TBCD string.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Digits(pub Octets);
+
+impl Digits {
+    /// The digits, as `tbcd::encode` gives back their octets.
+    #[inline]
+    pub fn digits(&self) -> Option<alloc::string::String> {
+        DigitsLv8(self.0.clone()).digits()
+    }
+
+    /// The octets of `digits`.
+    ///
+    /// # Errors
+    ///
+    /// A character that TBCD does not have.
+    #[inline]
+    pub fn new(digits: &str) -> Result<Self, crate::identity::Error> {
+        crate::identity::tbcd::encode(digits).map(|octets| Self(octets.into()))
+    }
+}
+
+impl fmt::Debug for Digits {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.digits() {
+            Some(digits) => write!(f, "Digits({digits:?})"),
+            None => write!(f, "Digits({:?})", Octets::copied(&self.0)),
+        }
+    }
+}
+
+impl Field for Digits {
+    const TO_THE_END: bool = true;
+
+    #[inline]
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        Rest::read(octets).map(|value| Self(value.0))
+    }
+    #[inline]
+    fn write(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.0);
+    }
+    #[inline]
+    fn size(&self) -> usize {
+        self.0.len()
+    }
+}
+
+#[cfg(feature = "tree")]
+impl FieldTree for Digits {
+    const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::OneOf(&[
+        &crate::tree::Takes::Digits,
+        &crate::tree::Takes::Members(None, &[("octets", &crate::tree::Takes::Octets(None))]),
+    ]);
+    #[inline]
+    fn to_tree(&self) -> crate::tree::Value {
+        match self.digits() {
+            Some(text) => crate::tree::text(text),
+            None => crate::tree::alternative("octets", crate::tree::octets(&self.0)),
+        }
+    }
+    #[inline]
+    fn from_tree(
+        value: &crate::tree::Value,
+        reading: &mut crate::tree::Reading,
+    ) -> Result<Self, crate::tree::Refused> {
+        let octets = match value.as_str() {
+            Some(text) => crate::identity::tbcd::encode(text)
+                .map_err(|_| reading.mismatch("Digits", value))?,
+            None => {
+                let (_, content) = reading.alternative(value, &["octets"])?;
+                reading.within("octets", content, |content, reading| {
+                    reading.octets(content)
+                })?
+            }
+        };
+        Ok(Self(octets.into()))
+    }
+}
+
 /// Text after a length of one octet, a UTF8String: as a NAI, a SUPI, a GPSI or a PEI, and
 /// the Key ID of a Key ID and Shared Secret of PFCP (TS 29.244 §8.2.276). Its tree is the text, or
 /// `{"octets": ...}` for octets that are no UTF-8.

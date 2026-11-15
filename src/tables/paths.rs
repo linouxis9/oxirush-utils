@@ -60,6 +60,12 @@ pub trait TreeProtocol: RegistryTree {
     /// key has more (an instance) refuses an IE written under the name of its type whose
     /// key is a row's, once it is read.
     const BY_TYPE: bool = true;
+    /// Whether the tree of a scope writes its rows in the order of the wire, each where
+    /// its first IE is, and a scope read from a tree keeps the order that the tree writes:
+    /// of a protocol whose senders write the IEs of a scope in orders of their own, whose
+    /// trees then encode back to their octets. Otherwise a tree is in the order of the
+    /// table, and a scope read from it encodes in that order.
+    const WIRE_ORDER: bool = false;
     /// Its IE types, in the order of their numbers.
     fn ie_types() -> &'static [IeTypeInfo<Self>];
     /// Its message types.
@@ -180,7 +186,49 @@ pub fn scope_to_tree<P: TreeProtocol, S: TreeScope + Scope<P = P>>(scope: &S) ->
             P::raw_tree(ie),
         );
     }
+    if P::WIRE_ORDER && !scope.order().is_empty() {
+        return Value::Object(in_wire_order::<P, S>(scope, members));
+    }
     Value::Object(members)
+}
+
+/// The members of the tree of a scope in the order of the wire: each where its first IE
+/// is.
+#[cold]
+fn in_wire_order<P: TreeProtocol, S: Scope<P = P>>(scope: &S, members: Map) -> Map {
+    let table = S::table();
+    let raws = scope.raw();
+    let mut names: Vec<Cow<'static, str>> = Vec::new();
+    let mut kept = 0;
+    for placed in scope.order() {
+        let key = match placed {
+            Placed::Field(key) => *key,
+            Placed::Raw => {
+                let Some(ie) = raws.get(kept) else { continue };
+                kept += 1;
+                ie.key()
+            }
+        };
+        let name: Cow<'static, str> = match table.row_of(key) {
+            Some(row) => row.name.into(),
+            None => P::tree_name(key, Some(table)).into(),
+        };
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    let mut rest: Vec<(Cow<'static, str>, Value)> = members.into_iter().collect();
+    let mut ordered = Map::new();
+    for name in names {
+        if let Some(at) = rest.iter().position(|(written, _)| *written == name) {
+            let (name, value) = rest.remove(at);
+            ordered.push(name, value);
+        }
+    }
+    for (name, value) in rest {
+        ordered.push(name, value);
+    }
+    ordered
 }
 
 /// Whether an entry is written as octets.
@@ -288,7 +336,7 @@ pub fn scope_from_tree<P: TreeProtocol, S: TreeScope + Scope<P = P>>(
     let mut placed: Vec<(usize, Placed<P::Key>)> = Vec::new();
     let mut kept: Vec<(usize, P::Raw)> = Vec::new();
     let mut rows_written: Vec<(usize, &str)> = Vec::new();
-    for (written, held) in members {
+    for (index, (written, held)) in members.iter().enumerate() {
         let (at, ie_type) = written_ie::<P>(table, &names, written, &mut rows_written, reading)?;
         let row = at.map(|at| &table.rows[at]);
         let octets = match held {
@@ -311,7 +359,11 @@ pub fn scope_from_tree<P: TreeProtocol, S: TreeScope + Scope<P = P>>(
                 false => read_ies(&mut scope, row, ie_type, held, reading),
             }
         })?;
-        let position = at.unwrap_or(usize::MAX);
+        // Where the tree writes it, of a protocol that keeps the order of the tree.
+        let position = match P::WIRE_ORDER {
+            true => index,
+            false => at.unwrap_or(usize::MAX),
+        };
         for ie in read {
             match ie {
                 Some(ie) => {
@@ -396,7 +448,10 @@ fn read_ies<P: TreeProtocol, S: TreeScope + Scope<P = P>>(
             if row.is_none()
                 && let Some(row) = S::table().rows.iter().find(|row| row.ie_type == raw.key())
             {
-                let why = alloc::format!("its key is that of the row {}, which goes by its name", row.name);
+                let why = alloc::format!(
+                    "its key is that of the row {}, which goes by its name",
+                    row.name
+                );
                 return Err(reading.refuse(ErrorKind::Value, why));
             }
             read.push(Some(raw));

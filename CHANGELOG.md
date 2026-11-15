@@ -49,7 +49,9 @@ All notable changes to `oxirush-utils` are recorded here.
   the paths of the tree of a message (`select`, `set`, `row_at`, `located`), over what the
   protocol says through `TreeProtocol`. A row may name the instance of its IE after its
   type, for a protocol whose key is a type and an instance, as GTPv2-C's; a table has at
-  most 127 rows.
+  most 127 rows. A protocol whose senders write IEs in orders of their own has the trees of
+  its scopes in the order of the wire (`TreeProtocol::WIRE_ORDER`), which then encode back
+  to their octets.
 - `tools/docx_tables.py` reads the paragraphs, tables and figures of a 3GPP specification
   in .docx, for the tests that compare a crate's tables with its document: the cells of a
   figure by their widths or by their grid columns, the label of a row on its left or on
