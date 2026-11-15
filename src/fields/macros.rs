@@ -880,8 +880,11 @@ macro_rules! layout {
 /// the table has as spare or reserved, or does not have, kept as it is. A field of `bits`
 /// bits, or a whole octet whose other bits are spare. `reserved [..]` lists the values that
 /// the table reserves, and `rejected [from ..= to]` gives those that a note of the table
-/// has its receiver reject, which are reserved in effect. PFCP's Gate (TS 29.244 Tables
-/// 8.2.7-1 and 8.2.7-2):
+/// has its receiver reject, which are reserved in effect. `read [from ..= to as value]`
+/// gives the values that a receiver reads as another, and `others as value` the one that
+/// it reads each value that the table does not name as ("all other values are
+/// interpreted as"). A value's name in a tree is the table's, or the one written after
+/// `tree`. PFCP's Gate (TS 29.244 Tables 8.2.7-1 and 8.2.7-2):
 ///
 /// ```text
 /// pub enum Gate "Table 8.2.7-1 and Table 8.2.7-2" bits 2 {
@@ -895,8 +898,9 @@ macro_rules! named_values {
         $(#[$meta:meta])*
         pub enum $ty:ident $table:literal bits $bits:literal $(reserved [$($reserved:literal),*])?
             $(rejected [$rejected_from:literal ..= $rejected_to:literal])?
-            $(read [$($from:literal ..= $to:literal as $target:literal),+])? {
-            $( $value:literal $variant:ident $name:literal ),* $(,)?
+            $(read [$($from:literal ..= $to:literal as $target:literal),+])?
+            $(others as $other:literal)? {
+            $( $value:literal $variant:ident $name:literal $(tree $tree_name:literal)? ),* $(,)?
         }
     )*) => {$(
         $(#[$meta])*
@@ -953,7 +957,7 @@ macro_rules! named_values {
             pub const NAMES: &'static [(u8, &'static str)] = &[$(($value, $name)),*];
             /// The names of the values, which a tree writes them by.
             #[cfg(feature = "tree")]
-            pub(crate) const NAMED: &'static [&'static str] = &[$($name),*];
+            pub(crate) const NAMED: &'static [&'static str] = &[$($crate::named_values!(@tree_name $name $($tree_name)?)),*];
             /// The width of the field, in bits.
             pub const BITS: u32 = $bits;
             /// The values that the tables reserve, and those that a note of theirs has a
@@ -963,6 +967,9 @@ macro_rules! named_values {
             /// The values that a sender does not send and a receiver reads as another, as
             /// the tables say: from, to, and the value that they are read as.
             pub const READ_AS: &'static [(u8, u8, u8)] = &[$($(($from, $to, $target)),+)?];
+            /// The value that a receiver reads each value that the tables do not name as,
+            /// where they say so ("all other values are interpreted as").
+            pub const OTHERS_AS: Option<u8> = $crate::named_values!(@others $($other)?);
 
             /// The variant of a number.
             pub const fn from_value(value: u8) -> Self {
@@ -985,6 +992,7 @@ macro_rules! named_values {
             pub const fn effective(self) -> Self {
                 match self.value() {
                     $($( $from..=$to => Self::from_value($target), )+)?
+                    $( _ if self.name().is_none() => Self::from_value($other), )?
                     _ => self,
                 }
             }
@@ -997,10 +1005,19 @@ macro_rules! named_values {
                 }
             }
 
-            /// The name, or the number of a value that the table does not name.
+            /// The name of the value in a tree: the table's, or the one written after
+            /// `tree`. `None` for `Other`.
+            pub const fn tree_name(self) -> Option<&'static str> {
+                match Self::from_value(self.value()) {
+                    $( Self::$variant => Some($crate::named_values!(@tree_name $name $($tree_name)?)), )*
+                    Self::Other(_) => None,
+                }
+            }
+
+            /// The name in a tree, or the number of a value that the table does not name.
             #[cfg(feature = "tree")]
             pub(crate) fn tree(self) -> $crate::tree::Value {
-                match self.name() {
+                match self.tree_name() {
                     Some(name) => $crate::tree::text(name),
                     None => $crate::tree::unsigned(self.value().into()),
                 }
@@ -1013,7 +1030,7 @@ macro_rules! named_values {
                 reading: &mut $crate::tree::Reading,
                 upper: u8,
             ) -> Result<Self, $crate::tree::Refused> {
-                const NAMES: &[&str] = &[$($name),*];
+                const NAMES: &[&str] = &[$($crate::named_values!(@tree_name $name $($tree_name)?)),*];
                 const VALUES: &[u8] = &[$($value),*];
                 if value.is_number() {
                     return Ok(Self::from_value(reading.unsigned(value, 0, upper.into())? as u8));
@@ -1096,6 +1113,10 @@ macro_rules! named_values {
             }
         }
     )*};
+    (@tree_name $name:literal) => { $name };
+    (@tree_name $name:literal $tree_name:literal) => { $tree_name };
+    (@others) => { None };
+    (@others $other:literal) => { Some($other) };
     (@reserved [$($reserved:literal),*]) => { &[$($reserved),*] };
     (@reserved [] [$from:literal $to:literal]) => {
         &$crate::fields::values_from::<{ $to - $from + 1 }>($from)

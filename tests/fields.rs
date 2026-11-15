@@ -15,14 +15,14 @@
    limitations under the License.
 */
 
-//! The accessors that `bits!` writes over the octets of a value, as a protocol's crate
-//! writes them.
+//! The accessors that `bits!` writes over the octets of a value, and the forms of
+//! `named_values!`, as a protocol's crate writes them.
 
 #![cfg(feature = "fields")]
 
 extern crate alloc;
 
-use oxirush_utils::fields::Octets;
+use oxirush_utils::fields::{Narrowable, Octets};
 use oxirush_utils::{bits, named_values};
 
 /// A protocol's row of a field: what `row!` writes.
@@ -56,12 +56,17 @@ macro_rules! row {
 }
 
 named_values! {
-    /// The type of a registration.
-    pub enum Kind "Table 1" bits 3 {
-        1 Initial "initial registration",
-        2 Mobility "mobility registration updating",
+    /// The type of a registration, whose other values are read as the first.
+    pub enum Kind "Table 1" bits 3 others as 1 {
+        1 Initial "initial registration" tree "initial-registration",
+        2 Mobility "mobility registration updating" tree "mobility-registration-updating",
     }
 
+    /// A value of two bits, two of whose values are read as another.
+    pub enum Level "Table 2" bits 2 read [2 ..= 3 as 1] {
+        0 Low "low",
+        1 High "high",
+    }
 }
 
 /// A value of one octet: a flag, a value of a table and a spare bit.
@@ -136,4 +141,33 @@ fn accessors_over_octets() {
         "a field of two parts has a cell for each"
     );
     assert!(!Several(Octets::copied(&[0x10])).spare_bits_are_zero());
+}
+
+#[test]
+fn named_values_with_tree_names_and_others() {
+    assert_eq!(Kind::Initial.name(), Some("initial registration"));
+    assert_eq!(Kind::Initial.tree_name(), Some("initial-registration"));
+    assert_eq!(Kind::from_value(7).effective(), Kind::Initial);
+    assert_eq!(Kind::from_value(2).effective(), Kind::Mobility);
+    assert_eq!(Kind::OTHERS_AS, Some(1));
+    assert_eq!(Level::from_value(3).effective(), Level::High);
+    assert_eq!(Level::OTHERS_AS, None);
+    assert_eq!(<Kind as Narrowable>::from_value(2), Kind::Mobility);
+}
+
+#[cfg(feature = "tree")]
+#[test]
+fn a_tree_name_is_what_the_tree_writes_and_reads() {
+    use oxirush_utils::fields::FieldTree;
+    use oxirush_utils::tree;
+    assert_eq!(
+        FieldTree::to_tree(&Kind::Mobility),
+        tree!("mobility-registration-updating")
+    );
+    let read = tree::read(
+        &tree!("Initial Registration"),
+        "Kind",
+        <Kind as FieldTree>::from_tree,
+    );
+    assert_eq!(read.ok(), Some(Kind::Initial));
 }
