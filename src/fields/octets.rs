@@ -44,6 +44,7 @@ enum Repr {
 
 impl Octets {
     /// A copy of `octets`.
+    #[inline]
     pub fn copied(octets: &[u8]) -> Self {
         match octets.len() {
             0 => Self(Repr::Empty),
@@ -71,6 +72,7 @@ impl Octets {
 }
 
 impl Default for Octets {
+    #[inline]
     fn default() -> Self {
         Self(Repr::Empty)
     }
@@ -85,6 +87,7 @@ impl Deref for Octets {
 }
 
 impl PartialEq for Octets {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.as_slice() == other.as_slice()
     }
@@ -93,6 +96,7 @@ impl PartialEq for Octets {
 impl Eq for Octets {}
 
 impl fmt::Debug for Octets {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for octet in self.as_slice() {
             write!(f, "{octet:02x}")?;
@@ -102,6 +106,7 @@ impl fmt::Debug for Octets {
 }
 
 impl From<Vec<u8>> for Octets {
+    #[inline]
     fn from(octets: Vec<u8>) -> Self {
         match octets.len() {
             0..=INLINE => Self::copied(&octets),
@@ -111,12 +116,14 @@ impl From<Vec<u8>> for Octets {
 }
 
 impl From<&[u8]> for Octets {
+    #[inline]
     fn from(octets: &[u8]) -> Self {
         Self::copied(octets)
     }
 }
 
 impl<const N: usize> From<[u8; N]> for Octets {
+    #[inline]
     fn from(octets: [u8; N]) -> Self {
         Self::copied(&octets)
     }
@@ -124,6 +131,7 @@ impl<const N: usize> From<[u8; N]> for Octets {
 
 /// Of a byte string: `b"internet".into()`.
 impl<const N: usize> From<&[u8; N]> for Octets {
+    #[inline]
     fn from(octets: &[u8; N]) -> Self {
         Self::copied(octets)
     }
@@ -131,6 +139,7 @@ impl<const N: usize> From<&[u8; N]> for Octets {
 
 /// The bits of an octet of two values of disjoint bits, each in its place: those of the
 /// fields of a header, of a value and its spare bits, of a type and a length.
+#[inline]
 pub const fn together(high: u8, low: u8) -> u8 {
     high | low
 }

@@ -95,6 +95,7 @@ pub enum Finding {
 }
 
 /// The one field of `fields`, which the tree of a value is when it is written as a scalar.
+#[inline]
 pub const fn one(fields: &'static [&'static str]) -> Option<&'static str> {
     match fields {
         [field] => Some(field),
@@ -104,6 +105,7 @@ pub const fn one(fields: &'static [&'static str]) -> Option<&'static str> {
 
 /// Each value from `from`, `N` of them: the values that a note of a table of values has a
 /// receiver reject.
+#[inline]
 pub const fn values_from<const N: usize>(from: u8) -> [u8; N] {
     let mut values = [0; N];
     let mut at = 0;
@@ -138,6 +140,7 @@ pub enum Path<'a> {
 }
 
 impl fmt::Display for Path<'_> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Root(path) => f.write_str(path),
@@ -160,6 +163,7 @@ impl fmt::Display for Path<'_> {
 pub struct Segment<'a>(pub &'a str);
 
 impl fmt::Display for Segment<'_> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut rest = self.0;
         while let Some(at) = rest.find(['~', '/']) {
@@ -179,6 +183,7 @@ impl fmt::Display for Segment<'_> {
 /// them: the name, or, of other octets, an object of one member, the one name of `field`,
 /// of the octets in hexadecimal. `{"octets": ...}` is an IE kept as octets.
 #[cfg(feature = "tree")]
+#[inline]
 pub fn name_tree(octets: &[u8], field: &'static [&'static str]) -> crate::tree::Value {
     match fqdn_name(octets) {
         Some(name) => crate::tree::text(name),
@@ -188,6 +193,7 @@ pub fn name_tree(octets: &[u8], field: &'static [&'static str]) -> crate::tree::
 
 /// The octets of the tree of a name of labels ([`name_tree`]).
 #[cfg(feature = "tree")]
+#[inline]
 pub fn name_from_tree(
     value: &crate::tree::Value,
     reading: &mut crate::tree::Reading,
@@ -209,6 +215,7 @@ pub fn name_from_tree(
 /// that are no UTF-8, an object of one member, the one name of `field`, of the octets in
 /// hexadecimal. `{"octets": ...}` is an IE kept as octets.
 #[cfg(feature = "tree")]
+#[inline]
 pub fn text_tree(octets: &[u8], field: &'static [&'static str]) -> crate::tree::Value {
     match core::str::from_utf8(octets) {
         Ok(text) => crate::tree::text(alloc::string::String::from(text)),
@@ -220,6 +227,7 @@ pub fn text_tree(octets: &[u8], field: &'static [&'static str]) -> crate::tree::
 /// is one, whose octets that are no text are the one member `member` of an object. A
 /// refusal names no member that is written, which a secret may be.
 #[cfg(feature = "tree")]
+#[inline]
 pub fn text_from_tree(
     value: &crate::tree::Value,
     reading: &mut crate::tree::Reading,

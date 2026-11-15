@@ -23,10 +23,12 @@ pub trait Field: Sized {
     /// Its length.
     fn size(&self) -> usize;
     /// What it breaks of the clause of its layout: a value that its table does not name.
+    #[inline]
     fn check<D: Deviate>(&self, _path: &Path<'_>, _clause: &'static str, _found: &mut Vec<D>) {}
     /// Whether its length, its number or its type fit the bits that say them: [`put`],
     /// which writes each field of a value, refuses one that does not, and `check()`
     /// reports it.
+    #[inline]
     fn fits(&self) -> bool {
         true
     }
@@ -42,11 +44,13 @@ pub trait FieldTree: Field {
     fn to_tree(&self) -> crate::tree::Value;
     /// Put its tree in the tree of its value, as the member `name`: a spare field only
     /// where it is set.
+    #[inline]
     fn put_member(&self, members: &mut crate::tree::Members, name: &'static str) {
         members.put(name, self.to_tree());
     }
     /// Read it from the member `name` of the tree of its value: a spare field is 0 where
     /// the tree leaves it out.
+    #[inline]
     fn read_member(
         read: &crate::tree::Read<'_>,
         name: &'static str,
@@ -81,6 +85,7 @@ macro_rules! field_names {
 /// where a later one, or unknown octets (`extra`), are, which would read as it. Of
 /// `fields`, each by its name and whether the value has it, the first that is missing so;
 /// `None` for none.
+#[inline]
 pub fn trailing(fields: &[(&'static str, bool)], extra: &[u8]) -> Option<&'static str> {
     let last = fields.iter().rposition(|(_, there)| *there);
     let read = match extra.is_empty() {
@@ -94,6 +99,7 @@ pub fn trailing(fields: &[(&'static str, bool)], extra: &[u8]) -> Option<&'stati
 /// Write `field`, named `name`, of a value of the IE `ie`: refused where its length, its
 /// number or its type do not fit the bits that say them ([`Field::fits`]). Each value
 /// writes each of its fields so.
+#[inline]
 pub fn put<F: Field>(
     field: &F,
     ie: &'static str,
@@ -185,6 +191,7 @@ pub fn flag_rule<D: Deviate>(
 }
 
 /// The octets of a field whose octets are fixed, or 0.
+#[inline]
 pub const fn octets_of(octets: Option<usize>) -> usize {
     match octets {
         Some(octets) => octets,
@@ -192,6 +199,7 @@ pub const fn octets_of(octets: Option<usize>) -> usize {
     }
 }
 
+#[inline]
 fn take<const N: usize>(octets: &mut &[u8]) -> Option<[u8; N]> {
     let (taken, rest) = octets.split_first_chunk::<N>()?;
     *octets = rest;
@@ -203,12 +211,15 @@ macro_rules! number_field {
         impl Field for $t {
             const OCTETS: Option<usize> = Some(core::mem::size_of::<$t>());
 
+            #[inline]
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take(octets).map(<$t>::from_be_bytes)
             }
+            #[inline]
             fn write(&self, out: &mut Vec<u8>) {
                 out.extend_from_slice(&self.to_be_bytes());
             }
+            #[inline]
             fn size(&self) -> usize {
                 core::mem::size_of::<$t>()
             }
@@ -217,9 +228,11 @@ macro_rules! number_field {
         #[cfg(feature = "tree")]
         impl FieldTree for $t {
             const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Number(<$t>::MAX as u64);
+            #[inline]
             fn to_tree(&self) -> crate::tree::Value {
                 crate::tree::unsigned((*self).into())
             }
+            #[inline]
             fn from_tree(
                 value: &crate::tree::Value,
                 reading: &mut crate::tree::Reading,
@@ -237,12 +250,15 @@ macro_rules! signed_field {
         impl Field for $t {
             const OCTETS: Option<usize> = Some(core::mem::size_of::<$t>());
 
+            #[inline]
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take(octets).map(<$t>::from_be_bytes)
             }
+            #[inline]
             fn write(&self, out: &mut Vec<u8>) {
                 out.extend_from_slice(&self.to_be_bytes());
             }
+            #[inline]
             fn size(&self) -> usize {
                 core::mem::size_of::<$t>()
             }
@@ -252,9 +268,11 @@ macro_rules! signed_field {
         impl FieldTree for $t {
             const TAKES: &'static crate::tree::Takes =
                 &crate::tree::Takes::Signed(<$t>::MIN as i64, <$t>::MAX as i64);
+            #[inline]
             fn to_tree(&self) -> crate::tree::Value {
                 crate::tree::signed((*self).into())
             }
+            #[inline]
             fn from_tree(
                 value: &crate::tree::Value,
                 reading: &mut crate::tree::Reading,
@@ -296,12 +314,14 @@ pub struct Narrow<E> {
 
 impl<E> Narrow<E> {
     /// The value, without spare bits.
+    #[inline]
     pub fn new(value: E) -> Self {
         Self { value, spare: 0 }
     }
 }
 
 /// The bits of the octet of a [`Narrow`] value that are its value.
+#[inline]
 const fn mask<E: Narrowable>() -> u8 {
     ((1u16 << E::BITS) - 1) as u8
 }
@@ -315,6 +335,7 @@ impl<E: Narrowable> Field for Narrow<E> {
         bit: 1,
         width: E::BITS as u8,
     }];
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let octet = u8::read(octets)?;
         Some(Self {
@@ -322,16 +343,20 @@ impl<E: Narrowable> Field for Narrow<E> {
             spare: octet & !mask::<E>(),
         })
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         let (spare, value) = (self.spare & !mask::<E>(), self.value.value() & mask::<E>());
         out.push(together(spare, value));
     }
+    #[inline]
     fn size(&self) -> usize {
         1
     }
+    #[inline]
     fn fits(&self) -> bool {
         self.value.value() <= mask::<E>() && self.spare & mask::<E>() == 0
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         if !self.fits() {
             found.push(D::found(
@@ -356,6 +381,7 @@ impl<E: NarrowTree> FieldTree for Narrow<E> {
             ("Spare", &crate::tree::Takes::Number(u8::MAX as u64)),
         ],
     );
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         if self.spare == 0 {
             return self.value.to_tree();
@@ -365,6 +391,7 @@ impl<E: NarrowTree> FieldTree for Narrow<E> {
         members.put("Spare", crate::tree::unsigned(self.spare.into()));
         members.finish()
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -408,9 +435,11 @@ impl<const BITS: u32> NarrowTree for Number<BITS> {
 
 impl<const BITS: u32> Narrowable for Number<BITS> {
     const BITS: u32 = BITS;
+    #[inline]
     fn from_value(value: u8) -> Self {
         Self(value)
     }
+    #[inline]
     fn value(self) -> u8 {
         self.0
     }
@@ -420,12 +449,15 @@ impl<const BITS: u32> Narrowable for Number<BITS> {
 impl<const BITS: u32> Field for Number<BITS> {
     const OCTETS: Option<usize> = Some(1);
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.push(self.0);
     }
+    #[inline]
     fn size(&self) -> usize {
         1
     }
@@ -434,9 +466,11 @@ impl<const BITS: u32> Field for Number<BITS> {
 #[cfg(feature = "tree")]
 impl<const BITS: u32> FieldTree for Number<BITS> {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Number(u8::MAX as u64);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::unsigned(self.0.into())
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -452,19 +486,24 @@ pub struct U40(pub u64);
 impl Field for U40 {
     const OCTETS: Option<usize> = Some(5);
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let [a, b, c, d, e] = take::<5>(octets)?;
         Some(Self(u64::from_be_bytes([0, 0, 0, a, b, c, d, e])))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.0.to_be_bytes()[3..]);
     }
+    #[inline]
     fn size(&self) -> usize {
         5
     }
+    #[inline]
     fn fits(&self) -> bool {
         self.0 < 1 << 40
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         if !self.fits() {
             found.push(D::found(
@@ -479,9 +518,11 @@ impl Field for U40 {
 #[cfg(feature = "tree")]
 impl FieldTree for U40 {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Number((1 << 40) - 1);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::unsigned(self.0)
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -500,12 +541,15 @@ pub type OctetArray16 = [u8; 16];
 impl<const N: usize> Field for [u8; N] {
     const OCTETS: Option<usize> = Some(N);
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         take::<N>(octets)
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(self);
     }
+    #[inline]
     fn size(&self) -> usize {
         N
     }
@@ -514,9 +558,11 @@ impl<const N: usize> Field for [u8; N] {
 #[cfg(feature = "tree")]
 impl<const N: usize> FieldTree for [u8; N] {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Octets(Some(N));
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::octets(self)
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -544,24 +590,29 @@ pub struct Lv16(pub Octets);
 macro_rules! __length_value {
     ($ty:ident $length:ty, $tree:ident $(($fields:expr, $takes:expr))?) => {
         impl $crate::fields::Field for $ty {
+            #[inline]
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let length = usize::from(<$length as $crate::fields::Field>::read(octets)?);
                 let (value, rest) = octets.split_at_checked(length)?;
                 *octets = rest;
                 Some(Self($crate::fields::Octets::copied(value)))
             }
+            #[inline]
             fn write(&self, out: &mut alloc::vec::Vec<u8>) {
                 // encode() refuses a value longer than its length can say.
                 let length = <$length>::try_from(self.0.len()).unwrap_or(<$length>::MAX);
                 out.extend_from_slice(&length.to_be_bytes());
                 out.extend_from_slice(&self.0);
             }
+            #[inline]
             fn size(&self) -> usize {
                 core::mem::size_of::<$length>() + self.0.len()
             }
+            #[inline]
             fn fits(&self) -> bool {
                 self.0.len() <= usize::from(<$length>::MAX)
             }
+            #[inline]
             fn check<D: $crate::fields::Deviate>(&self, path: &$crate::fields::Path<'_>, clause: &'static str, found: &mut alloc::vec::Vec<D>) {
                 if !self.fits() {
                     found.push(D::found(path, Some(clause), $crate::fields::Finding::Rule("more octets than their length can say")));
@@ -572,9 +623,11 @@ macro_rules! __length_value {
         #[cfg(feature = "tree")]
         impl $crate::fields::FieldTree for $ty {
             const TAKES: &'static $crate::tree::Takes = $crate::__length_value!(@takes $tree $(($fields, $takes))?);
+            #[inline]
             fn to_tree(&self) -> $crate::tree::Value {
                 $crate::__length_value!(@to_tree $tree $(($fields, $takes))? &self.0)
             }
+            #[inline]
             fn from_tree(
                 value: &$crate::tree::Value,
                 reading: &mut $crate::tree::Reading,
@@ -605,13 +658,16 @@ pub struct Rest(pub Octets);
 impl Field for Rest {
     const TO_THE_END: bool = true;
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let all = core::mem::take(octets);
         Some(Self(Octets::copied(all)))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.0);
     }
+    #[inline]
     fn size(&self) -> usize {
         self.0.len()
     }
@@ -620,9 +676,11 @@ impl Field for Rest {
 #[cfg(feature = "tree")]
 impl FieldTree for Rest {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Octets(None);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::octets(&self.0)
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -638,6 +696,7 @@ pub struct Percent(pub u8);
 
 impl Percent {
     /// The percentage as a receiver takes it: 0 for a value above 100.
+    #[inline]
     pub const fn effective(self) -> u8 {
         match self.0 {
             0..=100 => self.0,
@@ -649,15 +708,19 @@ impl Percent {
 impl Field for Percent {
     const OCTETS: Option<usize> = Some(1);
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.push(self.0);
     }
+    #[inline]
     fn size(&self) -> usize {
         1
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         if self.0 > 100 {
             found.push(D::found(
@@ -675,9 +738,11 @@ impl Field for Percent {
 #[cfg(feature = "tree")]
 impl FieldTree for Percent {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Number(u8::MAX as u64);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::unsigned(self.0.into())
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -694,15 +759,19 @@ pub struct Spare(pub u8);
 impl Field for Spare {
     const OCTETS: Option<usize> = Some(1);
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.push(self.0);
     }
+    #[inline]
     fn size(&self) -> usize {
         1
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, _clause: &'static str, found: &mut Vec<D>) {
         if self.0 != 0 {
             found.push(D::found(path, None, Finding::SpareBits));
@@ -713,20 +782,24 @@ impl Field for Spare {
 #[cfg(feature = "tree")]
 impl FieldTree for Spare {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Number(u8::MAX as u64);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::unsigned(self.0.into())
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
     ) -> Result<Self, crate::tree::Refused> {
         u8::from_tree(value, reading).map(Self)
     }
+    #[inline]
     fn put_member(&self, members: &mut crate::tree::Members, name: &'static str) {
         if self.0 != 0 {
             members.put(name, self.to_tree());
         }
     }
+    #[inline]
     fn read_member(
         read: &crate::tree::Read<'_>,
         name: &'static str,
@@ -742,6 +815,7 @@ impl FieldTree for Spare {
 pub struct Counted<T>(pub Vec<T>);
 
 impl<T: Field> Field for Counted<T> {
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let count = u8::read(octets)?;
         let mut values = Vec::with_capacity(usize::from(count).min(octets.len()));
@@ -750,6 +824,7 @@ impl<T: Field> Field for Counted<T> {
         }
         Some(Self(values))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         // More values than the number can say are written with the number cut: check()
         // reports it.
@@ -758,12 +833,15 @@ impl<T: Field> Field for Counted<T> {
             value.write(out);
         }
     }
+    #[inline]
     fn size(&self) -> usize {
         1 + self.0.iter().map(Field::size).sum::<usize>()
     }
+    #[inline]
     fn fits(&self) -> bool {
         self.0.len() <= usize::from(u8::MAX) && self.0.iter().all(Field::fits)
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         if self.0.len() > usize::from(u8::MAX) {
             found.push(D::found(
@@ -781,9 +859,11 @@ impl<T: Field> Field for Counted<T> {
 #[cfg(feature = "tree")]
 impl<T: FieldTree> FieldTree for Counted<T> {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::List(T::TAKES);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::Value::Array(self.0.iter().map(FieldTree::to_tree).collect())
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -804,6 +884,7 @@ impl<T: Field> Field for Each<T> {
     const TO_THE_END: bool = true;
     const CELLS: &'static [NarrowCell] = T::CELLS;
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let mut values = Vec::new();
         while !octets.is_empty() {
@@ -811,17 +892,21 @@ impl<T: Field> Field for Each<T> {
         }
         Some(Self(values))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         for value in &self.0 {
             value.write(out);
         }
     }
+    #[inline]
     fn size(&self) -> usize {
         self.0.iter().map(Field::size).sum()
     }
+    #[inline]
     fn fits(&self) -> bool {
         self.0.iter().all(Field::fits)
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         for value in &self.0 {
             value.check(path, clause, found);
@@ -832,9 +917,11 @@ impl<T: Field> Field for Each<T> {
 #[cfg(feature = "tree")]
 impl<T: FieldTree> FieldTree for Each<T> {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::List(T::TAKES);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::Value::Array(self.0.iter().map(FieldTree::to_tree).collect())
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -850,6 +937,7 @@ impl<T: FieldTree> FieldTree for Each<T> {
 pub struct Entries16<T>(pub Vec<T>);
 
 impl<T: Field> Field for Entries16<T> {
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let length = usize::from(u16::read(octets)?);
         let (mut within, rest) = octets.split_at_checked(length)?;
@@ -860,6 +948,7 @@ impl<T: Field> Field for Entries16<T> {
         }
         Some(Self(entries))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         // put() refuses entries longer than their length can say.
         let length = self.size() - 2;
@@ -868,12 +957,15 @@ impl<T: Field> Field for Entries16<T> {
             entry.write(out);
         }
     }
+    #[inline]
     fn size(&self) -> usize {
         2 + self.0.iter().map(Field::size).sum::<usize>()
     }
+    #[inline]
     fn fits(&self) -> bool {
         self.size() - 2 <= usize::from(u16::MAX) && self.0.iter().all(Field::fits)
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         if !self.fits() {
             let rule = Finding::Rule("more octets than their length can say");
@@ -888,9 +980,11 @@ impl<T: Field> Field for Entries16<T> {
 #[cfg(feature = "tree")]
 impl<T: FieldTree> FieldTree for Entries16<T> {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::List(T::TAKES);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::Value::Array(self.0.iter().map(FieldTree::to_tree).collect())
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -906,12 +1000,14 @@ pub struct PlmnId(pub [u8; 3]);
 
 impl PlmnId {
     /// The PLMN, when its digits are decimal.
+    #[inline]
     pub fn plmn(self) -> Option<crate::identity::Plmn> {
         crate::identity::Plmn::from_nas_octets(self.0).ok()
     }
 }
 
 impl From<crate::identity::Plmn> for PlmnId {
+    #[inline]
     fn from(plmn: crate::identity::Plmn) -> Self {
         Self(plmn.to_nas_octets())
     }
@@ -959,12 +1055,15 @@ impl Field for PlmnId {
             width: 4,
         },
     ];
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         take(octets).map(Self)
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.0);
     }
+    #[inline]
     fn size(&self) -> usize {
         3
     }
@@ -973,6 +1072,7 @@ impl Field for PlmnId {
 #[cfg(feature = "tree")]
 impl FieldTree for PlmnId {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Plmn;
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         match self.plmn() {
             Some(plmn) if plmn.to_nas_octets() == self.0 => {
@@ -981,6 +1081,7 @@ impl FieldTree for PlmnId {
             _ => crate::tree::octets(&self.0),
         }
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -1002,19 +1103,24 @@ pub struct U24(pub u32);
 impl Field for U24 {
     const OCTETS: Option<usize> = Some(3);
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let [a, b, c] = take::<3>(octets)?;
         Some(Self(u32::from_be_bytes([0, a, b, c])))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.0.to_be_bytes()[1..]);
     }
+    #[inline]
     fn size(&self) -> usize {
         3
     }
+    #[inline]
     fn fits(&self) -> bool {
         self.0 < 1 << 24
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         if !self.fits() {
             found.push(D::found(
@@ -1029,9 +1135,11 @@ impl Field for U24 {
 #[cfg(feature = "tree")]
 impl FieldTree for U24 {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Number(0xff_ffff);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::unsigned(self.0.into())
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -1045,12 +1153,15 @@ macro_rules! address_field {
         impl Field for $t {
             const OCTETS: Option<usize> = Some($n);
 
+            #[inline]
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take::<$n>(octets).map(<$t>::from)
             }
+            #[inline]
             fn write(&self, out: &mut Vec<u8>) {
                 out.extend_from_slice(&self.octets());
             }
+            #[inline]
             fn size(&self) -> usize {
                 $n
             }
@@ -1059,9 +1170,11 @@ macro_rules! address_field {
         #[cfg(feature = "tree")]
         impl FieldTree for $t {
             const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::$takes;
+            #[inline]
             fn to_tree(&self) -> crate::tree::Value {
                 crate::tree::text(alloc::format!("{self}"))
             }
+            #[inline]
             fn from_tree(
                 value: &crate::tree::Value,
                 reading: &mut crate::tree::Reading,
@@ -1081,12 +1194,14 @@ address_field!(Ipv4Addr, 4, Ipv4; Ipv6Addr, 16, Ipv6);
 pub struct Ipv4Address(pub Ipv4Addr);
 
 impl Default for Ipv4Address {
+    #[inline]
     fn default() -> Self {
         Self(Ipv4Addr::UNSPECIFIED)
     }
 }
 
 impl From<Ipv4Addr> for Ipv4Address {
+    #[inline]
     fn from(address: Ipv4Addr) -> Self {
         Self(address)
     }
@@ -1095,12 +1210,15 @@ impl From<Ipv4Addr> for Ipv4Address {
 impl Field for Ipv4Address {
     const OCTETS: Option<usize> = Some(4);
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Ipv4Addr::read(octets).map(Self)
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         self.0.write(out);
     }
+    #[inline]
     fn size(&self) -> usize {
         4
     }
@@ -1109,9 +1227,11 @@ impl Field for Ipv4Address {
 #[cfg(feature = "tree")]
 impl FieldTree for Ipv4Address {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Ipv4;
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         self.0.to_tree()
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -1121,6 +1241,7 @@ impl FieldTree for Ipv4Address {
 }
 
 /// What the labels of an FQDN break of RFC 1035, written as a DNS message writes them: `None` for labels of 1 to 63 octets, each after its length.
+#[inline]
 pub fn fqdn_broken(labels: &[u8]) -> Option<&'static str> {
     match labels {
         [] => Some("an FQDN without a label"),
@@ -1133,6 +1254,7 @@ pub fn fqdn_broken(labels: &[u8]) -> Option<&'static str> {
 
 /// Whether octets are labels of an FQDN as RFC 1035 writes them, without the last zero
 /// octet: each of 1 to 63 octets, after its length, and [`FQDN_OCTETS`] at most.
+#[inline]
 fn fqdn_valid(mut octets: &[u8]) -> bool {
     if octets.len() > FQDN_OCTETS {
         return false;
@@ -1153,6 +1275,7 @@ pub const FQDN_OCTETS: usize = 254;
 /// The labels of an FQDN as RFC 1035 writes them, without the last zero octet: `None`
 /// for octets that are not labels of 1 to 63 octets, each after its length, or that are
 /// more than [`FQDN_OCTETS`].
+#[inline]
 fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
     if octets.len() > FQDN_OCTETS {
         return None;
@@ -1170,6 +1293,7 @@ fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
 /// 29.571 clause 5.5.2 names has them (IETF RFC 4648 clause 4): groups of four characters
 /// of the alphabet, the last with one or two `=` of padding where the octets end short of
 /// three.
+#[inline]
 pub fn base64(octets: &[u8]) -> bool {
     let padding = octets
         .iter()
@@ -1186,6 +1310,7 @@ pub fn base64(octets: &[u8]) -> bool {
 /// Whether a text is a URL by its generic syntax (IETF RFC 3986 clause 3): a scheme, of a
 /// letter and of letters, digits, `+`, `-` and `.`, a colon, and visible characters of
 /// ASCII after it.
+#[inline]
 pub fn url(text: &str) -> bool {
     let Some((scheme, rest)) = text.split_once(':') else {
         return false;
@@ -1202,6 +1327,7 @@ pub fn url(text: &str) -> bool {
 
 /// Whether a text is a SIP URI by its scheme (IETF RFC 3261 clause 19.1.1): `sip:` or
 /// `sips:`, in letters of any case, and what a URL has after it.
+#[inline]
 pub fn sip_uri(text: &str) -> bool {
     let scheme = text.split(':').next().unwrap_or_default();
     (scheme.eq_ignore_ascii_case("sip") || scheme.eq_ignore_ascii_case("sips")) && url(text)
@@ -1209,6 +1335,7 @@ pub fn sip_uri(text: &str) -> bool {
 
 /// Whether octets are a field name of HTTP, a token (IETF RFC 9110 clauses 5.1 and 5.6.2):
 /// one or more letters, digits and ``!#$%&'*+-.^_`|~``.
+#[inline]
 pub fn http_field_name(octets: &[u8]) -> bool {
     let token = |octet: &u8| octet.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(octet);
     !octets.is_empty() && octets.iter().all(token)
@@ -1216,6 +1343,7 @@ pub fn http_field_name(octets: &[u8]) -> bool {
 
 /// Whether octets are a field value of HTTP (IETF RFC 9110 clause 5.5): visible characters
 /// and the octets above them, with spaces and tabs between them, and none before or after.
+#[inline]
 pub fn http_field_value(octets: &[u8]) -> bool {
     let blank = |octet: &u8| matches!(octet, b' ' | b'\t');
     let content = |octet: &u8| blank(octet) || matches!(octet, 0x21..=0x7e | 0x80..);
@@ -1228,6 +1356,7 @@ pub fn http_field_value(octets: &[u8]) -> bool {
 /// Identifier (TS 23.003 clauses 9.1.1 and 9.1.2): the Operator Identifier "is composed of
 /// three labels. The last label (or domain) shall be "gprs"", in letters of any case,
 /// after the "at least one label" of the Network Identifier.
+#[inline]
 pub fn full_apn(octets: &[u8]) -> bool {
     fqdn_labels(octets).is_some_and(|labels| {
         labels.len() >= 4
@@ -1239,6 +1368,7 @@ pub fn full_apn(octets: &[u8]) -> bool {
 
 /// The labels of `name`, each after its length: `None` for an empty label, a label of
 /// more than 63 octets, or more than [`FQDN_OCTETS`] of labels.
+#[inline]
 pub fn fqdn_of(name: &str) -> Option<Vec<u8>> {
     if name.len() + 1 > FQDN_OCTETS {
         return None;
@@ -1257,6 +1387,7 @@ pub fn fqdn_of(name: &str) -> Option<Vec<u8>> {
 /// The name of labels, with dots: `None` for labels that are not each of 1 to 63 octets
 /// of UTF-8 without a dot, or more than [`FQDN_OCTETS`], which the name would not give
 /// back.
+#[inline]
 pub fn fqdn_name(octets: &[u8]) -> Option<String> {
     let mut text = String::new();
     for label in fqdn_labels(octets)? {
@@ -1282,12 +1413,14 @@ impl Fqdn {
     /// The labels of a name, `smf.example`: `None` for a name with an empty label, a
     /// label of more than 63 octets, or of more than 253 octets, whose labels are more
     /// than 255 with the trailing zero byte (RFC 1035 §2.3.4).
+    #[inline]
     pub fn new(name: &str) -> Option<Self> {
         fqdn_of(name).map(|labels| Self(labels.into()))
     }
 
     /// The name, its labels with dots: `None` for octets that are no labels of 1 to 63
     /// octets of UTF-8 without a dot, which the name would not give back.
+    #[inline]
     pub fn name(&self) -> Option<String> {
         fqdn_name(&self.0)
     }
@@ -1296,15 +1429,19 @@ impl Fqdn {
 impl Field for Fqdn {
     const TO_THE_END: bool = true;
 
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Some(Self(Octets::copied(core::mem::take(octets))))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.0);
     }
+    #[inline]
     fn size(&self) -> usize {
         self.0.len()
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         if let Some(broken) = fqdn_broken(&self.0) {
             found.push(D::found(path, Some(clause), Finding::Rule(broken)));
@@ -1318,6 +1455,7 @@ impl FieldTree for Fqdn {
         &crate::tree::Takes::Name,
         &crate::tree::Takes::Members(None, &[("octets", &crate::tree::Takes::Octets(None))]),
     ]);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         use crate::tree;
         match self.name() {
@@ -1325,6 +1463,7 @@ impl FieldTree for Fqdn {
             None => tree::alternative("octets", tree::octets(&self.0)),
         }
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -1353,24 +1492,30 @@ impl FieldTree for Fqdn {
 pub struct SecretLv8(pub Octets);
 
 impl fmt::Debug for SecretLv8 {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SecretLv8({} octets)", self.0.len())
     }
 }
 
 impl Field for SecretLv8 {
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Lv8::read(octets).map(|value| Self(value.0))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         Lv8(self.0.clone()).write(out);
     }
+    #[inline]
     fn size(&self) -> usize {
         1 + self.0.len()
     }
+    #[inline]
     fn fits(&self) -> bool {
         self.0.len() <= usize::from(u8::MAX)
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         if !self.fits() {
             found.push(D::found(
@@ -1385,9 +1530,11 @@ impl Field for SecretLv8 {
 #[cfg(feature = "tree")]
 impl FieldTree for SecretLv8 {
     const TAKES: &'static crate::tree::Takes = &crate::tree::Takes::Octets(None);
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         crate::tree::octets(&self.0)
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -1405,24 +1552,30 @@ impl FieldTree for SecretLv8 {
 pub struct SecretTextLv8(pub Octets);
 
 impl fmt::Debug for SecretTextLv8 {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SecretTextLv8({} octets)", self.0.len())
     }
 }
 
 impl Field for SecretTextLv8 {
+    #[inline]
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Lv8::read(octets).map(|value| Self(value.0))
     }
+    #[inline]
     fn write(&self, out: &mut Vec<u8>) {
         Lv8(self.0.clone()).write(out);
     }
+    #[inline]
     fn size(&self) -> usize {
         1 + self.0.len()
     }
+    #[inline]
     fn fits(&self) -> bool {
         self.0.len() <= usize::from(u8::MAX)
     }
+    #[inline]
     fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
         Lv8(self.0.clone()).check(path, clause, found);
     }
@@ -1431,9 +1584,11 @@ impl Field for SecretTextLv8 {
 #[cfg(feature = "tree")]
 impl FieldTree for SecretTextLv8 {
     const TAKES: &'static crate::tree::Takes = TextLv8::TAKES;
+    #[inline]
     fn to_tree(&self) -> crate::tree::Value {
         TextLv8(self.0.clone()).to_tree()
     }
+    #[inline]
     fn from_tree(
         value: &crate::tree::Value,
         reading: &mut crate::tree::Reading,
@@ -1456,12 +1611,14 @@ pub struct DigitsLv8(pub Octets);
 
 impl DigitsLv8 {
     /// The digits, as `tbcd::encode` gives back their octets.
+    #[inline]
     pub fn digits(&self) -> Option<alloc::string::String> {
         let text = crate::identity::tbcd::decode(&self.0).ok()?;
         (crate::identity::tbcd::encode(&text).ok()? == *self.0).then_some(text)
     }
 
     /// How many digits it has, when they are TBCD digits of 0 to 9 alone.
+    #[inline]
     pub fn decimal(&self) -> Option<usize> {
         let digits = self.digits()?;
         digits
@@ -1475,12 +1632,14 @@ impl DigitsLv8 {
     /// # Errors
     ///
     /// A character that TBCD does not have.
+    #[inline]
     pub fn new(digits: &str) -> Result<Self, crate::identity::Error> {
         crate::identity::tbcd::encode(digits).map(|octets| Self(octets.into()))
     }
 }
 
 impl fmt::Debug for DigitsLv8 {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.digits() {
             Some(digits) => write!(f, "DigitsLv8({digits:?})"),
@@ -1497,12 +1656,14 @@ pub struct TextLv8(pub Octets);
 
 impl TextLv8 {
     /// The text.
+    #[inline]
     pub fn text(&self) -> Option<&str> {
         core::str::from_utf8(&self.0).ok()
     }
 }
 
 impl From<&str> for TextLv8 {
+    #[inline]
     fn from(text: &str) -> Self {
         Self(Octets::copied(text.as_bytes()))
     }
@@ -1511,23 +1672,28 @@ impl From<&str> for TextLv8 {
 macro_rules! identity_lv8 {
     ($($ty:ident($length:ty) $as_text:ident $takes:ident $from_text:expr),*) => {$(
         impl Field for $ty {
+            #[inline]
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let length = usize::from(<$length as Field>::read(octets)?);
                 let (value, rest) = octets.split_at_checked(length)?;
                 *octets = rest;
                 Some(Self(Octets::copied(value)))
             }
+            #[inline]
             fn write(&self, out: &mut Vec<u8>) {
                 let length = <$length>::try_from(self.0.len()).unwrap_or(<$length>::MAX);
                 out.extend_from_slice(&length.to_be_bytes());
                 out.extend_from_slice(&self.0);
             }
+            #[inline]
             fn size(&self) -> usize {
                 core::mem::size_of::<$length>() + self.0.len()
             }
+            #[inline]
             fn fits(&self) -> bool {
                 self.0.len() <= usize::from(<$length>::MAX)
             }
+            #[inline]
             fn check<D: Deviate>(&self, path: &Path<'_>, clause: &'static str, found: &mut Vec<D>) {
                 if !self.fits() {
                     found.push(D::found(path, Some(clause), Finding::Rule("more octets than their length can say")));
@@ -1541,12 +1707,14 @@ macro_rules! identity_lv8 {
                 &crate::tree::Takes::$takes,
                 &crate::tree::Takes::Members(None, &[("octets", &crate::tree::Takes::Octets(None))]),
             ]);
+            #[inline]
             fn to_tree(&self) -> crate::tree::Value {
                 match self.$as_text() {
                     Some(text) => crate::tree::text(text),
                     None => crate::tree::alternative("octets", crate::tree::octets(&self.0)),
                 }
             }
+            #[inline]
             fn from_tree(
                 value: &crate::tree::Value,
                 reading: &mut crate::tree::Reading,
@@ -1577,6 +1745,7 @@ identity_lv8!(
 
 impl TextLv8 {
     #[cfg(feature = "tree")]
+    #[inline]
     fn text_owned(&self) -> Option<alloc::string::String> {
         self.text().map(alloc::string::String::from)
     }
@@ -1591,17 +1760,20 @@ pub struct TextLv16(pub Octets);
 
 impl TextLv16 {
     /// The text.
+    #[inline]
     pub fn text(&self) -> Option<&str> {
         core::str::from_utf8(&self.0).ok()
     }
 
     #[cfg(feature = "tree")]
+    #[inline]
     fn text_owned(&self) -> Option<alloc::string::String> {
         self.text().map(alloc::string::String::from)
     }
 }
 
 impl From<&str> for TextLv16 {
+    #[inline]
     fn from(text: &str) -> Self {
         Self(Octets::copied(text.as_bytes()))
     }
@@ -1614,6 +1786,7 @@ mod tests {
     /// A Number of six bits is, as a field of its own, its whole octet, which a Narrow parts
     /// into the number and the spare bits.
     #[test]
+    #[inline]
     fn a_number_of_six_bits_as_a_field() {
         let mut octets: &[u8] = &[0x2e, 0xc1];
         assert_eq!(Number::<6>::read(&mut octets), Some(Number(0x2e)));
