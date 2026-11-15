@@ -177,6 +177,21 @@ fn a_tree_name_is_what_the_tree_writes_and_reads() {
 
 /// The macros name what they write by absolute paths: a crate's own `Result` of one
 /// parameter, in scope where they expand, changes nothing.
+/// A table of the crate alone.
+mod private {
+    oxirush_utils::named_values! {
+        /// A table that its crate keeps to itself.
+        pub(crate) enum Hidden "Table 4" bits 1 {
+            1 One "one",
+        }
+    }
+
+    #[test]
+    fn a_table_takes_its_visibility() {
+        assert_eq!(Hidden::named(1), Some(Hidden::One));
+    }
+}
+
 mod shadowed {
     #[allow(dead_code)]
     type Result<T> = core::result::Result<T, ()>;

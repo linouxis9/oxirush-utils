@@ -896,7 +896,7 @@ macro_rules! layout {
 macro_rules! named_values {
     ($(
         $(#[$meta:meta])*
-        pub enum $ty:ident $table:literal bits $bits:literal $(reserved [$($reserved:literal),*])?
+        $vis:vis enum $ty:ident $table:literal bits $bits:literal $(reserved [$($reserved:literal),*])?
             $(rejected [$rejected_from:literal ..= $rejected_to:literal])?
             $(read [$($from:literal ..= $to:literal as $target:literal),+])?
             $(others as $other:literal)? {
@@ -909,7 +909,7 @@ macro_rules! named_values {
         /// names is the variant of that name, which [`from_value`](Self::from_value) gives.
         #[derive(Debug, Clone, Copy)]
         #[non_exhaustive]
-        pub enum $ty {
+        $vis enum $ty {
             $(
                 #[doc = concat!(stringify!($value), ": ", $name, ".")]
                 $variant,
