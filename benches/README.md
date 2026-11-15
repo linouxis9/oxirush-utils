@@ -38,28 +38,22 @@ the allocations are those of one call.
 | Read the SUCI of an IMSI from a 5GS mobile identity | 80 ns, 2 allocations of 20 octets | | |
 | Write a PLMN in the order of NGAP | 7 ns, 0 allocations of 0 octets | | |
 
-The layout of the code moves a time by up to 15% from one build of the same
-code to another: a ratio within 10%, or within the spread of the runs, is
-about the same. A tree is read and written with serde_json, and keeps the
-members of an object in their order, where a `serde_json::Value` sorts them.
-An object is a list that is searched for a name: putting n members one after
-the other takes a time that grows as n², which the few dozen members of a
-value of a protocol never show, and an object that is read has 4096 members
-at most. `Map::push` adds a member whose name is new without the search, in a
-time that grows as n. The rows of 4096 members that are put and read were
-measured on 2026-11-07, when an object became a list, the row that pushes
-them on 2026-11-13 (with Rust 1.88.0, while the machine ran other work: put took
-18.0 ms there); the others at 8865ad4. The identities allocate nothing but the SUCI, which holds its scheme
-output.
+The layout of the code moves a time by up to 15 % from one build of the same
+code to another: a ratio within 10 %, or within the spread of the runs, is
+about the same. A tree keeps the members of an object in their order, where a
+`serde_json::Value` sorts them. An object is a list that is searched for a
+name: putting n members one after the other takes a time that grows as n²,
+and `Map::push` adds a member whose name is new in a time that grows as n.
+The identities allocate nothing but the SUCI, which holds its scheme output.
 
-The five rows of 65,535 entries use a path family that behaves like those of
-the protocol crates: list entries are selected by a name they hold, and a
-member that an entry lacks is a valueless place, added once per type in a
-selection and once per entry in an edit. They were measured on 2026-11-11 on
-the same machine, while it was running other work, after two quadratic steps
-of the path engine were made linear. Before that change the selection took
-315 ms, the copy with every other entry removed 200 ms, and the copy with an
-entry inserted before each one 1.70 s. The row that sets the member was added
-when `set` came to give it to every entry that lacks it: before, it gave it to
-the entries that have it and to the first that lacks it, 32,768 of them, in
-20.5 ms.
+Not every row is of 8865ad4 on a quiet machine:
+
+- the rows of 4096 members that are put and read: 2026-11-07, when an object
+  became a list;
+- the row that pushes them: 2026-11-13, with Rust 1.88.0, while the machine
+  ran other work (put took 18.0 ms there);
+- the five rows of 65,535 entries: 2026-11-11, while the machine ran other
+  work. Their path family behaves like those of the protocol crates: list
+  entries are selected by a name that they hold, and a member that an entry
+  lacks is a valueless place, added once per type in a selection and once
+  per entry in an edit.

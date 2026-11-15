@@ -96,15 +96,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-## Where each form goes
-
 The NAS octets of an identity are the value of an IE of
-[oxirush-nas](https://github.com/linouxis9/oxirush-nas). The AP octets of a
-PLMN are those of the identities of
-[oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
-[oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap). The messages of
-all three are trees of this crate, read by the same paths: their READMEs show
-how.
+[oxirush-nas](https://github.com/linouxis9/oxirush-nas), and the AP octets of
+a PLMN are those of [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap)
+and [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap).
 
 ## IMEI, IMEISV, and the identities of EPS
 
@@ -410,48 +405,24 @@ has what a protocol provides.
 
 ## Performance
 
-The tree of the crate against a `serde_json::Value` of the default
-features, on the same JSON, at 8865ad4 on core 2 of an AMD Ryzen 7 5700G
-(Linux 7.0, Rust 1.98.1), on 2026-10-18. A ratio is the time of serde_json
-over this crate's, and "about the same" is within 10 %:
+| Operation | Time | serde_json 1, time over this crate's |
+|---|---|---|
+| Read a tree of 925 octets | 2,645 ns | about the same |
+| Write it | 923 ns | 2.3x |
+| Select a value of it | 219 ns | about the same |
+| Read an object of 4096 members, 39,851 octets | 380 µs | 2.0x |
+| Read a 5G-GUTI from a 5GS mobile identity | 14 ns | |
+| Read the SUCI of an IMSI from a 5GS mobile identity | 80 ns | |
 
-| Operation | This crate | serde_json 1 | serde_json / this crate |
-|---|---|---|---|
-| Read a tree of 925 octets | 2,645 ns | 2,880 ns | about the same |
-| Write it | 923 ns ±15% between builds | 2,140 ns | 2.3x |
-| Select a value of it | 219 ns | 238 ns | about the same |
-| Put 4096 members into an object, one after the other | 15.9 ms | 0.65 ms | 0.04x |
-| Push 4096 new members, one after the other | 145 µs | | |
-| Read an object of 4096 members, 39,851 octets | 380 µs | 774 µs | 2.0x |
-
-A tree keeps the members of an object in their order, where a
-`serde_json::Value` sorts them. An object is a list that is searched for a
-name, which takes less than a map for the few dozen members of a value of a
-protocol: putting n members one after the other takes a time that grows as
-n², pushing n members whose names are new (`Map::push`) a time that grows as
-n, and an object that is read has 4096 members at most. The two rows of 4096
-members that are put and read were measured on 2026-11-07, when an object
-became a list, and the row that pushes them on 2026-11-13. Reading a PLMN, an IMSI or a 5G-GUTI takes 9
-to 14 ns without an allocation, and the SUCI of an IMSI 80 ns.
-[`benches/`](benches/README.md) has the allocations, the other identities and
-the method. In `benches/`:
-
-```sh
-cargo bench --bench tree
-```
+On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), at 8865ad4 on
+2026-10-18, the lowest of five runs; "about the same" is within 10 %. An
+object keeps its members in order and is searched by name, which suits the
+few dozen members of a value of a protocol: putting thousands of members one
+after the other is slower than serde_json, and `Map::push` avoids it.
+[`benches/README.md`](benches/README.md) has every figure, the allocations,
+the method and the commands.
 
 ## Tests and fuzzing
-
-The identities are tested against their clauses, against what Open5GS,
-free5GC and PacketRusher sent in lab runs, and against themselves: every
-value is read back from the octets it writes, and any octets are either a
-value that writes them back or no value. The tests of oxirush-nas and
-oxirush-ngap on paths run here too, on trees written out without a codec,
-and so do trees of 65,536 entries, within a time bound. `fuzz/` has three
-[cargo-fuzz](https://crates.io/crates/cargo-fuzz) targets: `identity` reads
-octets and text as each identity, `paths` takes any path and any edit on any
-tree, and `forms` reads any JSON with each reader of a tree and holds the
-forms of a tree and the segments of its paths to what they write.
 
 ```sh
 cargo test --all-features
@@ -459,8 +430,13 @@ cargo +nightly fuzz run identity -- -max_total_time=60 -max_len=64
 cargo +nightly fuzz run paths -- -max_total_time=60 -max_len=512
 ```
 
-Each Rust block of this page checks what it gives with `assert_eq!`, and runs
-as a documentation test of the crate.
+The identities are tested against their clauses, against what Open5GS,
+free5GC and PacketRusher sent in lab runs, and against themselves: every
+value is read back from the octets it writes. The path tests of oxirush-nas
+and oxirush-ngap run here too, on trees written without a codec. `fuzz/` has
+three [cargo-fuzz](https://crates.io/crates/cargo-fuzz) targets: `identity`
+reads octets and text as each identity, `paths` takes any path and edit on
+any tree, and `forms` reads any JSON with each reader of a tree.
 
 A pull request comes with a test for what it changes. Sign off your commits
 (`git commit -s`): by contributing you agree to the [Developer Certificate
