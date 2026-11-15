@@ -39,7 +39,9 @@ All notable changes to `oxirush-utils` are recorded here.
   (`Scope`): decode, encode in the order of the wire or of the table, and the entries of
   a row. `table!` writes the scope of a table from its rows: the struct, its builders and
   constructors, its codec, its check and its tree, on the modules that the protocol's
-  crate names.
+  crate names. `ies!` writes a protocol's IE types (`IeTypeInfo`, `Form`, what their trees
+  take and the trees of their values), and `messages!` its message types and the body of
+  a message.
 
 ### Changed
 

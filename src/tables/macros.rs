@@ -544,3 +544,293 @@ macro_rules! table {
     };
 
 }
+
+/// The IE types of a protocol's table of IE types, one line each: the type, its name,
+/// its form and the number of fixed octets that the table gives it, the clause or the
+/// table that defines it, and the types of the crate that are its values. The first
+/// argument names the protocol and the modules of its crate that hold its table items
+/// (`Content`) and its IE items (`IeType`, `Codec`): `{proto: P, table: m, ie: m}`. It
+/// writes `IE_TYPES`, `takes_of`, `value_tree`, `ie_type_layout` (with `spec`) and the
+/// protocol's [`RegistryTree`](crate::tables::RegistryTree).
+#[allow(clippy::crate_in_macro_def)]
+#[macro_export]
+macro_rules! ies {
+    ({proto: $proto:ty, table: $tm:ident, ie: $im:ident} $( $num:literal $name:literal $form:ident $(($fixed:literal))? $clause:literal $(=> $($ty:ident),+)? ; )*) => {
+        /// Every IE type of the table of IE types, in the order of their numbers.
+        pub static IE_TYPES: &[$crate::tables::IeTypeInfo<$proto>] = &[
+            $( $crate::tables::IeTypeInfo::<$proto> {
+                ie_type: $num,
+                name: $name,
+                form: $crate::ies!(@form $form),
+                fixed: $crate::ies!(@fixed $($fixed)?),
+                clause: $clause,
+                members: $crate::ies!(@members $form $($($ty),+)?),
+                scalar: $crate::fields::one($crate::ies!(@fields $form $($($ty),+)?)),
+                tables: $crate::ies!(@tables $form $($($ty),+)?),
+            }, )*
+        ];
+
+        /// The names of the flags and fields of the figure of `ie_type` that the crate lays
+        /// out, and how it lays them out, which the test `spec` compares with the figure:
+        /// for that test alone.
+        #[cfg(feature = "spec")]
+        #[doc(hidden)]
+        pub fn ie_type_layout(ie_type: u16) -> (&'static [&'static str], Option<&'static $crate::fields::Layout>) {
+            match ie_type {
+                $( $num => ($crate::ies!(@fields $form $($($ty),+)?), $crate::ies!(@layout $form $($($ty),+)?)), )*
+                _ => (&[], None),
+            }
+        }
+        $( $crate::ies!(@impls {proto: $proto, table: $tm, ie: $im} $form $num $name [$crate::ies!(@length $form $(($fixed))?)] $($($ty),+)?); )*
+
+        #[cfg(feature = "tree")]
+        impl $crate::tables::RegistryTree for $proto {
+            fn takes_of(ie_type: u16) -> Option<&'static $crate::tree::Takes> {
+                takes_of(ie_type)
+            }
+            fn value_tree(
+                ie_type: u16,
+                table: Option<&'static $crate::tables::Table<$proto>>,
+                octets: &[u8],
+            ) -> Option<$crate::tree::Value> {
+                value_tree(ie_type, table, octets)
+            }
+        }
+
+        /// What the tree of a value of `ie_type` takes: none for a grouped IE.
+        #[cfg(feature = "tree")]
+        pub(crate) fn takes_of(ie_type: u16) -> Option<&'static $crate::tree::Takes> {
+            match ie_type {
+                $( $num => $crate::ies!(@takes $form $($($ty),+)?), )*
+                _ => None,
+            }
+        }
+
+        /// The tree of the value of `ie_type` that `octets` are, of the content of the table
+        /// `table` for a grouped IE, or of its first: `None` for octets that are no such
+        /// value, and for a table of another type.
+        #[cfg(feature = "tree")]
+        pub(crate) fn value_tree(
+            ie_type: u16,
+            table: Option<&'static $crate::tables::Table<$proto>>,
+            octets: &[u8],
+        ) -> Option<$crate::tree::Value> {
+            match ie_type {
+                $( $num => $crate::ies!(@value_tree {proto: $proto, table: $tm, ie: $im} $form table octets $($($ty),+)?), )*
+                _ => None,
+            }
+        }
+    };
+    (@impls {proto: $proto:ty, table: $tm:ident, ie: $im:ident} $form:ident $num:literal $name:literal [$fixed:expr] $($ty:ident),*) => {
+        $(
+            impl crate::$im::IeType for $ty {
+                const IE_TYPE: u16 = $num;
+                const TYPE_NAME: &'static str = $name;
+                const FIXED: Option<u16> = $fixed;
+            }
+
+            impl crate::$tm::Content for $ty {
+                const TABLE: Option<&'static $crate::tables::Table<$proto>> = $crate::ies!(@content {proto: $proto, table: $tm, ie: $im} $form $ty);
+            }
+        )*
+    };
+    (@content {proto: $proto:ty, table: $tm:ident, ie: $im:ident} grouped $ty:ident) => { $crate::fields::__pastey::paste! { Some(&[<$ty:snake:upper _TABLE>]) } };
+    (@content {proto: $proto:ty, table: $tm:ident, ie: $im:ident} $form:ident $ty:ident) => { None };
+    (@form fixed) => { $crate::tables::Form::Fixed };
+    (@form variable) => { $crate::tables::Form::Variable };
+    (@form extendable) => { $crate::tables::Form::Extendable };
+    (@form grouped) => { $crate::tables::Form::Grouped };
+    (@fixed) => { None };
+    (@fixed $fixed:literal) => { Some($fixed) };
+    (@length fixed ($fixed:literal)) => { Some($fixed) };
+    (@length $form:ident $(($fixed:literal))?) => { None };
+    (@fields grouped $($ty:ident),+) => { &[] };
+    (@fields $form:ident $ty:ident) => { $ty::FIELDS };
+    (@takes grouped $($ty:ident),+) => { None };
+    (@takes $form:ident $ty:ident) => { Some($ty::TAKES) };
+    (@value_tree {proto: $proto:ty, table: $tm:ident, ie: $im:ident} grouped $table:ident $octets:ident $($ty:ident),+) => { $crate::fields::__pastey::paste! {{
+        $(
+            if $table.is_none_or(|table| core::ptr::eq(table, &[<$ty:snake:upper _TABLE>])) {
+                return <$ty as crate::$im::Codec>::decode($octets).map(|value| $crate::tree::Tree::to_tree(&value));
+            }
+        )+
+        None
+    }} };
+    (@value_tree {proto: $proto:ty, table: $tm:ident, ie: $im:ident} $form:ident $table:ident $octets:ident $ty:ident) => {
+        match $table {
+            Some(_) => None,
+            None => <$ty as crate::$im::Codec>::decode($octets).map(|value| $crate::tree::Tree::to_tree(&value)),
+        }
+    };
+    (@members grouped $($ty:ident),+) => { &[] };
+    (@members $form:ident $ty:ident) => { $ty::MEMBERS };
+    (@layout grouped $($ty:ident),+) => { None };
+    (@layout $form:ident $ty:ident) => { $ty::LAYOUT };
+    (@layout $form:ident) => { None };
+    (@tables grouped $($ty:ident),+) => { $crate::fields::__pastey::paste! { &[$(&[<$ty:snake:upper _TABLE>]),+] } };
+    (@tables $form:ident $($ty:ident),*) => { &[] };
+}
+
+/// The messages of a protocol's table of message types, one each: their type, the struct
+/// of their table and their interfaces. It writes `MESSAGE_TYPES` and the body of a message,
+/// and what is done with it by its type. The first argument names the protocol and the
+/// modules of its crate: `{proto: P, table: m, ie: m, check: m, paths: m, message: m,
+/// registry: m, error: E}`.
+#[allow(clippy::crate_in_macro_def)]
+#[macro_export]
+macro_rules! messages {
+    ({proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, message: $mm:ident, registry: $rm:ident, error: $error:ty} $( $code:literal $ty:ident [$($interface:ident)*] ),* $(,)?) => { $crate::fields::__pastey::paste! {
+        /// Every message type of the table of message types, in the order of their numbers.
+        pub static MESSAGE_TYPES: &[crate::$mm::MessageTypeInfo] = &[$(
+            crate::$mm::MessageTypeInfo {
+                message_type: $code,
+                interfaces: crate::$tm::Interfaces(0 $(| crate::$tm::Interfaces::$interface.0)*),
+                table: &crate::$rm::[<$ty:snake:upper _TABLE>],
+            },
+        )*];
+
+        /// The body of a message: one type of the table of message types each.
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[non_exhaustive]
+        pub enum Body {
+            $(
+                #[doc = concat!("Message type ", stringify!($code), ".")]
+                $ty(alloc::boxed::Box<crate::$rm::$ty>),
+            )*
+            /// A message type that the table of message types does not have, with the
+            /// octets after its header.
+            Other {
+                /// The message type.
+                message_type: u8,
+                /// The octets of its IEs.
+                octets: $crate::fields::Octets,
+            },
+        }
+
+        $(
+            impl From<crate::$rm::$ty> for Body {
+                fn from(body: crate::$rm::$ty) -> Self {
+                    Self::$ty(alloc::boxed::Box::new(body))
+                }
+            }
+        )*
+
+        impl Body {
+            /// The message type.
+            pub fn message_type(&self) -> u8 {
+                match self {
+                    $( Self::$ty(_) => $code, )*
+                    Self::Other { message_type, .. } => *message_type,
+                }
+            }
+
+            /// The table of the message.
+            pub fn table(&self) -> Option<&'static crate::$tm::Table> {
+                match self {
+                    $( Self::$ty(_) => Some(crate::$rm::$ty::table()), )*
+                    Self::Other { .. } => None,
+                }
+            }
+
+            /// The name that the table of message types gives the message.
+            pub fn name(&self) -> Option<&'static str> {
+                self.table().map(|table| table.name)
+            }
+
+            /// The names of the messages, in the order of their types.
+            #[cfg(feature = "tree")]
+            pub(crate) fn names() -> [&'static str; [$($code),*].len()] {
+                [$( crate::$rm::$ty::table().name ),*]
+            }
+
+            pub(crate) fn decode(message_type: u8, octets: &[u8]) -> Result<Self, crate::$im::IeFault> {
+                Ok(match message_type {
+                    $( $code => {
+                        // The message is decoded in its box, and not moved there.
+                        let mut body = alloc::boxed::Box::<crate::$rm::$ty>::default();
+                        crate::$tm::decode_scope_sized(&mut *body, octets, true)?;
+                        Self::$ty(body)
+                    } )*
+                    other => Self::Other { message_type: other, octets: $crate::fields::Octets::copied(octets) },
+                })
+            }
+
+            pub(crate) fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), $error> {
+                match self {
+                    $( Self::$ty(body) => crate::$tm::encode_scope(&**body, out), )*
+                    Self::Other { octets, .. } => {
+                        out.extend_from_slice(octets);
+                        Ok(())
+                    }
+                }
+            }
+
+            pub(crate) fn encoded_len(&self) -> usize {
+                match self {
+                    $( Self::$ty(body) => $crate::tables::Scope::encoded_len(&**body), )*
+                    Self::Other { octets, .. } => octets.len(),
+                }
+            }
+
+            /// The octets that the body takes beyond its own size: its box, and what its
+            /// IEs hold ([`Listed::held`](crate::$im::Listed::held)).
+            #[cfg(feature = "endpoint")]
+            pub(crate) fn held(&self) -> usize {
+                match self {
+                    $( Self::$ty(body) => core::mem::size_of::<crate::$rm::$ty>() + $crate::tables::Scope::held(&**body), )*
+                    Self::Other { .. } => 0,
+                }
+            }
+
+            /// The body as its receiver reads its octets ([`crate::$cm::as_read`]).
+            pub(crate) fn as_read(&self, context: crate::$cm::Context, found: &mut alloc::vec::Vec<crate::$cm::Deviation>) -> Option<Self> {
+                let path = crate::$cm::Path::Root(crate::$cm::ROOT);
+                match self {
+                    $( Self::$ty(body) => crate::$cm::as_read(&**body, &path, context, found).map(Self::from), )*
+                    Self::Other { .. } => None,
+                }
+            }
+
+            pub(crate) fn check(&self, path: &crate::$cm::Path, context: crate::$cm::Context, found: &mut alloc::vec::Vec<crate::$cm::Deviation>) {
+                match self {
+                    $( Self::$ty(body) => crate::$cm::check_scope(&**body, path, context, found), )*
+                    Self::Other { message_type, .. } => {
+                        let _ = context;
+                        found.push(crate::$cm::unknown_message(*message_type));
+                    }
+                }
+            }
+
+            #[cfg(feature = "tree")]
+            pub(crate) fn ies_tree(&self) -> $crate::tree::Value {
+                match self {
+                    $( Self::$ty(body) => crate::$pm::scope_to_tree(&**body), )*
+                    Self::Other { octets, .. } => $crate::tree::alternative("octets", $crate::tree::octets(octets)),
+                }
+            }
+
+            /// The body of the message of `kind`, a position among the names or a message
+            /// type that none has, from the tree of its IEs.
+            #[cfg(feature = "tree")]
+            pub(crate) fn from_ies_tree(
+                kind: Result<usize, u8>,
+                value: &$crate::tree::Value,
+                reading: &mut $crate::tree::Reading,
+            ) -> Result<Self, $crate::tree::Refused> {
+                const CODES: &[u8] = &[$($code),*];
+                let code = match kind {
+                    Ok(position) => CODES[position],
+                    Err(code) => code,
+                };
+                Ok(match code {
+                    $( $code => Self::$ty(alloc::boxed::Box::new(crate::$pm::scope_from_tree(value, reading)?)), )*
+                    other => {
+                        let (_, octets) = reading.alternative(value, &["octets"])?;
+                        let octets = reading.within("octets", octets, |value, reading| reading.octets(value))?;
+                        Self::Other { message_type: other, octets: octets.into() }
+                    }
+                })
+            }
+        }
+    }};
+}

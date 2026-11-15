@@ -28,10 +28,15 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 
 mod macros;
+mod registry;
+
+#[cfg(feature = "tree")]
+pub use registry::RegistryTree;
+pub use registry::{Form, IeTypeInfo};
 
 /// What a protocol gives the tables: the key of an IE, its framing, its kept IEs, its
 /// presences and its interfaces.
-pub trait Protocol: Debug + 'static {
+pub trait Protocol: Debug + Sized + 'static {
     /// What identifies an IE in its scope: its type, or its type and its instance.
     type Key: Copy + Eq + Debug;
     /// An IE that a scope keeps as octets.
