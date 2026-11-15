@@ -93,6 +93,9 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+#[cfg(feature = "fields")]
+#[cfg_attr(docsrs, doc(cfg(feature = "fields")))]
+pub mod fields;
 pub mod identity;
 #[cfg(feature = "tree")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tree")))]

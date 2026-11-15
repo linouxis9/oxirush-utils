@@ -21,6 +21,12 @@ All notable changes to `oxirush-utils` are recorded here.
   message, a list, an object of members each with what it takes, or one of several forms.
   A type describes its tree with it once, for someone who writes a value and for a path
   that is checked without a value at hand.
+- The feature `fields`: the fields that the codecs of a protocol of type, length and value
+  lay out their values on (numbers, narrow values of a few bits, octets after a length,
+  lists, addresses, PLMNs, FQDNs, text, digits and secrets), each with its tree and what
+  its tree takes; `put`, which refuses a field too long for its length; what a check finds
+  in a field (`Finding`), which a protocol makes its own deviation (`Deviate`); and the
+  layout of a value that a test compares with the figure of its specification.
 
 ### Changed
 
