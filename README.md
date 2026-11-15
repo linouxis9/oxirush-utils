@@ -375,18 +375,20 @@ has what a protocol provides.
 
 | Operation | This crate | serde_json 1 |
 |---|---|---|
-| Read a tree of 925 octets | 2,645 ns | about the same |
-| Write it | 923 ns | 2.3× slower |
-| Select a value of it | 219 ns | about the same |
-| Read an object of 4096 members, 39,851 octets | 380 µs | 2.0× slower |
-| Put 4096 members into an object, one after the other | 15.9 ms | 24× faster |
+| Read a tree of 925 octets | 5,046 ns | 1.2× slower |
+| Write it | 1,597 ns | 2.6× slower |
+| Select a value of it | 425 ns | 1.1× slower |
+| Read an object of 4096 members, 39,851 octets | 833 µs | 1.8× slower |
+| Put 4096 members into an object, one after the other | 25.5 ms | 19× faster |
 
-On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), at 8865ad4 on
-2026-10-18, the lowest of five runs. The serde_json cell says how much slower
-or faster serde_json is than this crate: "about the same" when the two are
-within 10 %. An object keeps its members in order and is searched by name;
-`Map::push` adds 4096 members whose names are new in 145 µs. Reading a 5G-GUTI from a 5GS
-mobile identity takes 14 ns, and the SUCI of an IMSI 80 ns.
+Medians of ten runs, the two in turns, on one core of an Intel Xeon
+E5-2680 v4 (a KVM guest, Linux 7.0, Rust 1.100.0), at 824b57f on
+2026-11-15. The serde_json cell says how much slower or faster serde_json
+is than this crate: "about the same" when the medians are within 10 % or
+the ten times overlap. An object keeps its members in order and is searched
+by name; `Map::push` adds 4096 members whose names are new in 330 µs.
+Reading a 5G-GUTI from a 5GS mobile identity takes 27 ns, and the SUCI of an
+IMSI 132 ns.
 [`benches/README.md`](benches/README.md) has every figure, the allocations,
 the method and the commands.
 
