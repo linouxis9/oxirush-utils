@@ -27,6 +27,8 @@
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
+mod macros;
+
 /// What a protocol gives the tables: the key of an IE, its framing, its kept IEs, its
 /// presences and its interfaces.
 pub trait Protocol: Debug + 'static {
@@ -62,6 +64,8 @@ pub trait Raw {
     fn key(&self) -> Self::Key;
     /// Write it.
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Self::Error>;
+    /// How many octets it writes, its header included.
+    fn encoded_len(&self) -> usize;
 }
 
 /// The presence of an IE in its table.

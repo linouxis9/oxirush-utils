@@ -37,7 +37,9 @@ All notable changes to `oxirush-utils` are recorded here.
   of an IE in its scope, its framing, the IEs that a scope keeps as octets, its presences
   and its interfaces), and what a typed scope of a message or a grouped IE does with them
   (`Scope`): decode, encode in the order of the wire or of the table, and the entries of
-  a row.
+  a row. `table!` writes the scope of a table from its rows: the struct, its builders and
+  constructors, its codec, its check and its tree, on the modules that the protocol's
+  crate names.
 
 ### Changed
 
