@@ -33,11 +33,11 @@ Each example shows what it gives with `assert_eq!`, and runs as a test of the cr
 
 ```toml
 [dependencies]
-oxirush-utils = { version = "0.2", features = ["alloc"] }
+oxirush-utils = { version = "0.3", features = ["alloc"] }
 # With the tree and its paths, which need an allocator too:
-# oxirush-utils = { version = "0.2", features = ["tree"] }
+# oxirush-utils = { version = "0.3", features = ["tree"] }
 # Without an allocator, the values that have their digits in place:
-# oxirush-utils = "0.2"
+# oxirush-utils = "0.3"
 ```
 
 | Feature | Adds | Through |
