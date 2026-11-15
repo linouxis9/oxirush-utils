@@ -23,6 +23,10 @@
 //! A protocol says what is its own through [`Protocol`]: the key of an IE in its scope
 //! (its type, or its type and its instance), its framing, the IEs that a scope keeps as
 //! octets, its presences and its interfaces.
+//!
+//! The macros [`table!`](crate::table), [`ies!`](crate::ies) and
+//! [`messages!`](crate::messages) expand in the protocol's own crate: they name its modules
+//! by `crate::` paths.
 
 use alloc::vec::Vec;
 use core::fmt::Debug;

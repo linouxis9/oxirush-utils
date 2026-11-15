@@ -5,8 +5,9 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 What the OxiRush crates share, in Rust: the identities of 3GPP networks as
-values, and one JSON tree with paths for the messages of every protocol, in
-`no_std` and with no dependency unless a feature asks for one.
+values, one JSON tree with paths for the messages of every protocol, and the
+fields and tables that codecs of type, length and value are written with. It
+is `no_std`, with no dependency unless a feature asks for one.
 
 ```rust
 use oxirush_utils::identity::{Guti5g, Plmn};
@@ -36,6 +37,8 @@ Each example shows what it gives with `assert_eq!`, and runs as a test of the cr
 oxirush-utils = { version = "0.3", features = ["alloc"] }
 # With the tree and its paths, which need an allocator too:
 # oxirush-utils = { version = "0.3", features = ["tree"] }
+# With what a codec of type, length and value is written with:
+# oxirush-utils = { version = "0.3", features = ["fields", "tables"] }
 # Without an allocator, the values that have their digits in place:
 # oxirush-utils = "0.3"
 ```
@@ -44,6 +47,8 @@ oxirush-utils = { version = "0.3", features = ["alloc"] }
 |---------|------|---------|
 | `alloc` | What holds a text or a list: the SUPI, the SUCIs, TBCD strings, identity digits as octets | |
 | `tree` | The tree of a message, its forms and its paths, and `Serialize` and `Deserialize` for a type through its tree | `serde_json`, `serde_core` |
+| `fields` | The fields of the values of a protocol of type, length and value, and the macros that describe them: `bits!`, `layout!`, `named_values!` | `pastey` |
+| `tables` | The tables of the IEs of a protocol's messages, and the macros that write their codecs: `table!`, `ies!`, `messages!` | `fields` |
 | `idna` | The realm and the username of a NAI checked as internationalized names too: Unicode normalization form C, and a realm that IDNA takes as it is written | `idna`, `unicode-normalization` |
 
 No feature is on by default. `tree` turns on the `float_roundtrip` feature of
@@ -319,9 +324,82 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## Describe the bits of a value
+
+With the `fields` feature, `named_values!` writes a table of named values,
+and `bits!` writes the accessors of the fields of a value from where each
+field sits: its octet, its lowest bit and its width. A setter refuses a value
+that the bits of its field cannot hold.
+
+```rust
+use oxirush_utils::{bits, named_values};
+
+named_values! {
+    /// The 5GS registration type value (TS 24.501 Table 9.11.3.7.1)
+    pub enum RegistrationType "Table 9.11.3.7.1" bits 3 others as 1 {
+        1 Initial "initial registration",
+        2 Mobility "mobility registration updating",
+        3 Periodic "periodic registration updating",
+        4 Emergency "emergency registration",
+    }
+}
+
+// What `bits!` lists of each field: here, its name alone
+struct Field(&'static str);
+macro_rules! field {
+    ($field:ident, $name:literal, $($rest:tt)*) => { Field($name) };
+}
+
+/// The value of the 5GS registration type IE, one octet
+#[derive(Debug)]
+struct Registration(u8);
+
+bits! {
+    over [Field, field]
+    impl Registration (0) "9.11.3.7" octets 1 {
+        follow_on "Follow-on request bit": 0 4 1,
+        kind "5GS registration type value": 0 1 3 as RegistrationType,
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut value = Registration(0x09);
+    assert!(value.follow_on());
+    assert_eq!(value.kind(), RegistrationType::Initial);
+
+    value.set_follow_on(false).set_kind(RegistrationType::Periodic)?;
+    assert_eq!(value.0, 0x03);
+
+    // 7 has no name, and the table reads it as an initial registration
+    value.set_kind_raw(7);
+    assert_eq!(value.kind(), RegistrationType::Other(7));
+    assert_eq!(value.kind().effective(), RegistrationType::Initial);
+
+    // 8 does not fit in three bits
+    let refused = value.set_kind(RegistrationType::Other(8)).unwrap_err();
+    assert_eq!(
+        refused.to_string(),
+        "5GS registration type value: 8 is more than 7, the most that its bits hold",
+    );
+
+    let names: Vec<_> = Registration::FIELDS.iter().map(|field| field.0).collect();
+    assert_eq!(names, ["Follow-on request bit", "5GS registration type value"]);
+    Ok(())
+}
+```
+
+`layout!` describes a value of whole fields, some present by its flags, and
+`Layout::differences` compares a layout with the figure of its clause. With
+the `tables` feature, `table!`, `ies!` and `messages!` write a protocol's
+messages and grouped IEs from the rows of their tables: their codecs, checks
+and trees. [oxirush-nas](https://github.com/linouxis9/oxirush-nas) and
+[oxirush-pfcp](https://github.com/linouxis9/oxirush-pfcp) are written with
+them; [the documentation](https://docs.rs/oxirush-utils/latest/oxirush_utils/tables/)
+has what a protocol provides.
+
 ## Limits
 
-- It knows no codec and no message: the crates of each protocol do.
+- It knows no protocol: the crates of each protocol describe their messages.
 - It conceals no SUCI and derives no key:
   [oxirush-security](https://github.com/linouxis9/oxirush-security) does.
 - `Supi` checks that a NAI has a realm, and its length, but not its grammar:
@@ -397,7 +475,8 @@ says how to report a vulnerability.
 - [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and the derivation of keys.
 - [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap): NGAP, between a gNB and an AMF.
 - [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap): S1AP, between an eNB and an MME.
-- [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
+- [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a user-plane test peer.
+- [oxirush-pfcp](https://github.com/linouxis9/oxirush-pfcp): PFCP, between the control plane and the user plane.
 - [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 
 ## License

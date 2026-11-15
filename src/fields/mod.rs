@@ -25,6 +25,11 @@
 //! The codecs of the OxiRush crates lay out their values on these fields. A protocol names
 //! its own clauses: a finding has the clause of the value that the protocol's macros give
 //! it, or none for spare bits, which the protocol's [`Deviate`] gives its clause.
+//!
+//! The macros [`bits!`](crate::bits), [`layout!`](crate::layout) and
+//! [`named_values!`](crate::named_values) write a value from its description. The
+//! [README](https://github.com/linouxis9/oxirush-utils#describe-the-bits-of-a-value) has an
+//! example.
 
 use core::fmt;
 

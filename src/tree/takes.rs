@@ -29,7 +29,7 @@ use super::same_name;
 /// ```
 /// use oxirush_utils::tree::Takes;
 ///
-/// // A value of three flags, or of a number written alone as its `value`.
+/// // A value of two flags, or of a number written alone as its `value`.
 /// const FLAGS: Takes = Takes::Members(None, &[("V4", &Takes::Flag), ("V6", &Takes::Flag)]);
 /// const RATE: Takes = Takes::Members(
 ///     Some("value"),

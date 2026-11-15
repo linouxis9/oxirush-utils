@@ -15,9 +15,10 @@
    limitations under the License.
 */
 
-//! What the OxiRush crates share: the identities of 3GPP networks as values, and one
-//! tree with paths for the messages of every family. `no_std`, without a dependency
-//! unless a feature asks for one.
+//! What the OxiRush crates share: the identities of 3GPP networks as values, one tree
+//! with paths for the messages of every family, and the fields and tables that codecs
+//! of type, length and value are written with. `no_std`, without a dependency unless a
+//! feature asks for one.
 //!
 //! ```rust
 //! use oxirush_utils::identity::{Guti5g, Plmn};
@@ -41,8 +42,9 @@
 //! # Tasks
 //!
 //! The [README](https://github.com/linouxis9/oxirush-utils#readme) has an example of
-//! each, with what it gives, except the rules of a family of messages: the
-//! documentation of [`tree::Family`] has theirs.
+//! each, with what it gives, except the rules of a family of messages and what the tree
+//! of a value takes: the documentation of [`tree::Family`] and [`tree::Takes`] has
+//! theirs.
 //!
 //! | Task | Items |
 //! |------|-------|
@@ -55,12 +57,16 @@
 //! | Paths | [`tree::select`], [`tree::paths`], [`tree::set`], [`tree::insert`], [`tree::remove`] |
 //! | The rules of a family of messages | [`tree::Family`], [`tree::select_in`] |
 //! | Any format of serde | [`impl_serde!`] |
+//! | Describe the bits of a value | [`named_values!`], [`bits!`], [`fields::OutOfRange`], [`layout!`], [`fields::Layout::differences`] |
+//! | What the tree of a value takes | [`tree::Takes`], [`tree::read`] |
 //!
 //! # Modules
 //!
 //! | Module | Has | Feature |
 //! |--------|-----|---------|
 //! | [`identity`] | The PLMN with its two codings, TBCD digits, IMSI, IMEI, IMEISV, the SUPI with its type, the SUCI of an IMSI and the SUCI in the form of a NAI with the grammar of a NAI, the GUTI and the S-TMSI of 5GS and of EPS, the tracking area identities, the types of identity, the identity of a security algorithm | none |
+//! | [`fields`] | The fields of the values of a protocol of type, length and value: numbers, narrow values of a few bits, octets after a length, lists, addresses, PLMNs, FQDNs, text, digits and secrets; `put`, the findings of a check, and the layout of a value with its comparison to a figure. `bits!`, `layout!` and `named_values!` write a value from its description | `fields` |
+//! | [`tables`] | The tables of a protocol of type, length and value, and what a typed scope of a message or a grouped IE does with them: decode, encode, check, and with `tree` its tree and paths. `table!`, `ies!` and `messages!` write them from their rows | `tables` |
 //! | [`tree`](mod@tree) | The tree of a message as a JSON value that keeps the order of its members, and `tree!` that writes one: the forms of the plain values, the writer and the reader of members, paths with `select`, `paths`, `set`, `remove`, `insert`, and `Serialize` and `Deserialize` for a type through its tree | `tree` |
 //!
 //! The crate is `no_std` with `alloc`, has no dependency without a feature, and no
@@ -79,13 +85,17 @@
 //! - [oxirush-security](https://docs.rs/oxirush-security): NAS security, AKA and the derivation of keys.
 //! - [oxirush-ngap](https://docs.rs/oxirush-ngap): NGAP, between a gNB and an AMF.
 //! - [oxirush-s1ap](https://docs.rs/oxirush-s1ap): S1AP, between an eNB and an MME.
-//! - [oxirush-gtp-u](https://docs.rs/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
+//! - [oxirush-gtp-u](https://docs.rs/oxirush-gtp-u): GTP-U tunnels, with a user-plane test peer.
+//! - [oxirush-pfcp](https://docs.rs/oxirush-pfcp): PFCP, between the control plane and the user plane.
 //! - [oxirush-sctp](https://docs.rs/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 
 #![no_std]
 // Without its feature an item of the tables is plain text: the links are checked in the
 // build of every feature, which docs.rs makes.
-#![cfg_attr(not(feature = "tree"), allow(rustdoc::broken_intra_doc_links))]
+#![cfg_attr(
+    not(all(feature = "tree", feature = "tables")),
+    allow(rustdoc::broken_intra_doc_links)
+)]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -111,6 +121,6 @@ pub mod tables;
 pub mod tree;
 
 /// The blocks of the README, which are compiled and run with the documentation tests.
-#[cfg(all(doctest, feature = "tree"))]
+#[cfg(all(doctest, feature = "tree", feature = "fields"))]
 #[doc = include_str!("../README.md")]
 struct _Readme;

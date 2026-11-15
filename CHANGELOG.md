@@ -6,85 +6,84 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ### Added
 
-- `Map::push` adds a member at the end without searching the object for its name,
-  for a name that the object does not have, as the members that the tree of a type
-  writes one after the other. A debug build panics on a name that is there. Pushing
+- The feature `fields`: the fields that the codecs of a protocol of type, length and
+  value lay out their values on. They are numbers, narrow values of a few bits, octets
+  after a length, lists, addresses, PLMNs, FQDNs, text, digits (also a TBCD string up to
+  the end of an IE) and secrets, each with its tree and what its tree takes. `put`
+  refuses a field too long for its length. A check reports a `Finding`, which the
+  protocol turns into its own deviation (`Deviate`). `Layout` is the layout of a value,
+  and `Layout::differences` compares it with the cells of the figure of its clause.
+- The macros of `fields`, which write a value from its description: `bits!` (flags and
+  fields by octet, lowest bit and width), `layout!` (fields that are always there, an
+  octet of flags, fields that the flags make present, and unknown octets) and
+  `named_values!` (a table of named values, with the tree name of a value and the value
+  that the others are read as). Each writes the codec, the check, the tree and what the
+  tree takes, on the traits that the protocol's crate names. `bits!` with `over` writes
+  the accessors of the fields over the octets of an existing value: a getter and a
+  setter for each field, and a getter and a setter of its bits (`_raw`). The setter
+  refuses a value that the bits of its field cannot hold (`OutOfRange`: "8 is more than
+  7, the most that its bits hold"); the setter of bits writes them as they are given.
+- The feature `tables`: the tables of the IEs of a protocol of type, length and value
+  (`Row`, `Role`, `Table`, `Repeat`, `On`), over what the protocol gives through
+  `Protocol`: the key of an IE in its scope, its framing, the IEs that a scope keeps as
+  octets, its presences and its interfaces. A typed scope of a message or a grouped IE
+  (`Scope`) decodes, encodes in the order of the wire or of the table, and gives the
+  entries of a row. A row may name its IE's instance after its type, for a protocol
+  whose key is a type and an instance, as GTPv2-C's. A table has 127 rows at most.
+- The macros of `tables`: `table!` writes the scope of a table from its rows (the
+  struct, its builders and constructors, its codec, its check and its tree), `ies!` a
+  protocol's IE types (`IeTypeInfo`, `Form`, what their trees take and the trees of
+  their values), and `messages!` its message types (`MessageTypeInfo`) and the body of a
+  message.
+- With `tables` and `tree`: the trees of the scopes and the paths of the tree of a
+  message (`select`, `set`, `row_at`, `located`), over what the protocol gives through
+  `TreeProtocol`. With `TreeProtocol::WIRE_ORDER`, the trees keep the order of the wire,
+  for a protocol whose senders order their IEs as they like, and encode back to the same
+  octets.
+- `tree::Takes` says what the tree of a value takes: a flag, a number, names, octets, a
+  text, a name, digits, an address, a PLMN, the tree of a message, a list, an object of
+  members each with what it takes, or one of several forms. A type describes its tree
+  once, for whoever writes a value and for a path that is checked without a value.
+- `tree::read` reads a tree with a function as a value of a named type, and refuses it as
+  `from_value` does: for a type that a table describes and that has no `Tree`.
+- `Reading::octets_sized` reads octets of a size given at run time, as `octet_array` does
+  for a size given as a type parameter, with the same refusal.
+- `Map::push` adds a member at the end without searching the object for its name, for a
+  name that the object does not have, such as the members that the tree of a type writes
+  one after the other. A debug build panics on a name that is there. Pushing
   4096 members takes 145 µs, where `insert` takes 18 ms; in the tree of a NAS
   REGISTRATION ACCEPT of 23 members, pushing them instead of inserting them takes 3 %
   off the time to build it.
-- `tree::read` reads a tree with a function as a value of a type of a name, and refuses it
-  as `from_value` does: for a type that a table describes and that has no `Tree`.
-- `Reading::octets_sized` reads octets of a size given as a number, as `octet_array` reads
-  them for a size given as a type parameter, with the same refusal.
-- `tree::Takes` says what the tree of a value takes, as the type that reads it says it: a
-  flag, a number, names, octets, a text, a name, digits, an address, a PLMN, the tree of a
-  message, a list, an object of members each with what it takes, or one of several forms.
-  A type describes its tree with it once, for someone who writes a value and for a path
-  that is checked without a value at hand.
-- The feature `fields`: the fields that the codecs of a protocol of type, length and value
-  lay out their values on (numbers, narrow values of a few bits, octets after a length,
-  lists, addresses, PLMNs, FQDNs, text, digits and secrets), each with its tree and what
-  its tree takes; `put`, which refuses a field too long for its length; what a check finds
-  in a field (`Finding`), which a protocol makes its own deviation (`Deviate`); and the
-  layout of a value that a test compares with the figure of its specification. Its
-  macros write a value from its description: `bits!` (flags and fields by octet, lowest
-  bit and width), `layout!` (fields always there, an octet of flags, fields that the
-  flags make present, unknown octets) and `named_values!` (a table of named values), each
-  with its codec, its check, its tree and what its tree takes, on the traits that the
-  protocol's crate names. `bits!` with `over` writes the accessors of the fields over the
-  octets of a value that holds them: the getter and setter of each, and of the bits of a
-  field of more than one bit. Such a setter refuses a value that the bits of its field do
-  not hold (`OutOfRange`, "8 is more than 7, the most that its bits hold"); the setter of
-  bits (`_raw`) writes those of the value that the field has.
-- The feature `tables`: the tables of a protocol of type, length and value (`Row`,
-  `Role`, `Table`, `Repeat`, `On`) over what the protocol says through `Protocol` (the key
-  of an IE in its scope, its framing, the IEs that a scope keeps as octets, its presences
-  and its interfaces), and what a typed scope of a message or a grouped IE does with them
-  (`Scope`): decode, encode in the order of the wire or of the table, and the entries of
-  a row. `table!` writes the scope of a table from its rows: the struct, its builders and
-  constructors, its codec, its check and its tree, on the modules that the protocol's
-  crate names. `ies!` writes a protocol's IE types (`IeTypeInfo`, `Form`, what their trees
-  take and the trees of their values), and `messages!` its message types
-  (`MessageTypeInfo`) and the body of a message. With `tree`, the trees of the scopes and
-  the paths of the tree of a message (`select`, `set`, `row_at`, `located`), over what the
-  protocol says through `TreeProtocol`. A row may name the instance of its IE after its
-  type, for a protocol whose key is a type and an instance, as GTPv2-C's; a table has at
-  most 127 rows. A protocol whose senders write IEs in orders of their own has the trees of
-  its scopes in the order of the wire (`TreeProtocol::WIRE_ORDER`), which then encode back
-  to their octets.
 - `tools/docx_tables.py` reads the paragraphs, tables and figures of a 3GPP specification
   in .docx, for the tests that compare a crate's tables with its document: the cells of a
-  figure by their widths or by their grid columns, the label of a row on its left or on
-  its right, and the octets that a label of the NAS specifications names.
-  `Layout::differences` compares a layout with the cells of its figure.
+  figure by their widths or their grid columns, the label of a row on its left or its
+  right, and the octets that a label of the NAS specifications names.
 
 ### Changed
 
+- Breaking: the name of a member of a `Map` and the text of a `Value::String` are a
+  `Cow<'static, str>`. A name or an enumerated value that the program has as a
+  `&'static str` goes into a tree without a copy, and a copy of the tree copies none of
+  them. `Value::from(&'static str)`, `tree::text`, `tree::alternative`, `Members::put`
+  and `Map::entry` take a `&'static str` or a `String` as it is; shorter-lived text is
+  made a `String` first. `Map::insert`, `Map::push`, `FromIterator` and `Extend` take a
+  `Cow<'static, str>`. `Map::iter`, `keys`, `get_key_value`, `retain` and the iterators
+  of a `&Map` give the names as `&str`. Copying a list of 65,535 entries written with
+  `tree!` takes 65,536 allocations instead of 262,140, and 2.6 ms instead of 8.4 ms.
 - `tree::unhex` reads eight digits at a time in a `u64`: 32 octets in 26 ns, where
   it took 37 ns, 285 octets in 138 ns (246 ns) and 1500 octets in 564 ns (1130 ns).
   What it reads and refuses is unchanged.
 
-- A name of a member of a `Map`, and the text of a `Value::String`, are a
-  `Cow<'static, str>`: a name or a value of an enumeration that the program holds as a
-  `&'static str` goes into a tree without being copied, and a copy of the tree copies
-  none of them. `Value::from(&'static str)`, `tree::text`, `tree::alternative`,
-  `Members::put` and `Map::entry` take one as it is, and a `String` as it is; text that
-  lives less long is made a `String` first. `Map::insert`, `Map::push`, `FromIterator`
-  and `Extend` take a `Cow<'static, str>`, which `"name".into()` and `string.into()`
-  give; `Map::iter`, `keys`, `get_key_value`, `retain` and the iterators of a `&Map`
-  give the names as `&str`. Copying a list of 65,535 entries written with `tree!`
-  takes 65,536 allocations instead of 262,140, and 2.6 ms instead of 8.4 ms.
-
 ### Removed
 
-- `readme/`, the package that compared what each block of the README and of the
-  front page of the documentation printed with the text under it: the blocks check
-  what they give with `assert_eq!`, and run as documentation tests.
+- `readme/`, the repository's package that compared the output of each README block
+  with the text under it. The blocks check their results with `assert_eq!` and run as
+  documentation tests.
 
 ### Fixed
 
-- Fix quadratic time in paths that select many entries of one list. Results, errors
-  and the state of the tree after a refused edit are unchanged.
+- Paths that select many entries of one list no longer take quadratic time. Results,
+  errors and the state of the tree after a refused edit are unchanged.
   - `Next::absent_once` no longer scans every place found so far on each call. It
     keeps an index of the valueless places, one per shape. Selecting a member that
     half of the 65,535 entries of a list lack went from 315 ms to 1.5 ms.
@@ -93,13 +92,20 @@ All notable changes to `oxirush-utils` are recorded here.
     `Vec::insert` per entry. Copying a 65,535-entry list and removing every other
     entry went from 200 ms to 11 ms; copying it and inserting an entry before each
     one went from 1.7 s to 15 ms.
-- `set` through `*` gives a member to every entry that lacks it. In the walk of an
-  edit, `Next::absent_once` added one valueless place for all the objects that lack
-  the member, so `set` gave it to the first of them only: with 7 entries of which 3
-  have `sd`, `set` at `/slices/*/sd` changed 4. It now adds a place at each call in
-  an edit, as `Next::absent` does; in a walk that selects (`select_in`, `places_in`)
-  it still adds a valueless place once per shape. `remove` and `insert` are
-  unchanged: they act only where the member is there.
+- `set` through `*` gives a member to every entry that lacks it. It gave the member to
+  the first such entry only: with 7 entries of which 3 have `sd`, `set` at
+  `/slices/*/sd` changed 4. `remove` and `insert` are unchanged: they act only where the
+  member is there.
+
+### Migration from 0.2
+
+| 0.2 | 0.3 |
+|-----|-----|
+| `tree::text(name)`, `members.put(name, value)`, `tree::alternative(name, value)` with a `&str` that is not `'static` | `tree::text(name.to_owned())`, `members.put(name.to_owned(), value)`, `tree::alternative(name.to_owned(), value)` |
+| `map.insert(name, value)` with a `String` | `map.insert(name.into(), value)` |
+| `Value::String(string)` | `Value::String(string.into())` |
+| `if let Value::String(text) = value` then `text.as_str()` | `&**text` |
+| `map.keys()`, `map.iter()` giving `&String` | they give `&str` |
 
 ## 0.2.2 - 2026-11-09
 
