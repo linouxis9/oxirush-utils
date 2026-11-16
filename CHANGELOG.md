@@ -2,6 +2,15 @@
 
 All notable changes to `oxirush-utils` are recorded here.
 
+## 0.4.0 - unreleased
+
+### Changed
+
+- Breaking: the `new()` of a scope that `table!` writes takes a mandatory row that is a
+  list as its values, in any collection or iterator (`[bearer]`, `vec![a, b]`,
+  `iter.map(...)`), where it took one value. A call that passed one value passes it in
+  an array: `new(pdr, far)` becomes `new([pdr], [far])`.
+
 ## 0.3.0 - 2026-11-16
 
 ### Added

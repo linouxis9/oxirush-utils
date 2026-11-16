@@ -18,8 +18,9 @@
 //! The macro that writes the scope of a table.
 
 /// A message or the content of a grouped IE, from its table: a struct with a field for
-/// each row, `new()` with the mandatory IEs, a `with_` builder for each row, the codec,
-/// the check and the tree.
+/// each row, `new()` with the mandatory IEs (a row that is a list as its values, in any
+/// collection or iterator), a `with_` builder for each row, the codec, the check and the
+/// tree.
 ///
 /// The first argument names the protocol and its modules, which a protocol's crate passes
 /// in a wrapper: `{proto: P, table: m, ie: m, check: m, paths: m, error: E, ctors: c}`, the
@@ -525,12 +526,24 @@ macro_rules! table {
         impl $ty {
             #[doc = $doc]
             #[allow(clippy::too_many_arguments)]
-            pub fn $name($($arg)*) -> Self {
+            pub fn $name($( $f: $crate::table!(@argument [$($m)*] $ft) ),*) -> Self {
                 #[allow(unused_mut)]
                 let mut scope = Self::default();
-                $( crate::$tm::FieldValues::<$ft>::add(&mut scope.$f, $f); )*
+                $( $crate::table!(@put {proto: $proto, table: $tm, ie: $im, check: $cm, paths: $pm, error: $error, ctors: $ctors} [$($m)*] $ft, scope.$f, $f); )*
                 scope
             }
+        }
+    };
+    // The argument of a mandatory row: its value, or the values of a list, in any
+    // collection or iterator.
+    (@argument [] $t:ty) => { $t };
+    (@argument [* $($max:literal)?] $t:ty) => { impl IntoIterator<Item = $t> };
+    (@put {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} [] $t:ty, $field:expr, $value:ident) => {
+        crate::$tm::FieldValues::<$t>::add(&mut $field, $value)
+    };
+    (@put {proto: $proto:ty, table: $tm:ident, ie: $im:ident, check: $cm:ident, paths: $pm:ident, error: $error:ty, ctors: $ctors:ident} [* $($max:literal)?] $t:ty, $field:expr, $value:ident) => {
+        for value in $value {
+            crate::$tm::FieldValues::<$t>::add(&mut $field, value);
         }
     };
     (@new $fam:tt $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal M $(* $($max:literal)?)? $vty:ident [$($i:ident)*] , $($rest:tt)*) => {
