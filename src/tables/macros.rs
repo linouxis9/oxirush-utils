@@ -130,6 +130,8 @@ macro_rules! table {
 
                 $crate::table!(@setter [$(* $($max)?)?] $tm $vty $row [<set_ $field>] [<push_ $field>] $field);
 
+                $crate::table!(@required $p [$(* $($max)?)?] $tm $vty $row $field);
+
                 #[doc = concat!("Remove the ", $row, " IE, or each of a list.")]
                 pub fn [<clear_ $field>](&mut self) -> &mut Self {
                     self.$field = Default::default();
@@ -542,6 +544,32 @@ macro_rules! table {
             }
         }
     };
+    // The accessor of a mandatory row, which a received scope may lack: its value, or the
+    // values of a list, or `Missing` of the row.
+    (@required M [] $tm:ident $vty:ident $row:literal $field:ident) => {
+        #[doc = concat!("The mandatory ", $row, " IE: `Missing` where the scope lacks it, as a received one may.")]
+        pub fn $field(&self) -> Result<&$vty, $crate::tables::Missing> {
+            crate::$tm::FieldValues::<$vty>::first(&self.$field).ok_or($crate::tables::Missing {
+                scope: <Self as $crate::tables::Scope>::table().name,
+                id: <Self as $crate::tables::Scope>::table().id,
+                row: $row,
+            })
+        }
+    };
+    (@required M [* $($max:literal)?] $tm:ident $vty:ident $row:literal $field:ident) => {
+        #[doc = concat!("The mandatory ", $row, " IEs, one at least: `Missing` where the scope has none, as a received one may.")]
+        pub fn $field(&self) -> Result<&[$vty], $crate::tables::Missing> {
+            match crate::$tm::FieldValues::<$vty>::values(&self.$field) {
+                [] => Err($crate::tables::Missing {
+                    scope: <Self as $crate::tables::Scope>::table().name,
+                    id: <Self as $crate::tables::Scope>::table().id,
+                    row: $row,
+                }),
+                values => Ok(values),
+            }
+        }
+    };
+    (@required $p:ident $repeat:tt $tm:ident $vty:ident $row:literal $field:ident) => {};
     // The setter of a row in place: of a row there once, `set_`, which gives it its value;
     // of a list, `push_`, which adds one at its end.
     (@setter [] $tm:ident $vty:ident $row:literal $set:ident $push:ident $field:ident) => {

@@ -445,6 +445,35 @@ pub trait Scope: Default {
     fn order_mut(&mut self) -> &mut Vec<Placed<<Self::P as Protocol>::Key>>;
 }
 
+/// A mandatory row that a scope lacks, as the accessor of the row that `table!` writes
+/// gives it: the scope, its table and the row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Missing {
+    /// The name of the scope: its message or its grouped IE.
+    pub scope: &'static str,
+    /// The number of its table in the specification, or of its clause.
+    pub id: &'static str,
+    /// The name of the row.
+    pub row: &'static str,
+}
+
+impl core::fmt::Display for Missing {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let what = if self.id.contains('-') {
+            "Table "
+        } else {
+            "§"
+        };
+        write!(
+            f,
+            "the mandatory {} of the {} ({what}{}) is missing",
+            self.row, self.scope, self.id
+        )
+    }
+}
+
+impl core::error::Error for Missing {}
+
 /// The key of an IE of a scope's protocol.
 type Key<S> = <<S as Scope>::P as Protocol>::Key;
 /// Why a scope's protocol does not encode.

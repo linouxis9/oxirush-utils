@@ -10,6 +10,10 @@ All notable changes to `oxirush-utils` are recorded here.
   in place, `push_<row>()`, which adds one to a list, and `clear_<row>()`, which removes
   the row; the body that `messages!` writes has `as_<message>()` and
   `as_<message>_mut()`, the message that it is or `None`.
+- The scope that `table!` writes has an accessor of each mandatory row, named as its
+  field: `request.rat_type()` gives the value, or the values of a list, or `Missing`,
+  which names the row, the scope and its table, as a received message may lack it. The
+  field stays an `Option` (or a list).
 
 ### Changed
 
