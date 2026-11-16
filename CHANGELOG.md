@@ -4,6 +4,13 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ## 0.4.0 - unreleased
 
+### Added
+
+- The scope that `table!` writes has `set_<row>()`, which gives a row there once its value
+  in place, `push_<row>()`, which adds one to a list, and `clear_<row>()`, which removes
+  the row; the body that `messages!` writes has `as_<message>()` and
+  `as_<message>_mut()`, the message that it is or `None`.
+
 ### Changed
 
 - Breaking: the `new()` of a scope that `table!` writes takes a mandatory row that is a

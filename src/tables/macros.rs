@@ -127,6 +127,14 @@ macro_rules! table {
                     crate::$tm::FieldValues::<$vty>::add(&mut self.$field, value);
                     self
                 }
+
+                $crate::table!(@setter [$(* $($max)?)?] $tm $vty $row [<set_ $field>] [<push_ $field>] $field);
+
+                #[doc = concat!("Remove the ", $row, " IE, or each of a list.")]
+                pub fn [<clear_ $field>](&mut self) -> &mut Self {
+                    self.$field = Default::default();
+                    self
+                }
             )*
         }
 
@@ -534,6 +542,22 @@ macro_rules! table {
             }
         }
     };
+    // The setter of a row in place: of a row there once, `set_`, which gives it its value;
+    // of a list, `push_`, which adds one at its end.
+    (@setter [] $tm:ident $vty:ident $row:literal $set:ident $push:ident $field:ident) => {
+        #[doc = concat!("Set the ", $row, " IE in place.")]
+        pub fn $set(&mut self, value: $vty) -> &mut Self {
+            crate::$tm::FieldValues::<$vty>::add(&mut self.$field, value);
+            self
+        }
+    };
+    (@setter [* $($max:literal)?] $tm:ident $vty:ident $row:literal $set:ident $push:ident $field:ident) => {
+        #[doc = concat!("Add an IE at the end of the ", $row, " list, in place.")]
+        pub fn $push(&mut self, value: $vty) -> &mut Self {
+            crate::$tm::FieldValues::<$vty>::add(&mut self.$field, value);
+            self
+        }
+    };
     // The argument of a mandatory row: its value, or the values of a list, in any
     // collection or iterator.
     (@argument [] $t:ty) => { $t };
@@ -735,6 +759,24 @@ macro_rules! messages {
         )*
 
         impl Body {
+            $(
+                #[doc = concat!("The ", stringify!($ty), " that the body is: `None` for another message.")]
+                pub fn [<as_ $ty:snake>](&self) -> Option<&crate::$rm::$ty> {
+                    match self {
+                        Self::$ty(body) => Some(body),
+                        _ => None,
+                    }
+                }
+
+                #[doc = concat!("The ", stringify!($ty), " that the body is, to change in place: `None` for another message.")]
+                pub fn [<as_ $ty:snake _mut>](&mut self) -> Option<&mut crate::$rm::$ty> {
+                    match self {
+                        Self::$ty(body) => Some(body),
+                        _ => None,
+                    }
+                }
+            )*
+
             /// The message type.
             pub fn message_type(&self) -> u8 {
                 match self {
