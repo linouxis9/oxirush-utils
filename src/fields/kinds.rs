@@ -1982,6 +1982,9 @@ impl From<&str> for TextLv16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::format;
+    #[cfg(feature = "tree")]
+    use alloc::string::ToString;
 
     /// A Number of six bits is, as a field of its own, its whole octet, which a Narrow parts
     /// into the number and the spare bits.
@@ -2001,5 +2004,83 @@ mod tests {
             FieldTree::to_tree(&Number::<6>(46)),
             crate::tree::unsigned(46)
         );
+    }
+
+    /// A finding as a protocol's check writes it, with its clause.
+    #[derive(Debug, PartialEq)]
+    struct Found(Option<&'static str>, Finding);
+
+    impl Deviate for Found {
+        fn found(_path: &Path<'_>, clause: Option<&'static str>, finding: Finding) -> Self {
+            Self(clause, finding)
+        }
+    }
+
+    /// An IPv4 address that a value always has is its four octets, and its tree the
+    /// address as text.
+    #[test]
+    fn an_ipv4_address_is_four_octets() {
+        let address = Ipv4Address::from(Ipv4Addr::new(10, 0, 0, 1));
+        assert_eq!(address.0, Ipv4Addr::new(10, 0, 0, 1));
+        let mut octets: &[u8] = &[10, 0, 0, 1, 0xff];
+        assert_eq!(Ipv4Address::read(&mut octets), Some(address));
+        assert_eq!(octets, [0xff]);
+        assert_eq!(Ipv4Address::read(&mut &[10, 0, 0][..]), None);
+        let mut out = Vec::new();
+        address.write(&mut out);
+        assert_eq!(out, [10, 0, 0, 1]);
+        assert_eq!(address.size(), 4);
+        #[cfg(feature = "tree")]
+        {
+            let tree = FieldTree::to_tree(&address);
+            assert_eq!(tree.to_string(), r#""10.0.0.1""#);
+            let read = crate::tree::read(&tree, "Ipv4Address", Ipv4Address::from_tree);
+            assert_eq!(read.unwrap(), address);
+        }
+    }
+
+    /// A passphrase after a length of one octet: 255 octets at most, which `Debug` and the
+    /// error of its tree do not print.
+    #[test]
+    fn a_secret_text_after_its_length() {
+        let secret = SecretTextLv8(Octets::copied(b"abc"));
+        assert_eq!(format!("{secret:?}"), "SecretTextLv8(3 octets)");
+        let mut octets: &[u8] = &[3, b'a', b'b', b'c', 0xff];
+        assert_eq!(SecretTextLv8::read(&mut octets), Some(secret.clone()));
+        assert_eq!(octets, [0xff]);
+        assert_eq!(SecretTextLv8::read(&mut &[4, b'a'][..]), None);
+        let mut out = Vec::new();
+        secret.write(&mut out);
+        assert_eq!(out, [3, b'a', b'b', b'c']);
+        assert_eq!(secret.size(), 4);
+        let mut found: Vec<Found> = Vec::new();
+        secret.check(&Path::Root(""), "8.2.276", &mut found);
+        assert_eq!(found, []);
+        let longest = SecretTextLv8(Octets::copied(&[b'x'; 255]));
+        assert!(longest.fits());
+        let longer = SecretTextLv8(Octets::copied(&[b'x'; 256]));
+        assert!(!longer.fits());
+        let mut found: Vec<Found> = Vec::new();
+        longer.check(&Path::Root(""), "8.2.276", &mut found);
+        let rule = Finding::Rule("more octets than their length can say");
+        assert_eq!(found, [Found(Some("8.2.276"), rule)]);
+        #[cfg(feature = "tree")]
+        {
+            let tree = FieldTree::to_tree(&secret);
+            assert_eq!(tree.to_string(), r#""abc""#);
+            let read = |tree: &crate::tree::Value| {
+                crate::tree::read(tree, "SecretTextLv8", SecretTextLv8::from_tree)
+            };
+            assert_eq!(read(&tree).unwrap(), secret);
+            let octets = SecretTextLv8(Octets::copied(&[0xff, 0xfe]));
+            assert_eq!(read(&FieldTree::to_tree(&octets)).unwrap(), octets);
+            assert_eq!(read(&FieldTree::to_tree(&longest)).unwrap(), longest);
+            let error = read(&FieldTree::to_tree(&longer)).unwrap_err().to_string();
+            assert!(
+                error.contains("octets that their length can say"),
+                "{error}"
+            );
+            assert!(!error.contains("xxx"), "{error}");
+        }
     }
 }
