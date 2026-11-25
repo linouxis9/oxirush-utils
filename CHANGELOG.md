@@ -17,6 +17,10 @@ All notable changes to `oxirush-utils` are recorded here.
 
 ### Changed
 
+- Breaking: `Checking::of_no_row()` takes the table of the scope, beside the path and the
+  IE, so that a protocol tells an IE of no row by the rows that the table has: GTPv2-C
+  tells an IE whose spare bits are set by its instance. An implementation that does not
+  need the table ignores it.
 - Breaking: the `new()` of a scope that `table!` writes takes a mandatory row that is a
   list as its values, in any collection or iterator (`[bearer]`, `vec![a, b]`,
   `iter.map(...)`), where it took one value. A call that passed one value passes it in

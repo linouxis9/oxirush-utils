@@ -89,9 +89,14 @@ pub trait Checking: Protocol {
         context: Self::Context,
         found: &mut Vec<Self::Deviation>,
     );
-    /// The deviation of an IE of no row of its table that the scope keeps as octets, which
-    /// frames: `None` for one that breaks nothing.
-    fn of_no_row(path: &str, ie: &Self::Raw) -> Option<Self::Deviation>;
+    /// The deviation of an IE of no row of `table` that the scope keeps as octets, which
+    /// frames: `None` for one that breaks nothing. The table says which rows there are, for
+    /// a protocol whose key holds more than a row's, as the spare bits beside an instance.
+    fn of_no_row(
+        path: &str,
+        table: &'static Table<Self>,
+        ie: &Self::Raw,
+    ) -> Option<Self::Deviation>;
     /// Whether an IE kept as octets has a null length.
     fn is_null(ie: &Self::Raw) -> bool;
     /// Whether the Length of an IE kept as octets is that of its content.
@@ -340,7 +345,7 @@ fn raw_deviations<S: Scope>(
                 ));
                 continue;
             }
-            if let Some(deviation) = <S::P as Checking>::of_no_row(&here, ie) {
+            if let Some(deviation) = <S::P as Checking>::of_no_row(&here, table, ie) {
                 found.push(deviation);
             }
             continue;
